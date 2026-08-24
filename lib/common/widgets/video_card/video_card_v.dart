@@ -115,8 +115,10 @@ class VideoCardV extends StatelessWidget {
     );
     // 🔴 無障礙改造：整卡一個語義節點，VoiceOver 左右滑逐卡瀏覽
     // 標題+UP主+時長一次唸完；上下滑 = 點讚/分享/更多 操作
-    final String a11yLabel = '${videoItem.title}，${videoItem.owner.name}'
-        '${videoItem.duration > 0 ? '，時長 ${DurationUtils.formatDuration(videoItem.duration)}' : ''}';
+    final durationPart = videoItem.duration > 0
+        ? '，時長 ${DurationUtils.formatDuration(videoItem.duration)}'
+        : '';
+    final String a11yLabel = '${videoItem.title}，${videoItem.owner.name}$durationPart';
     final String statDesc =
         '播放 ${videoItem.stat.view}，彈幕 ${videoItem.stat.danmu}';
     return Semantics(
