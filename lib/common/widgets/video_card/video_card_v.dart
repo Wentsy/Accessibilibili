@@ -5,6 +5,10 @@ import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/common/widgets/video_popup_menu.dart';
 import 'package:PiliPlus/http/search.dart';
+import 'package:PiliPlus/http/video.dart';
+import 'package:PiliPlus/http/loading_state.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:PiliPlus/models/home/rcmd/result.dart';
 import 'package:PiliPlus/models/model_rec_video_item.dart';
 import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
@@ -79,6 +83,29 @@ class VideoCardV extends StatelessWidget {
     }
   }
 
+  /// 無障礙自訂操作：VoiceOver 上下滑切換、點兩下啟用
+  Map<CustomSemanticsAction, VoidCallback> _a11yActions(BuildContext context) {
+    final bvid = videoItem.bvid;
+    return {
+      const CustomSemanticsAction(label: '點讚'): () async {
+        if (bvid == null) return;
+        final res = await VideoHttp.likeVideo(bvid: bvid, type: true);
+        if (res case Success(:final response)) {
+          SmartDialog.showToast(response);
+        } else {
+          SmartDialog.showToast('點讚失敗（需登入）');
+        }
+      },
+      const CustomSemanticsAction(label: '分享'): () {
+        if (bvid == null) return;
+        SmartDialog.showToast('分享：https://www.bilibili.com/video/$bvid');
+      },
+      const CustomSemanticsAction(label: '更多操作'): () {
+        onPushDetail();
+      },
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     void onLongPress() => imageSaveDialog(
@@ -86,7 +113,22 @@ class VideoCardV extends StatelessWidget {
       cover: videoItem.cover,
       bvid: videoItem.bvid,
     );
-    return Stack(
+    // 🔴 無障礙改造：整卡一個語義節點，VoiceOver 左右滑逐卡瀏覽
+    // 標題+UP主+時長一次唸完；上下滑 = 點讚/分享/更多 操作
+    final String a11yLabel = '${videoItem.title}，${videoItem.owner.name}'
+        '${videoItem.duration > 0 ? '，時長 ${DurationUtils.formatDuration(videoItem.duration)}' : ''}';
+    final String statDesc =
+        '播放 ${videoItem.stat.view}，彈幕 ${videoItem.stat.danmu}';
+    return Semantics(
+      container: true,
+      explicitChildNodes: false,
+      button: false,
+      label: a11yLabel,
+      value: statDesc,
+      hint: '點兩下開啟影片。上滑有更多操作',
+      onLongPressHint: null,
+      customSemanticsActions: _a11yActions(context),
+      child: Stack(
       clipBehavior: Clip.none,
       children: [
         Card(

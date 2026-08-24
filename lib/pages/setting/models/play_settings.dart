@@ -53,10 +53,10 @@ List<SettingsModel> get playSettings => [
     ),
   const SwitchModel(
     title: '自动播放',
-    subtitle: '进入详情页自动播放',
+    subtitle: '进入详情页自动播放（已預設開啟）',
     leading: Icon(Icons.motion_photos_auto_outlined),
     setKey: SettingBoxKey.autoPlayEnable,
-    defaultVal: false,
+    defaultVal: true,
   ),
   const SwitchModel(
     title: '全屏显示锁定按钮',

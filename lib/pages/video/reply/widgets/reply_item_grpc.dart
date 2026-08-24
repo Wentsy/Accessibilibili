@@ -134,13 +134,40 @@ class ReplyItemGrpc extends StatelessWidget {
         ],
       );
     }
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: () => replyReply?.call(replyItem, null),
-        onLongPress: showMore,
-        onSecondaryTap: PlatformUtils.isMobile ? null : showMore,
-        child: child,
+    // 🔴 無障礙：整則評論一個語義節點，VoiceOver 左右滑逐則瀏覽
+    final String a11yLabel =
+        '${replyItem.member.name} 說：${replyItem.content.message}'
+        '${replyItem.like > 0 ? '，${replyItem.like} 個讚' : ''}'
+        '${replyItem.count > 0 ? '，共 ${replyItem.count} 條回覆' : ''}';
+    return Semantics(
+      container: true,
+      explicitChildNodes: false,
+      label: a11yLabel,
+      hint: '點兩下查看回覆。上滑有更多操作',
+      customSemanticsActions: {
+        const CustomSemanticsAction(label: '更多操作'): showMore,
+        const CustomSemanticsAction(label: '點讚這條評論'): () async {
+          final res = await ReplyHttp.likeReply(
+            type: 1,
+            oid: replyItem.oid.toInt(),
+            rpid: replyItem.rpid.toInt(),
+            action: 1,
+          );
+          if (res case Success()) {
+            SmartDialog.showToast('已點讚');
+          } else {
+            SmartDialog.showToast('點讚失敗（需登入）');
+          }
+        },
+      },
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: () => replyReply?.call(replyItem, null),
+          onLongPress: showMore,
+          onSecondaryTap: PlatformUtils.isMobile ? null : showMore,
+          child: child,
+        ),
       ),
     );
   }

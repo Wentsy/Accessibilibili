@@ -1,0 +1,69 @@
+name: Build iOS ipa (a11y fork)
+
+on:
+  push:
+    branches: [main, a11y]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter 3.47.1
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.1
+
+      - name: Doctor
+        run: flutter doctor -v
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build iOS (unsigned)
+        run: |
+          flutter build ios --release --no-codesign
+
+      - name: Fake-sign frameworks + main binary (ad-hoc)
+        run: |
+          APP="build/ios/iphoneos/Runner.app"
+          cat > /tmp/ent.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>platform-application</key>
+            <true/>
+            <key>com.apple.security.network.client</key>
+            <true/>
+            <key>com.apple.developer.team-identifier</key>
+            <string></string>
+          </dict>
+          </plist>
+          EOF
+          # 簽所有 embedded frameworks（依賴順序）
+          if [ -d "$APP/Frameworks" ]; then
+            find "$APP/Frameworks" -name "*.framework" | while read FW; do
+              codesign --force --sign - --timestamp=none "$FW" || true
+            done
+            find "$APP/Frameworks" -name "*.dylib" | while read DY; do
+              codesign --force --sign - --timestamp=none "$DY" || true
+            done
+          fi
+          # 主執行主執行檔（帶 entitlements，一次到位）
+          codesign --force --sign - --timestamp=none --entitlements /tmp/ent.plist "$APP"
+          codesign -dv "$APP" || true
+
+      - name: Package ipa
+        run: |
+          mkdir -p Payload
+          cp -R build/ios/iphoneos/Runner.app Payload/
+          zip -qry PiliPlus-a11y.ipa Payload
+          ls -lh PiliPlus-a11y.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: piliplus-a11y-ipa
+          path: PiliPlus-a11y.ipa
