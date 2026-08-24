@@ -1,5 +1,5 @@
 import 'dart:math';
-import 'dart:ui' show CustomSemanticsAction;
+import 'package:flutter/services.dart' show CustomSemanticsAction;
 
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/constants.dart';
