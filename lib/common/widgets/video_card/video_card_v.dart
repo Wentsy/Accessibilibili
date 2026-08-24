@@ -1,3 +1,4 @@
+import 'dart:ui' show CustomSemanticsAction, VoidCallback;
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
@@ -86,8 +87,8 @@ class VideoCardV extends StatelessWidget {
   /// 無障礙自訂操作：VoiceOver 上下滑切換、點兩下啟用
   Map<CustomSemanticsAction, VoidCallback> _a11yActions(BuildContext context) {
     final bvid = videoItem.bvid;
-    return {
-      const CustomSemanticsAction(label: '點讚'): () async {
+    return <CustomSemanticsAction, VoidCallback>{
+      CustomSemanticsAction(label: '點讚'): () async {
         if (bvid == null) return;
         final res = await VideoHttp.likeVideo(bvid: bvid, type: true);
         if (res case Success(:final response)) {
@@ -96,11 +97,11 @@ class VideoCardV extends StatelessWidget {
           SmartDialog.showToast('點讚失敗（需登入）');
         }
       },
-      const CustomSemanticsAction(label: '分享'): () {
+      CustomSemanticsAction(label: '分享'): () {
         if (bvid == null) return;
         SmartDialog.showToast('分享：https://www.bilibili.com/video/$bvid');
       },
-      const CustomSemanticsAction(label: '更多操作'): () {
+      CustomSemanticsAction(label: '更多操作'): () {
         onPushDetail();
       },
     };

@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' show CustomSemanticsAction;
 
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/constants.dart';
@@ -144,13 +145,13 @@ class ReplyItemGrpc extends StatelessWidget {
       explicitChildNodes: false,
       label: a11yLabel,
       hint: '點兩下查看回覆。上滑有更多操作',
-      customSemanticsActions: {
-        const CustomSemanticsAction(label: '更多操作'): showMore,
-        const CustomSemanticsAction(label: '點讚這條評論'): () async {
+      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+        CustomSemanticsAction(label: '更多操作'): showMore,
+        CustomSemanticsAction(label: '點讚這條評論'): () async {
           final res = await ReplyHttp.likeReply(
             type: 1,
             oid: replyItem.oid.toInt(),
-            rpid: replyItem.rpid.toInt(),
+            rpid: replyItem.id.toInt(),
             action: 1,
           );
           if (res case Success()) {
