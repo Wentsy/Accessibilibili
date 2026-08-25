@@ -101,12 +101,8 @@ class VideoCardV extends StatelessWidget {
       },
       CustomSemanticsAction(label: '分享'): () {
         if (bvid == null) return;
-        SmartDialog.showToast('分享：https://www.bilibili.com/video/$bvid');
-      },
-      CustomSemanticsAction(label: '複製連結'): () {
-        if (bvid == null) return;
         Utils.copyText('https://www.bilibili.com/video/$bvid');
-        SmartDialog.showToast('已複製連結');
+        SmartDialog.showToast('連結已複製，可直接分享');
       },
       CustomSemanticsAction(label: '稍後再看'): () {
         if (bvid == null || !Accounts.main.isLogin) {

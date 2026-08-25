@@ -1,4 +1,6 @@
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:PiliPlus/common/style.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -12,6 +14,7 @@ import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:PiliPlus/utils/utils.dart';
 import 'package:material_ui/material_ui.dart';
 
 // 视频卡片 - 水平布局
@@ -36,7 +39,21 @@ class VideoCardH extends StatelessWidget {
       cover: videoItem.cover,
     );
     final theme = Theme.of(context);
-    return Material(
+    // 🔴 無障礙：整卡語義節點（比照首頁）
+    final bvid = videoItem.bvid;
+    return Semantics(
+      container: true,
+      explicitChildNodes: false,
+      label: videoItem.title,
+      hint: '點兩下開啟影片。上滑有更多操作',
+      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+        CustomSemanticsAction(label: '分享'): () {
+          if (bvid == null) return;
+          Utils.copyText('https://www.bilibili.com/video/$bvid');
+          SmartDialog.showToast('連結已複製，可直接分享');
+        },
+      },
+      child: Material(
       type: .transparency,
       child: Stack(
         clipBehavior: .none,
@@ -163,18 +180,8 @@ class VideoCardH extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            bottom: 0,
-            right: 12,
-            width: 29,
-            height: 29,
-            child: VideoPopupMenu(
-              iconSize: 17,
-              videoItem: videoItem,
-              onRemove: onRemove,
-            ),
-          ),
         ],
+      ),
       ),
     );
   }

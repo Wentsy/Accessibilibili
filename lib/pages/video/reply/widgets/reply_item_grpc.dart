@@ -136,8 +136,11 @@ class ReplyItemGrpc extends StatelessWidget {
       );
     }
     // 🔴 無障礙：整則評論一個語義節點，VoiceOver 左右滑逐則瀏覽
+    // YouTube iOS 模式：暱稱 → 內容 → [圖片] → 讚數 → 回覆數，單一焦點
+    final hasPic = replyItem.content.pictures.isNotEmpty;
+    final String picPart = hasPic ? '，[圖片]' : '';
     final String a11yLabel =
-        '${replyItem.member.name} 說：${replyItem.content.message}'
+        '${replyItem.member.name} 說：${replyItem.content.message}$picPart'
         '${replyItem.like > 0 ? '，${replyItem.like} 個讚' : ''}'
         '${replyItem.count > 0 ? '，共 ${replyItem.count} 條回覆' : ''}';
     return Semantics(
@@ -149,19 +152,6 @@ class ReplyItemGrpc extends StatelessWidget {
       hint: '點兩下查看回覆。上滑有更多操作',
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(label: '更多操作'): showMore,
-        CustomSemanticsAction(label: '點踩這條評論'): () async {
-          final res = await ReplyHttp.hateReply(
-            type: 1,
-            action: 1,
-            oid: replyItem.oid.toInt(),
-            rpid: replyItem.id.toInt(),
-          );
-          if (res case Success()) {
-            SmartDialog.showToast('已點踩');
-          } else {
-            SmartDialog.showToast('點踩失敗（需登入）');
-          }
-        },
         CustomSemanticsAction(label: '點讚這條評論'): () async {
           final res = await ReplyHttp.likeReply(
             type: 1,
@@ -173,6 +163,19 @@ class ReplyItemGrpc extends StatelessWidget {
             SmartDialog.showToast('已點讚');
           } else {
             SmartDialog.showToast('點讚失敗（需登入）');
+          }
+        },
+        CustomSemanticsAction(label: '點踩這條評論'): () async {
+          final res = await ReplyHttp.hateReply(
+            type: 1,
+            action: 1,
+            oid: replyItem.oid.toInt(),
+            rpid: replyItem.id.toInt(),
+          );
+          if (res case Success()) {
+            SmartDialog.showToast('已點踩');
+          } else {
+            SmartDialog.showToast('點踩失敗（需登入）');
           }
         },
       },
