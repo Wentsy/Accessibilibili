@@ -73,9 +73,10 @@ class _MainReplyPageState extends State<MainReplyPage>
               physics: const AlwaysScrollableScrollPhysics(),
               // 🔴 無障礙：加大預建範圍 + 明確捲動語義（VoiceOver 三指滑動目標）
               cacheExtent: 3000,
-              semanticChildCount: _controller.loadingState.value.isSuccess
-                  ? (_controller.loadingState.value.response?.length ?? 0)
-                  : null,
+              semanticChildCount: switch (_controller.loadingState.value) {
+                Success(:final response) => response?.length ?? 0,
+                _ => null,
+              },
               slivers: [
                 buildReplyHeader(colorScheme),
                 Obx(
