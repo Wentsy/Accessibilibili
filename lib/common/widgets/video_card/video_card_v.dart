@@ -99,11 +99,15 @@ class VideoCardV extends StatelessWidget {
           SmartDialog.showToast(response);
           // 🔴 語音反饋：VoiceOver 立即朗讀結果
           SemanticsService.sendAnnouncement(
-              TextDirection.ltr, response);
+              WidgetsBinding.instance.platformDispatcher.views.first,
+              response,
+              ui.TextDirection.ltr);
         } else {
           SmartDialog.showToast('點讚失敗（需登入）');
           SemanticsService.sendAnnouncement(
-              TextDirection.ltr, '點讚失敗，需要登入');
+              WidgetsBinding.instance.platformDispatcher.views.first,
+              '點讚失敗，需要登入',
+              ui.TextDirection.ltr);
         }
       },
       CustomSemanticsAction(label: '分享'): () {
