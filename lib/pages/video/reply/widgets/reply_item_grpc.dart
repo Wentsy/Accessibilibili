@@ -84,6 +84,9 @@ class ReplyItemGrpc extends StatelessWidget {
   final bool needDivider;
   final ValueChanged<ReplyInfo>? onReply;
   final Function(ReplyInfo replyItem, int? subIndex)? onDelete;
+
+  /// 🔴 無障礙：穩定排序鍵，防止 VoiceOver 焦點鬼打牆
+  final OrdinalSortKey? a11ySortKey;
   final Int64? upMid;
   final VoidCallback? showDialogue;
   final Function? getTag;

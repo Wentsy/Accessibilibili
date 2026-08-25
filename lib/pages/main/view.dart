@@ -5,6 +5,7 @@ import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/floating_navigation_bar.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
+import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/main_layout.dart';
 import 'package:PiliPlus/common/widgets/route_aware_mixin.dart';
@@ -493,7 +494,7 @@ class _MainAppState extends PopScopeState<MainApp>
           context: context,
           removeTop: true,
           child: Semantics(
-            sortKey: const OrdinalSortKey(-1),
+            sortKey: OrdinalSortKey(-1),
             container: true,
             explicitChildNodes: false,
             child: bottomNav,
