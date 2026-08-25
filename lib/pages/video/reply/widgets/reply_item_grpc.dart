@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/widgets.dart' show ScrollableState;
 
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/constants.dart';
@@ -174,6 +175,32 @@ class ReplyItemGrpc extends StatelessWidget {
             SmartDialog.showToast('已點讚');
           } else {
             SmartDialog.showToast('點讚失敗（需登入）');
+          }
+        },
+        CustomSemanticsAction(label: '向下翻頁'): () {
+          final sc = Get.context?.findAncestorStateOfType<State<Scrollable>>();
+          // 直接用主軸捲動：找 ScrollableState
+          final scrollable = Get.context?.findAncestorStateOfType<ScrollableState>();
+          if (scrollable != null && scrollable.position.hasContentDimensions) {
+            final pos = scrollable.position;
+            pos.jumpTo((pos.pixels + pos.viewportDimension * 0.9)
+                .clamp(0.0, pos.maxScrollExtent));
+          }
+        },
+        CustomSemanticsAction(label: '向上翻頁'): () {
+          final scrollable = Get.context?.findAncestorStateOfType<ScrollableState>();
+          if (scrollable != null && scrollable.position.hasContentDimensions) {
+            final pos = scrollable.position;
+            pos.jumpTo((pos.pixels - pos.viewportDimension * 0.9)
+                .clamp(0.0, pos.maxScrollExtent));
+          }
+        },
+        CustomSemanticsAction(label: '載入更多評論'): () {
+          // 手動觸發預載（鬼打牆時的救援）
+          final scrollable = Get.context?.findAncestorStateOfType<ScrollableState>();
+          if (scrollable != null) {
+            final pos = scrollable.position;
+            pos.jumpTo(pos.maxScrollExtent);
           }
         },
         CustomSemanticsAction(label: '點踩這條評論'): () async {
