@@ -69,7 +69,6 @@ class ReplyItemGrpc extends StatelessWidget {
     this.needDivider = true,
     this.onReply,
     this.onDelete,
-    this.a11ySortKey,
     this.upMid,
     this.showDialogue,
     this.getTag,
