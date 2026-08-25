@@ -138,8 +138,9 @@ class VideoCardV extends StatelessWidget {
       hint: '點兩下開啟影片。上滑有更多操作',
       onLongPressHint: null,
       customSemanticsActions: _a11yActions(context),
+      child: ExcludeSemantics(
       child: Stack(
-      clipBehavior: Clip.none,
+        clipBehavior: Clip.none,
       children: [
         Card(
           child: InkWell(
@@ -186,6 +187,7 @@ class VideoCardV extends StatelessWidget {
           ),
         ),
       ],
+      ),
       ),
     );
   }

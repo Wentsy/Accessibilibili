@@ -180,7 +180,8 @@ class ReplyItemGrpc extends StatelessWidget {
           }
         },
       },
-      child: Material(
+      child: ExcludeSemantics(
+        child: Material(
         type: MaterialType.transparency,
         child: InkWell(
           onTap: () => replyReply?.call(replyItem, null),
@@ -188,6 +189,7 @@ class ReplyItemGrpc extends StatelessWidget {
           onSecondaryTap: PlatformUtils.isMobile ? null : showMore,
           child: child,
         ),
+      ),
       ),
     );
   }
