@@ -123,8 +123,11 @@ class _MainReplyPageState extends State<MainReplyPage>
             ? SliverList.builder(
                 itemCount: response.length + 1,
                 itemBuilder: (context, index) {
-                  if (index == response.length) {
+                  // 🔴 無障礙：VoiceOver 逐項滑動很慢，倒數第4個就預載
+                  if (index >= response.length - 3) {
                     _controller.onLoadMore();
+                  }
+                  if (index == response.length) {
                     return Container(
                       alignment: Alignment.center,
                       margin: EdgeInsets.only(bottom: padding.bottom),
