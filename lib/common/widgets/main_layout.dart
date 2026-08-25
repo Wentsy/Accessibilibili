@@ -94,10 +94,6 @@ class _RenderMainLayout extends RenderBox
     setOffset(body, bodyOffset);
   }
 
-    }
-    return super.hitTestChildren(result, position: position);
-  }
-
   @override
   void paint(PaintingContext context, Offset offset) {
     void doPaint(RenderBox? child) {
