@@ -494,9 +494,8 @@ class _MainAppState extends PopScopeState<MainApp>
           context: context,
           removeTop: true,
           child: Semantics(
-            sortKey: OrdinalSortKey(-1),
             container: true,
-            explicitChildNodes: false,
+            explicitChildNodes: true,
             child: bottomNav,
           ),
         );
