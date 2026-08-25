@@ -1742,22 +1742,7 @@ class HeaderControlState extends State<HeaderControl>
                     plPlayerController.onPopInvokedWithResult(false, null),
               ),
             ),
-            if (!plPlayerController.isDesktopPip &&
-                (!isFullScreen || !isPortrait))
-              SizedBox(
-                width: btnWidth,
-                height: btnHeight,
-                child: IconButton(
-                  tooltip: '返回主页',
-                  style: btnStyle,
-                  icon: const Icon(
-                    FontAwesomeIcons.house,
-                    size: 15,
-                    color: Colors.white,
-                  ),
-                  onPressed: plPlayerController.onCloseAll,
-                ),
-              ),
+
             title,
             // show current datetime
             ...?timeBatteryWidgets,

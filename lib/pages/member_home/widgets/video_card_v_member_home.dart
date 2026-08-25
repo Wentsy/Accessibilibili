@@ -86,7 +86,7 @@ class VideoCardVMemberHome extends StatelessWidget {
     );
     // 🔴 無障礙：整卡一個語義節點（比照首頁）
     final bvid = videoItem.bvid;
-    final String a11yLabel = '${videoItem.title}'
+    final String a11yLabel = '${videoItem.title}，${videoItem.owner.name}'
         '${videoItem.duration > 0 ? '，時長 ${DurationUtils.formatDuration(videoItem.duration)}' : ''}'
         '，播放 ${videoItem.stat.view ?? "?"} 次，彈幕 ${videoItem.stat.danmu ?? "?"}';
     return Semantics(
