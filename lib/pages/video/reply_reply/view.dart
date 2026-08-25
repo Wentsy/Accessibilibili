@@ -188,29 +188,35 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Semantics(
-                excludeSemantics: true,
-                sortKey: const OrdinalSortKey(0.4),
-                button: true,
-                label: '載入更多回覆',
-                child: FloatingActionButton.small(
-                heroTag: 'loadMoreRepliesSub',
-                onPressed: () {
-                  feedBack();
-                  final sc = scrollController;
-                  if (sc.hasClients) {
-                    sc.animateTo(
-                      sc.position.maxScrollExtent,
-                      duration: const Duration(milliseconds: 400),
-                      curve: Curves.easeOut,
-                    );
+                Obx(() {
+                  _controller.loadingState.value; // 註冊依賴
+                  if (_controller.isEnd) {
+                    return const SizedBox.shrink();
                   }
-                  _controller.onLoadMore();
-                },
-                tooltip: '载入更多回复',
-                child: const Icon(Icons.unfold_more),
-                ),
-                ),
+                  return Semantics(
+                    excludeSemantics: true,
+                    sortKey: const OrdinalSortKey(0.4),
+                    button: true,
+                    label: '載入更多回覆',
+                    child: FloatingActionButton.small(
+                      heroTag: 'loadMoreRepliesSub',
+                      onPressed: () {
+                        feedBack();
+                        final sc = scrollController;
+                        if (sc.hasClients) {
+                          sc.animateTo(
+                            sc.position.maxScrollExtent,
+                            duration: const Duration(milliseconds: 400),
+                            curve: Curves.easeOut,
+                          );
+                        }
+                        _controller.onLoadMore();
+                      },
+                      tooltip: '载入更多回复',
+                      child: const Icon(Icons.unfold_more),
+                    ),
+                  );
+                }),
                 const SizedBox(height: 12),
                 Semantics(
                 excludeSemantics: true,
@@ -219,7 +225,15 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                 label: '發表回覆',
                 child: FloatingActionButton(
                 heroTag: 'replyReplyFab',
-                onPressed: () => _controller.onReply(null, index: -1),
+                onPressed: () {
+                  final root = widget.firstFloor ?? _controller.firstFloor.value;
+                  if (root != null) {
+                    feedBack();
+                    _controller.onReply(root, index: 0);
+                  } else {
+                    SmartDialog.showToast('請先等待評論載入');
+                  }
+                },
                 tooltip: '发表回复',
                 child: const Icon(Icons.reply),
                 ),

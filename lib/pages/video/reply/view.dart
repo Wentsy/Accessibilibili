@@ -130,30 +130,36 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-              // 🔴 載入更多評論：滑到底時觸手可及
-              Semantics(
-                excludeSemantics: true,
-                sortKey: const OrdinalSortKey(0.4),
-                button: true,
-                label: '載入更多評論',
-                child: FloatingActionButton.small(
-                heroTag: 'loadMoreReplies',
-                onPressed: () {
-                  feedBack();
-                  final sc = _videoReplyController.scrollController;
-                  if (sc.hasClients) {
-                    sc.animateTo(
-                      sc.position.maxScrollExtent,
-                      duration: const Duration(milliseconds: 400),
-                      curve: Curves.easeOut,
-                    );
-                  }
-                  _videoReplyController.onLoadMore();
-                },
-                tooltip: '载入更多评论',
-                child: const Icon(Icons.unfold_more),
-                ),
-              ),
+              // 🔴 載入更多評論：滑到底時觸手可及；「沒有更多了」就隱藏
+              Obx(() {
+                _videoReplyController.loadingState.value; // 註冊依賴
+                if (_videoReplyController.isEnd) {
+                  return const SizedBox.shrink();
+                }
+                return Semantics(
+                  excludeSemantics: true,
+                  sortKey: const OrdinalSortKey(0.4),
+                  button: true,
+                  label: '載入更多評論',
+                  child: FloatingActionButton.small(
+                    heroTag: 'loadMoreReplies',
+                    onPressed: () {
+                      feedBack();
+                      final sc = _videoReplyController.scrollController;
+                      if (sc.hasClients) {
+                        sc.animateTo(
+                          sc.position.maxScrollExtent,
+                          duration: const Duration(milliseconds: 400),
+                          curve: Curves.easeOut,
+                        );
+                      }
+                      _videoReplyController.onLoadMore();
+                    },
+                    tooltip: '载入更多评论',
+                    child: const Icon(Icons.unfold_more),
+                  ),
+                );
+              }),
               const SizedBox(height: 12),
               Semantics(
                 excludeSemantics: true,
@@ -269,6 +275,8 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
 
   // 展示二级回复
   void replyReply(ReplyInfo replyItem, int? id) {
+    // 🔴 無障礙：樓中樓打開時隱藏主評論區 FAB（避免 VoiceOver 聽到四個重疊按鈕）
+    hideFab();
     EasyThrottle.throttle('replyReply', const Duration(milliseconds: 500), () {
       int oid = replyItem.oid.toInt();
       int rpid = replyItem.id.toInt();

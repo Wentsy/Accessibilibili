@@ -784,7 +784,7 @@ class RenderProgressBar extends RenderBox implements MouseTrackerAnnotation {
 
   // This is how much to move the thumb if the move is triggered by a
   // semantic action rather than a touch event.
-  static const double _semanticActionUnit = 0.05;
+  static const double _semanticActionUnit = 0.02; // 🔴 2% 步進：長影片跳轉更精準
 
   void increaseAction() {
     final newValue = _thumbValue + _semanticActionUnit;
