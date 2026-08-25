@@ -1,3 +1,5 @@
+import 'package:flutter/semantics.dart';
+import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/colored_box_transition.dart';
@@ -146,7 +148,9 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
     return SimpleColoredBox(
       color: theme.canvasColor,
       child: MiniScaffold(
-        body: widget.isVideoDetail
+        body: Stack(
+          children: [
+            widget.isVideoDetail
             ? Column(
                 children: [
                   Container(
@@ -176,6 +180,55 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                 ],
               )
             : child(),
+            // 🔴 無障礙：樓中樓浮動按鈕（載入更多 + 發表回覆），比照評論區
+            Positioned(
+              right: 16,
+              bottom: 16 + MediaQuery.paddingOf(context).bottom,
+              child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Semantics(
+                excludeSemantics: true,
+                sortKey: const OrdinalSortKey(0.4),
+                button: true,
+                label: '載入更多回覆',
+                child: FloatingActionButton.small(
+                heroTag: 'loadMoreRepliesSub',
+                onPressed: () {
+                  feedBack();
+                  final sc = scrollController;
+                  if (sc.hasClients) {
+                    sc.animateTo(
+                      sc.position.maxScrollExtent,
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeOut,
+                    );
+                  }
+                  _controller.onLoadMore();
+                },
+                tooltip: '载入更多回复',
+                child: const Icon(Icons.unfold_more),
+                ),
+                ),
+                const SizedBox(height: 12),
+                Semantics(
+                excludeSemantics: true,
+                sortKey: const OrdinalSortKey(0.5),
+                button: true,
+                label: '發表回覆',
+                child: FloatingActionButton(
+                heroTag: 'replyReplyFab',
+                onPressed: () => _controller.onReply(null, index: -1),
+                tooltip: '发表回复',
+                child: const Icon(Icons.reply),
+                ),
+                ),
+              ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
