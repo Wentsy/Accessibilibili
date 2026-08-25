@@ -141,7 +141,7 @@ class _MainReplyPageState extends State<MainReplyPage>
                   if (index == response.length) {
                     return Semantics(
                       container: true,
-                      label: _controller.isEnd ? '没有更多了' : '載入更多評論中',
+                      label: _controller.isEnd ? '没有更多了' : '載入更多評論中，請點右下角按鈕',
                       child: Container(
                       alignment: Alignment.center,
                       margin: EdgeInsets.only(bottom: padding.bottom),
