@@ -150,7 +150,11 @@ class ReplyItemGrpc extends StatelessWidget {
       scopesRoute: false,
       label: a11yLabel,
       textDirection: TextDirection.ltr,
-      hint: '點兩下查看回覆。上滑有更多操作',
+      // 🔴 雙擊行為：有樓中樓 → 展開回覆；沒有 → 開啟更多選單
+      onTap: (replyItem.count ?? 0) > 0
+          ? () => replyReply?.call(replyItem, null)
+          : () => showMore(),
+      onTapHint: (replyItem.count ?? 0) > 0 ? '點兩下展開回覆' : '點兩下開啟更多操作',
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(label: '更多操作'): showMore,
         CustomSemanticsAction(label: '點讚這條評論'): () async {

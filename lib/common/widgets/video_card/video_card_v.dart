@@ -23,6 +23,7 @@ import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -110,6 +111,41 @@ class VideoCardV extends StatelessWidget {
           return;
         }
         UserHttp.toViewLater(bvid: bvid);
+      },
+      CustomSemanticsAction(label: '造訪UP主'): () {
+        Get.toNamed('/member?mid=${videoItem.owner.mid}');
+      },
+      CustomSemanticsAction(label: '更多操作'): () {
+        showModalBottomSheet(
+          context: context,
+          useSafeArea: true,
+          builder: (sheetCtx) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.link),
+                  title: const Text('複製影片連結'),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    if (bvid != null) {
+                      Utils.copyText('https://www.bilibili.com/video/$bvid');
+                      SmartDialog.showToast('連結已複製');
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.person_search),
+                  title: Text('造訪UP主：${videoItem.owner.name}'),
+                  onTap: () {
+                    Navigator.pop(sheetCtx);
+                    Get.toNamed('/member?mid=${videoItem.owner.mid}');
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
       },
     };
   }
