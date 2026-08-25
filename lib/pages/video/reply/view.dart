@@ -76,9 +76,9 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
         isClampingScrollPhysics: widget.isNested,
         child: ScaffoldLayout(
           body: CustomScrollView(
-            controller: widget.isNested
-                ? null
-                : _videoReplyController.scrollController,
+            // 🔴 無障礙修復：nested 模式也必須掛 controller，
+            // 否則 VoiceOver 翻頁動作（scrollController 操作）全部靜默失敗
+            controller: _videoReplyController.scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             key: const PageStorageKey(_VideoReplyPanelState),
             slivers: [
