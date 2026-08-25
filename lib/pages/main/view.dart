@@ -501,10 +501,13 @@ class _MainAppState extends PopScopeState<MainApp>
           ),
         );
       }
+      // 🔴 無障礙：底部留白給導航列，避免列表覆蓋導航按鈕
+      final navHeight = 75.0;
       padding = .only(
         top: _padding.top,
         left: _padding.left,
         right: _padding.right,
+        bottom: navHeight,
       );
     } else {
       sideBar = DecoratedBox(

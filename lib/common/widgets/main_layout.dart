@@ -94,24 +94,6 @@ class _RenderMainLayout extends RenderBox
     setOffset(body, bodyOffset);
   }
 
-  @override
-  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
-    // 🔴 無障礙 + 可用性修復：body 覆蓋全螢幕時，底端區域的 hit test 應優先給底部導航
-    // 讓底部導航的按鈕真正可被點擊，而非被 body 的卡片元素吃單
-    final bottomNav = this.bottomNav;
-    if (bottomNav != null) {
-      final bottomNavSize = bottomNav.paintBounds.size;
-      final bottomY = constraints.maxHeight - bottomNavSize.height;
-      if (position.dy >= bottomY) {
-        final bool isHit = result.addWithPaintOffset(
-          offset: getOffset(bottomNav),
-          position: position,
-          hitTest: (BoxHitTestResult result, Offset transformed) {
-            return bottomNav.hitTest(result, position: transformed);
-          },
-        );
-        if (isHit) return true;
-      }
     }
     return super.hitTestChildren(result, position: position);
   }

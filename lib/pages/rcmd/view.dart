@@ -39,7 +39,7 @@ class _RcmdPageState extends State<RcmdPage>
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverPadding(
-              padding: const .only(top: Style.cardSpace, bottom: 100),
+              padding: const .only(top: Style.cardSpace, bottom: 140),
               sliver: Obx(
                 () => _buildBody(colorScheme, controller.loadingState.value),
               ),
