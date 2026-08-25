@@ -1736,8 +1736,8 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                           barHeight: 3.5,
                           thumbRadius: 2.5,
                           // 🔴 無障礙修復：VoiceOver 上下滑調進度（±5%）必須接 onSeek 才會真的跳轉
-                          onSeek: (position) =>
-                              plPlayerController.seekTo(position),
+                          onSeek: (milliseconds) => plPlayerController
+                              .seekTo(Duration(milliseconds: milliseconds)),
                         ),
                       ),
                       if (plPlayerController.enableBlock &&
