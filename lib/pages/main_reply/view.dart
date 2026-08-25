@@ -128,7 +128,10 @@ class _MainReplyPageState extends State<MainReplyPage>
                     _controller.onLoadMore();
                   }
                   if (index == response.length) {
-                    return Container(
+                    return Semantics(
+                      container: true,
+                      label: _controller.isEnd ? '没有更多了' : '載入更多評論中',
+                      child: Container(
                       alignment: Alignment.center,
                       margin: EdgeInsets.only(bottom: padding.bottom),
                       height: 125,
@@ -138,6 +141,7 @@ class _MainReplyPageState extends State<MainReplyPage>
                           fontSize: 12,
                           color: colorScheme.outline,
                         ),
+                      ),
                       ),
                     );
                   } else {
