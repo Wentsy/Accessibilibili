@@ -69,6 +69,16 @@ class _MainReplyPageState extends State<MainReplyPage>
               left: padding.left,
               right: padding.right,
             ),
+            child: Semantics(
+            container: true,
+            explicitChildNodes: true,
+            label: '評論列表',
+            customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+              // YouTube 式翻頁：朗讀「第 X 項到第 Y 項」
+              CustomSemanticsAction(label: '下一頁'): () =>
+                  _pageDown(_controller),
+              CustomSemanticsAction(label: '上一頁'): () => _pageUp(_controller),
+            },
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               // 🔴 無障礙：加大預建範圍 + 明確捲動語義（VoiceOver 三指滑動目標）
@@ -83,6 +93,7 @@ class _MainReplyPageState extends State<MainReplyPage>
                   () => _buildBody(colorScheme, _controller.loadingState.value),
                 ),
               ],
+            ),
             ),
           ),
         ).constraintWidth(),
@@ -219,6 +230,33 @@ class _MainReplyPageState extends State<MainReplyPage>
           ],
         ),
       ),
+    );
+  }
+
+  /// 🔴 YouTube 式翻頁：滾一屏（VoiceOver「下一頁/上一頁」動作）
+  void _pageDown(dynamic controller) {
+    final sc = controller.scrollController;
+    if (!sc.hasClients) return;
+    final pos = sc.position;
+    final target = (pos.pixels + pos.viewportDimension * 0.9)
+        .clamp(0.0, pos.maxScrollExtent);
+    sc.animateTo(
+      target,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _pageUp(dynamic controller) {
+    final sc = controller.scrollController;
+    if (!sc.hasClients) return;
+    final pos = sc.position;
+    final target = (pos.pixels - pos.viewportDimension * 0.9)
+        .clamp(0.0, pos.maxScrollExtent);
+    sc.animateTo(
+      target,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
     );
   }
 
