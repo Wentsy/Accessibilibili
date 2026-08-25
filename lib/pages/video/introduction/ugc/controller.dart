@@ -225,7 +225,7 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
   @override
   /// 🔴 無障礙：VoiceOver 即時朗讀動作結果（2026-08-26）
   void a11yAnnounce(String msg) {
-    SemanticsService.sendAnnouncement(TextDirection.ltr, msg);
+    SemanticsService.sendAnnouncement(Get.context!, msg, Directionality.of(Get.context!));
   }
 
   Future<void> actionLikeVideo() async {
