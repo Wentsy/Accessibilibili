@@ -69,19 +69,11 @@ class _MainReplyPageState extends State<MainReplyPage>
               left: padding.left,
               right: padding.right,
             ),
-            child: Semantics(
-            container: true,
-            explicitChildNodes: true,
-            label: '評論列表',
-            customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
-              // YouTube 式翻頁：朗讀「第 X 項到第 Y 項」
-              CustomSemanticsAction(label: '下一頁'): () =>
-                  _pageDown(_controller),
-              CustomSemanticsAction(label: '上一頁'): () => _pageUp(_controller),
-            },
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              // 🔴 無障礙：加大預建範圍 + 明確捲動語義（VoiceOver 三指滑動目標）
+              // 🔴 無障礙：加大預建範圍，讓 VoiceOver 永遠有「下一條」可跳
+              // 注意：不要在這裡包 Semantics(container)——會把捲動區變成語義孤島，
+              // 吞掉 scroll actions 和外部元素（FAB 被蓋掉的元兇）
               cacheExtent: 3000,
               semanticChildCount: switch (_controller.loadingState.value) {
                 Success(:final response) => response?.length ?? 0,
@@ -93,7 +85,6 @@ class _MainReplyPageState extends State<MainReplyPage>
                   () => _buildBody(colorScheme, _controller.loadingState.value),
                 ),
               ],
-            ),
             ),
           ),
         ).constraintWidth(),

@@ -1,3 +1,4 @@
+import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -125,7 +126,11 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 right: kFloatingActionButtonMargin,
                 bottom: kFloatingActionButtonMargin + bottom,
               ),
-              child: FloatingActionButton(
+              child: Semantics(
+                sortKey: const OrdinalSortKey(0.5),
+                button: true,
+                label: '發表評論',
+                child: FloatingActionButton(
                 heroTag: null,
                 onPressed: () {
                   feedBack();
@@ -137,6 +142,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 },
                 tooltip: '发表评论',
                 child: const Icon(Icons.reply),
+                ),
               ),
             ),
           ),
