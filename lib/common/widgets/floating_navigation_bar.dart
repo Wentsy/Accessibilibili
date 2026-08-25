@@ -287,10 +287,8 @@ class _NavigationDestinationBuilderState
       container: true,
       explicitChildNodes: false,
       excludeSemantics: true,
-      label: info.label,
-      selected: widget.enabled &&
-          (widget.selectedIndex == _NavigationDestinationInfo.of(context).index ??
-              false),
+      label: widget.label,
+      selected: widget.enabled && info.selectedIndex == info.index,
       child: GestureDetector(
       behavior: .opaque,
       onTap: widget.enabled ? info.onTap : null,
