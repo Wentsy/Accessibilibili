@@ -71,6 +71,8 @@ class _MainReplyPageState extends State<MainReplyPage>
             ),
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
+              // 🔴 無障礙：加大預建範圍，VoiceOver 掃描時永遠有「下一條」可跳
+              cacheExtent: 3000,
               slivers: [
                 buildReplyHeader(colorScheme),
                 Obx(

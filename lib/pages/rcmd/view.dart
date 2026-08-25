@@ -37,6 +37,7 @@ class _RcmdPageState extends State<RcmdPage>
         child: CustomScrollView(
           controller: controller.scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
+          cacheExtent: 3000,
           slivers: [
             SliverPadding(
               padding: const .only(top: Style.cardSpace, bottom: 140),
