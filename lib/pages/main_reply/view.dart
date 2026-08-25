@@ -121,6 +121,8 @@ class _MainReplyPageState extends State<MainReplyPage>
       Success(:final response) =>
         response != null && response.isNotEmpty
             ? SliverList.builder(
+                // 🔴 無障礙：固定 key，載入更多時保留元素樹與 VoiceOver 焦點
+                key: const ValueKey('reply_list'),
                 itemCount: response.length + 1,
                 itemBuilder: (context, index) {
                   // 🔴 無障礙：VoiceOver 逐項滑動很慢，倒數第4個就預載
