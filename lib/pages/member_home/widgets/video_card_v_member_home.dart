@@ -15,6 +15,7 @@ import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
+import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 // 视频卡片 - 垂直布局
@@ -86,7 +87,8 @@ class VideoCardVMemberHome extends StatelessWidget {
     // 🔴 無障礙：整卡一個語義節點（比照首頁）
     final bvid = videoItem.bvid;
     final String a11yLabel = '${videoItem.title}'
-        '${videoItem.duration > 0 ? '，時長 ${DurationUtils.formatDuration(videoItem.duration)}' : ''}';
+        '${videoItem.duration > 0 ? '，時長 ${DurationUtils.formatDuration(videoItem.duration)}' : ''}'
+        '，播放 ${videoItem.stat.view ?? "?"} 次，彈幕 ${videoItem.stat.danmu ?? "?"}';
     return Semantics(
       container: true,
       explicitChildNodes: false,
@@ -100,6 +102,41 @@ class VideoCardVMemberHome extends StatelessWidget {
           SmartDialog.showToast('連結已複製，可直接分享');
         },
         CustomSemanticsAction(label: '儲存封面'): () => onLongPress(),
+        CustomSemanticsAction(label: '造訪UP主'): () {
+          Get.toNamed('/member?mid=${videoItem.owner.mid}');
+        },
+        CustomSemanticsAction(label: '更多操作'): () {
+          showModalBottomSheet(
+            context: context,
+            useSafeArea: true,
+            builder: (sheetCtx) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.link),
+                    title: const Text('複製影片連結'),
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      if (bvid != null) {
+                        Utils.copyText('https://www.bilibili.com/video/$bvid');
+                        SmartDialog.showToast('連結已複製');
+                      }
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.person_search),
+                    title: Text('造訪UP主：${videoItem.owner.name}'),
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      Get.toNamed('/member?mid=${videoItem.owner.mid}');
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       },
       child: ExcludeSemantics(
       child: Card(
