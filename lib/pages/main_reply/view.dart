@@ -128,7 +128,7 @@ class _MainReplyPageState extends State<MainReplyPage>
                 itemCount: response.length + 1,
                 itemBuilder: (context, index) {
                   // 🔴 無障礙：VoiceOver 逐項滑動很慢，倒數第4個就預載
-                  if (index >= response.length - 3) {
+                  if (index >= response.length - 8) {
                     _controller.onLoadMore();
                   }
                   if (index == response.length) {
