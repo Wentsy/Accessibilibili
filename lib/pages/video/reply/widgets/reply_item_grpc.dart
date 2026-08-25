@@ -178,29 +178,39 @@ class ReplyItemGrpc extends StatelessWidget {
           }
         },
         CustomSemanticsAction(label: '向下翻頁'): () {
-          final sc = Get.context?.findAncestorStateOfType<State<Scrollable>>();
-          // 直接用主軸捲動：找 ScrollableState
-          final scrollable = Get.context?.findAncestorStateOfType<ScrollableState>();
+          final scrollable = context.findAncestorStateOfType<ScrollableState>();
           if (scrollable != null && scrollable.position.hasContentDimensions) {
             final pos = scrollable.position;
-            pos.jumpTo((pos.pixels + pos.viewportDimension * 0.9)
-                .clamp(0.0, pos.maxScrollExtent));
+            final target = (pos.pixels + pos.viewportDimension * 0.9)
+                .clamp(0.0, pos.maxScrollExtent);
+            scrollable.position.animateTo(
+              target,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
           }
         },
         CustomSemanticsAction(label: '向上翻頁'): () {
-          final scrollable = Get.context?.findAncestorStateOfType<ScrollableState>();
+          final scrollable = context.findAncestorStateOfType<ScrollableState>();
           if (scrollable != null && scrollable.position.hasContentDimensions) {
             final pos = scrollable.position;
-            pos.jumpTo((pos.pixels - pos.viewportDimension * 0.9)
-                .clamp(0.0, pos.maxScrollExtent));
+            final target = (pos.pixels - pos.viewportDimension * 0.9)
+                .clamp(0.0, pos.maxScrollExtent);
+            scrollable.position.animateTo(
+              target,
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
           }
         },
         CustomSemanticsAction(label: '載入更多評論'): () {
-          // 手動觸發預載（鬼打牆時的救援）
-          final scrollable = Get.context?.findAncestorStateOfType<ScrollableState>();
-          if (scrollable != null) {
-            final pos = scrollable.position;
-            pos.jumpTo(pos.maxScrollExtent);
+          final scrollable = context.findAncestorStateOfType<ScrollableState>();
+          if (scrollable != null && scrollable.position.hasContentDimensions) {
+            scrollable.position.animateTo(
+              scrollable.position.maxScrollExtent,
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.easeOut,
+            );
           }
         },
         CustomSemanticsAction(label: '點踩這條評論'): () async {
