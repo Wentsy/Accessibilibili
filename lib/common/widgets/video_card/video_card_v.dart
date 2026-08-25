@@ -177,18 +177,6 @@ class VideoCardV extends StatelessWidget {
             ),
           ),
         ),
-        if (videoItem.goto == 'av')
-          Positioned(
-            right: -5,
-            bottom: -2,
-            width: 29,
-            height: 29,
-            child: VideoPopupMenu(
-              iconSize: 17,
-              videoItem: videoItem,
-              onRemove: onRemove,
-            ),
-          ),
       ],
       ),
     );

@@ -516,7 +516,11 @@ class _MainAppState extends PopScopeState<MainApp>
       child: MainLayout(
         sideBar: sideBar,
         bottomNav: bottomNav,
-        body: Padding(padding: padding, child: child),
+        body: Semantics(
+          container: true,
+          explicitChildNodes: true,
+          child: Padding(padding: padding, child: child),
+        ),
       ),
     );
 

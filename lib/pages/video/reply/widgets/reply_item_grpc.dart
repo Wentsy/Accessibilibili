@@ -143,7 +143,9 @@ class ReplyItemGrpc extends StatelessWidget {
     return Semantics(
       container: true,
       explicitChildNodes: false,
+      scopesRoute: false,
       label: a11yLabel,
+      textDirection: TextDirection.ltr,
       hint: '點兩下查看回覆。上滑有更多操作',
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(label: '更多操作'): showMore,
@@ -175,7 +177,9 @@ class ReplyItemGrpc extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context, ColorScheme colorScheme) {
     final member = replyItem.member;
-    Widget header = GestureDetector(
+    Widget header = Semantics(
+      excludeSemantics: true,
+      child: GestureDetector(
       onTap: () {
         feedBack();
         Get.toNamed('/member?mid=${replyItem.mid}');
@@ -272,6 +276,7 @@ class ReplyItemGrpc extends StatelessWidget {
             ),
           ),
         ],
+        ),
       ),
     );
     if (PendantAvatar.showDecorate) {
