@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'dart:ui' as ui;
 import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show ReloadMixin;
@@ -225,7 +226,10 @@ class UgcIntroController extends CommonIntroController with ReloadMixin {
   @override
   /// 🔴 無障礙：VoiceOver 即時朗讀動作結果（2026-08-26）
   void a11yAnnounce(String msg) {
-    SemanticsService.sendAnnouncement(Get.context!, msg, Directionality.of(Get.context!));
+    SemanticsService.sendAnnouncement(
+        WidgetsBinding.instance.platformDispatcher.views.first,
+        msg,
+        ui.TextDirection.ltr);
   }
 
   Future<void> actionLikeVideo() async {

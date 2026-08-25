@@ -1,5 +1,6 @@
 import 'dart:async' show FutureOr, Timer;
 
+import 'dart:ui' as ui;
 import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/http/fav.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -242,7 +243,10 @@ mixin FavMixin on TripleMixin {
             updateFavCount(hasFav ? -1 : 1);
             this.hasFav.toggle();
             SmartDialog.showToast('${hasFav ? '取消' : ''}收藏成功');
-      SemanticsService.sendAnnouncement(TextDirection.ltr, '${hasFav ? '已取消收藏' : '收藏成功'}');
+      SemanticsService.sendAnnouncement(
+        WidgetsBinding.instance.platformDispatcher.views.first,
+        '${hasFav ? '已取消收藏' : '收藏成功'}',
+        ui.TextDirection.ltr);
           } else {
             res.toast();
           }
@@ -287,7 +291,10 @@ mixin FavMixin on TripleMixin {
         hasFav.value = newVal;
       }
       SmartDialog.showToast('${newVal ? '' : '取消'}收藏成功');
-      SemanticsService.sendAnnouncement(TextDirection.ltr, '${newVal ? '收藏成功' : '已取消收藏'}');
+      SemanticsService.sendAnnouncement(
+        WidgetsBinding.instance.platformDispatcher.views.first,
+        '${newVal ? '收藏成功' : '已取消收藏'}',
+        ui.TextDirection.ltr);
     } else {
       result.toast();
     }
