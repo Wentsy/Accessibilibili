@@ -69,6 +69,7 @@ class ReplyItemGrpc extends StatelessWidget {
     this.needDivider = true,
     this.onReply,
     this.onDelete,
+    this.a11ySortKey,
     this.upMid,
     this.showDialogue,
     this.getTag,
@@ -83,6 +84,9 @@ class ReplyItemGrpc extends StatelessWidget {
   final bool needDivider;
   final ValueChanged<ReplyInfo>? onReply;
   final Function(ReplyInfo replyItem, int? subIndex)? onDelete;
+
+  /// 🔴 無障礙：穩定排序鍵
+  final OrdinalSortKey? a11ySortKey;
 
   final Int64? upMid;
   final VoidCallback? showDialogue;
