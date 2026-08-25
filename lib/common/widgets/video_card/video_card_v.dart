@@ -126,15 +126,15 @@ class VideoCardV extends StatelessWidget {
     final durationPart = videoItem.duration > 0
         ? '，時長 ${DurationUtils.formatDuration(videoItem.duration)}'
         : '';
-    final String a11yLabel = '${videoItem.title}，${videoItem.owner.name}$durationPart';
-    final String statDesc =
-        '播放 ${videoItem.stat.view}，彈幕 ${videoItem.stat.danmu}';
+    final String a11yLabel =
+        '${videoItem.title}，${videoItem.owner.name}$durationPart'
+        '，播放 ${videoItem.stat.view} 次，彈幕 ${videoItem.stat.danmu}';
     return Semantics(
       container: true,
       explicitChildNodes: false,
+      excludeSemantics: true,
       button: false,
       label: a11yLabel,
-      value: statDesc,
       hint: '點兩下開啟影片。上滑有更多操作',
       onLongPressHint: null,
       customSemanticsActions: _a11yActions(context),

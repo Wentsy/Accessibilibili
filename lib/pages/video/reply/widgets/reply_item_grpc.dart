@@ -146,6 +146,7 @@ class ReplyItemGrpc extends StatelessWidget {
     return Semantics(
       container: true,
       explicitChildNodes: false,
+      excludeSemantics: true,
       scopesRoute: false,
       label: a11yLabel,
       textDirection: TextDirection.ltr,

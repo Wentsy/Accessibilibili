@@ -90,6 +90,7 @@ class VideoCardVMemberHome extends StatelessWidget {
     return Semantics(
       container: true,
       explicitChildNodes: false,
+      excludeSemantics: true,
       label: a11yLabel,
       hint: '點兩下開啟影片。上滑有更多操作',
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{

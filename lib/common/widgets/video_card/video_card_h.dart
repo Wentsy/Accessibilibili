@@ -44,7 +44,8 @@ class VideoCardH extends StatelessWidget {
     return Semantics(
       container: true,
       explicitChildNodes: false,
-      label: videoItem.title,
+      excludeSemantics: true,
+      label: '${videoItem.title}，播放 ${videoItem.stat?.view ?? ''} 次',
       hint: '點兩下開啟影片。上滑有更多操作',
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(label: '分享'): () {
