@@ -156,7 +156,11 @@ class ReplyItemGrpc extends StatelessWidget {
             oid: replyItem.oid.toInt(),
             rpid: replyItem.id.toInt(),
           );
-          SmartDialog.showToast(res case Success() ? '已點踩' : '點踩失敗（需登入）');
+          if (res case Success()) {
+            SmartDialog.showToast('已點踩');
+          } else {
+            SmartDialog.showToast('點踩失敗（需登入）');
+          }
         },
         CustomSemanticsAction(label: '點讚這條評論'): () async {
           final res = await ReplyHttp.likeReply(
