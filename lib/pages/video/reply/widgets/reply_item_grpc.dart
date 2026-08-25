@@ -149,6 +149,15 @@ class ReplyItemGrpc extends StatelessWidget {
       hint: '點兩下查看回覆。上滑有更多操作',
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(label: '更多操作'): showMore,
+        CustomSemanticsAction(label: '點踩這條評論'): () async {
+          final res = await ReplyHttp.hateReply(
+            type: 1,
+            action: 1,
+            oid: replyItem.oid.toInt(),
+            rpid: replyItem.id.toInt(),
+          );
+          SmartDialog.showToast(res case Success() ? '已點踩' : '點踩失敗（需登入）');
+        },
         CustomSemanticsAction(label: '點讚這條評論'): () async {
           final res = await ReplyHttp.likeReply(
             type: 1,

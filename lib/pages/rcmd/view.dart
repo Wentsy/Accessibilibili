@@ -69,7 +69,8 @@ class _RcmdPageState extends State<RcmdPage>
             ? SliverGrid.builder(
                 gridDelegate: gridDelegate,
                 itemBuilder: (context, index) {
-                  if (index == response.length - 1) {
+                  // 🔴 無障礙：VoiceOver 逐項滑動很慢，倒數第 4 個就預載，避免滑到底還要等
+                  if (index >= response.length - 4) {
                     controller.onLoadMore();
                   }
                   if (controller.lastRefreshAt != null) {

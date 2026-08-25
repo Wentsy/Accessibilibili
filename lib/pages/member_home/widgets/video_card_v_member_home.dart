@@ -1,3 +1,5 @@
+import 'dart:math';
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
@@ -11,6 +13,8 @@ import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:PiliPlus/utils/utils.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:material_ui/material_ui.dart';
 
 // 视频卡片 - 垂直布局
@@ -79,7 +83,23 @@ class VideoCardVMemberHome extends StatelessWidget {
       aid: videoItem.param,
       bvid: videoItem.bvid,
     );
-    return Card(
+    // 🔴 無障礙：整卡一個語義節點（比照首頁）
+    final bvid = videoItem.bvid;
+    final String a11yLabel = '${videoItem.title}'
+        '${videoItem.duration > 0 ? '，時長 ${DurationUtils.formatDuration(videoItem.duration)}' : ''}';
+    return Semantics(
+      container: true,
+      explicitChildNodes: false,
+      label: a11yLabel,
+      hint: '點兩下開啟影片。上滑有更多操作',
+      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+        CustomSemanticsAction(label: '複製連結'): () {
+          if (bvid == null) return;
+          Utils.copyText('https://www.bilibili.com/video/$bvid');
+          SmartDialog.showToast('已複製連結');
+        },
+      },
+      child: Card(
       child: InkWell(
         onTap: onPushDetail,
         onLongPress: onLongPress,
@@ -144,6 +164,7 @@ class VideoCardVMemberHome extends StatelessWidget {
             content(context),
           ],
         ),
+      ),
       ),
     );
   }

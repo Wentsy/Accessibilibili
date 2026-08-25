@@ -5,6 +5,7 @@ import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/common/widgets/video_popup_menu.dart';
 import 'package:PiliPlus/http/search.dart';
+import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:flutter/foundation.dart';
@@ -19,6 +20,8 @@ import 'package:PiliPlus/utils/extension/dimension_ext.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:PiliPlus/utils/accounts.dart';
+import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:intl/intl.dart';
 import 'package:material_ui/material_ui.dart';
@@ -100,8 +103,17 @@ class VideoCardV extends StatelessWidget {
         if (bvid == null) return;
         SmartDialog.showToast('分享：https://www.bilibili.com/video/$bvid');
       },
-      CustomSemanticsAction(label: '更多操作'): () {
-        onPushDetail();
+      CustomSemanticsAction(label: '複製連結'): () {
+        if (bvid == null) return;
+        Utils.copyText('https://www.bilibili.com/video/$bvid');
+        SmartDialog.showToast('已複製連結');
+      },
+      CustomSemanticsAction(label: '稍後再看'): () {
+        if (bvid == null || !Accounts.main.isLogin) {
+          SmartDialog.showToast('稍後再看需登入');
+          return;
+        }
+        UserHttp.toViewLater(bvid: bvid);
       },
     };
   }
