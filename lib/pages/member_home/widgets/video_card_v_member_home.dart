@@ -94,18 +94,17 @@ class VideoCardVMemberHome extends StatelessWidget {
       label: a11yLabel,
       hint: '點兩下開啟影片。上滑有更多操作',
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
-        CustomSemanticsAction(label: '複製連結'): () {
+        CustomSemanticsAction(label: '分享'): () {
           if (bvid == null) return;
           Utils.copyText('https://www.bilibili.com/video/$bvid');
-          SmartDialog.showToast('已複製連結');
+          SmartDialog.showToast('連結已複製，可直接分享');
         },
+        CustomSemanticsAction(label: '儲存封面'): () => onLongPress(),
       },
       child: ExcludeSemantics(
       child: Card(
       child: InkWell(
         onTap: onPushDetail,
-        onLongPress: onLongPress,
-        onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
         borderRadius: const .all(.circular(12)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
