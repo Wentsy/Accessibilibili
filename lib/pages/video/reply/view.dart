@@ -132,6 +132,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
               children: [
               // 🔴 載入更多評論：滑到底時觸手可及
               Semantics(
+                excludeSemantics: true,
                 sortKey: const OrdinalSortKey(0.4),
                 button: true,
                 label: '載入更多評論',
@@ -155,6 +156,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
               ),
               const SizedBox(height: 12),
               Semantics(
+                excludeSemantics: true,
                 sortKey: const OrdinalSortKey(0.5),
                 button: true,
                 label: '發表評論',
