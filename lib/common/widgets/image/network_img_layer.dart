@@ -70,8 +70,9 @@ class NetworkImgLayer extends StatelessWidget {
     } else {
       memCacheHeight = height.cacheSize(context);
     }
-    return CachedNetworkImage(
-      excludeFromSemantics: true,
+    return Semantics(
+      excludeSemantics: true,
+      child: CachedNetworkImage(
       imageUrl: ImageUtils.thumbnailUrl(src, quality),
       width: width,
       height: height,
@@ -89,6 +90,7 @@ class NetworkImgLayer extends StatelessWidget {
           _placeholder(context, isEmote: isEmote, isAvatar: isAvatar),
       colorBlendMode: reduce ? BlendMode.modulate : null,
       color: reduce ? reduceLuxColor : null,
+      ),
     );
   }
 
