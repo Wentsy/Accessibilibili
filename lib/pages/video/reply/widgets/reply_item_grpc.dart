@@ -1,6 +1,5 @@
 import 'dart:math';
 import 'package:flutter/semantics.dart';
-import 'package:flutter/widgets.dart' show ScrollableState;
 
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/constants.dart';
@@ -175,42 +174,6 @@ class ReplyItemGrpc extends StatelessWidget {
             SmartDialog.showToast('已點讚');
           } else {
             SmartDialog.showToast('點讚失敗（需登入）');
-          }
-        },
-        CustomSemanticsAction(label: '向下翻頁'): () {
-          final scrollable = context.findAncestorStateOfType<ScrollableState>();
-          if (scrollable != null && scrollable.position.hasContentDimensions) {
-            final pos = scrollable.position;
-            final target = (pos.pixels + pos.viewportDimension * 0.9)
-                .clamp(0.0, pos.maxScrollExtent);
-            scrollable.position.animateTo(
-              target,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            );
-          }
-        },
-        CustomSemanticsAction(label: '向上翻頁'): () {
-          final scrollable = context.findAncestorStateOfType<ScrollableState>();
-          if (scrollable != null && scrollable.position.hasContentDimensions) {
-            final pos = scrollable.position;
-            final target = (pos.pixels - pos.viewportDimension * 0.9)
-                .clamp(0.0, pos.maxScrollExtent);
-            scrollable.position.animateTo(
-              target,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            );
-          }
-        },
-        CustomSemanticsAction(label: '載入更多評論'): () {
-          final scrollable = context.findAncestorStateOfType<ScrollableState>();
-          if (scrollable != null && scrollable.position.hasContentDimensions) {
-            scrollable.position.animateTo(
-              scrollable.position.maxScrollExtent,
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.easeOut,
-            );
           }
         },
         CustomSemanticsAction(label: '點踩這條評論'): () async {
