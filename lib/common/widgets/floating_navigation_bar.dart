@@ -281,13 +281,24 @@ class _NavigationDestinationBuilderState
   Widget build(BuildContext context) {
     final info = _NavigationDestinationInfo.of(context);
 
-    final child = GestureDetector(
+        // 🔴 無障礙：明確的按鈕語義，讓 VoiceOver 觸摸瀏覽能摸到標籤
+    final child = Semantics(
+      button: true,
+      container: true,
+      explicitChildNodes: false,
+      excludeSemantics: true,
+      label: info.label,
+      selected: widget.enabled &&
+          (widget.selectedIndex == _NavigationDestinationInfo.of(context).index ??
+              false),
+      child: GestureDetector(
       behavior: .opaque,
       onTap: widget.enabled ? info.onTap : null,
       child: _NavigationBarDestinationLayout(
         icon: widget.buildIcon(context),
         iconKey: iconKey,
         label: widget.buildLabel(context),
+      ),
       ),
     );
     if (info.labelBehavior == .alwaysShow) {
