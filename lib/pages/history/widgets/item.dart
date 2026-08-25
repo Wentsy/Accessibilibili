@@ -1,3 +1,4 @@
+import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -46,7 +47,40 @@ class HistoryItem extends StatelessWidget {
             ..enableMultiSelect.value = true
             ..onSelect(item);
 
-    return Material(
+    // 🔴 無障礙改造（2026-08-26）：比照首頁卡——整條一個語義節點，左右滑逐條瀏覽
+    final hasProgress = hasDuration && item.progress != null && item.progress != 0;
+    final progressPart = hasDuration
+        ? (item.progress == -1
+            ? '，已看完'
+            : '，觀看至 ${DurationUtils.formatDuration(item.progress)}，時長 ${DurationUtils.formatDuration(item.duration)}')
+        : '';
+    final authorPart = item.authorName?.isNotEmpty == true ? '，${item.authorName}' : '';
+    final String a11yLabel = '${item.title}$authorPart$progressPart';
+
+    return Semantics(
+      container: true,
+      explicitChildNodes: false,
+      excludeSemantics: true,
+      button: false,
+      label: a11yLabel,
+      hint: '點兩下繼續觀看。上滑有更多操作',
+      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+        if (item.authorMid != null && item.authorName?.isNotEmpty == true)
+          CustomSemanticsAction(label: '造訪UP主'): () =>
+              Get.toNamed('/member?mid=${item.authorMid}'),
+        if (business != 'pgc' && item.badge != '番剧' &&
+            item.tagName?.contains('动画') != true && business != 'live' &&
+            business?.contains('article') != true)
+          CustomSemanticsAction(label: '稍後再看'): () =>
+              UserHttp.toViewLater(bvid: item.history.bvid),
+        CustomSemanticsAction(label: '刪除這條記錄'): () =>
+            onDelete(item.kid!, business!),
+        if (enableMultiSelect == false)
+          CustomSemanticsAction(label: '多選模式'): () => ctr
+            ..enableMultiSelect.value = true
+            ..onSelect(item),
+      },
+      child: Material(
       type: MaterialType.transparency,
       child: InkWell(
         onTap: enableMultiSelect
@@ -196,73 +230,9 @@ class HistoryItem extends StatelessWidget {
                 ],
               ),
             ),
-            Positioned(
-              right: 12,
-              bottom: 0,
-              width: 29,
-              height: 29,
-              child: PopupMenuButton(
-                padding: EdgeInsets.zero,
-                tooltip: '功能菜单',
-                icon: Icon(
-                  Icons.more_vert_outlined,
-                  color: theme.colorScheme.outline,
-                  size: 18,
-                ),
-                position: PopupMenuPosition.under,
-                itemBuilder: (_) => [
-                  if (item.authorMid != null &&
-                      item.authorName?.isNotEmpty == true)
-                    PopupMenuItem(
-                      onTap: () => Get.toNamed('/member?mid=${item.authorMid}'),
-                      height: 38,
-                      child: Row(
-                        children: [
-                          const Icon(
-                            MdiIcons.accountCircleOutline,
-                            size: 16,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            '访问：${item.authorName}',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (business != 'pgc' &&
-                      item.badge != '番剧' &&
-                      item.tagName?.contains('动画') != true &&
-                      business != 'live' &&
-                      business?.contains('article') != true)
-                    PopupMenuItem(
-                      onTap: () =>
-                          UserHttp.toViewLater(bvid: item.history.bvid),
-                      height: 38,
-                      child: const Row(
-                        children: [
-                          Icon(Icons.watch_later_outlined, size: 16),
-                          SizedBox(width: 6),
-                          Text('稍后再看', style: TextStyle(fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                  PopupMenuItem(
-                    onTap: () => onDelete(item.kid!, business!),
-                    height: 38,
-                    child: const Row(
-                      children: [
-                        Icon(Icons.close_outlined, size: 16),
-                        SizedBox(width: 6),
-                        Text('删除记录', style: TextStyle(fontSize: 13)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
+      ),
       ),
     );
   }

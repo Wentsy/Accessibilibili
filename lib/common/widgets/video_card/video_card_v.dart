@@ -9,7 +9,7 @@ import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/semantics.dart' show CustomSemanticsAction, VoidCallback;
+import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/models/home/rcmd/result.dart';
 import 'package:PiliPlus/models/model_rec_video_item.dart';
 import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
@@ -96,8 +96,13 @@ class VideoCardV extends StatelessWidget {
         final res = await VideoHttp.likeVideo(bvid: bvid, type: true);
         if (res case Success(:final response)) {
           SmartDialog.showToast(response);
+          // 🔴 語音反饋：VoiceOver 立即朗讀結果
+          SemanticsService.sendAnnouncement(
+              TextDirection.ltr, response);
         } else {
           SmartDialog.showToast('點讚失敗（需登入）');
+          SemanticsService.sendAnnouncement(
+              TextDirection.ltr, '點讚失敗，需要登入');
         }
       },
       CustomSemanticsAction(label: '分享'): () {

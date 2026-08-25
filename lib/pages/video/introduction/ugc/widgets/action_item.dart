@@ -1,3 +1,4 @@
+import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/widgets/custom_arc.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
@@ -83,6 +84,17 @@ class ActionItem extends StatelessWidget {
               )
             : child,
       ),
+    );
+    // 🔴 無障礙（2026-08-26）：按鈕語義節點 + 狀態即時朗讀
+    // selected = 已點讚/已收藏等；liveRegion = 狀態變化瞬間 VoiceOver 自動朗讀新狀態
+    child = Semantics(
+      button: true,
+      excludeSemantics: true,
+      label: semanticsLabel,
+      selected: selectStatus,
+      value: selectStatus ? '已啟用' : '未啟用',
+      liveRegion: true,
+      child: child,
     );
     return expand ? Expanded(child: child) : child;
   }
