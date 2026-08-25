@@ -126,7 +126,35 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 right: kFloatingActionButtonMargin,
                 bottom: kFloatingActionButtonMargin + bottom,
               ),
-              child: Semantics(
+              child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+              // 🔴 載入更多評論：滑到底時觸手可及
+              Semantics(
+                sortKey: const OrdinalSortKey(0.4),
+                button: true,
+                label: '載入更多評論',
+                child: FloatingActionButton.small(
+                heroTag: 'loadMoreReplies',
+                onPressed: () {
+                  feedBack();
+                  final sc = _videoReplyController.scrollController;
+                  if (sc.hasClients) {
+                    sc.animateTo(
+                      sc.position.maxScrollExtent,
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeOut,
+                    );
+                  }
+                  _videoReplyController.onLoadMore();
+                },
+                tooltip: '载入更多评论',
+                child: const Icon(Icons.unfold_more),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Semantics(
                 sortKey: const OrdinalSortKey(0.5),
                 button: true,
                 label: '發表評論',
@@ -143,6 +171,8 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 tooltip: '发表评论',
                 child: const Icon(Icons.reply),
                 ),
+              ),
+              ],
               ),
             ),
           ),
