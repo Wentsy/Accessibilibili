@@ -71,8 +71,11 @@ class _MainReplyPageState extends State<MainReplyPage>
             ),
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              // 🔴 無障礙：加大預建範圍，VoiceOver 掃描時永遠有「下一條」可跳
+              // 🔴 無障礙：加大預建範圍 + 明確捲動語義（VoiceOver 三指滑動目標）
               cacheExtent: 3000,
+              semanticChildCount: _controller.loadingState.value.isSuccess
+                  ? (_controller.loadingState.value.response?.length ?? 0)
+                  : null,
               slivers: [
                 buildReplyHeader(colorScheme),
                 Obx(
@@ -124,7 +127,8 @@ class _MainReplyPageState extends State<MainReplyPage>
         response != null && response.isNotEmpty
             ? SliverList.builder(
                 // 🔴 無障礙：固定 key，載入更多時保留元素樹與 VoiceOver 焦點
-                key: const ValueKey('reply_list'),
+                // 🔴 key 含長度：載更多時以增量 diff 更新，保留既有語義節點與焦點
+                key: ValueKey('reply_list_${response?.length ?? 0}'),
                 itemCount: response.length + 1,
                 itemBuilder: (context, index) {
                   // 🔴 無障礙：VoiceOver 逐項滑動很慢，倒數第4個就預載
