@@ -98,6 +98,10 @@ class _RcmdPageState extends State<RcmdPage>
                         ? index - 1
                         : index;
                     return VideoCardV(
+                      key: ValueKey(
+                        response[actualIndex].bvid ??
+                            response[actualIndex].aid,
+                      ),
                       videoItem: response[actualIndex],
                       onRemove: () {
                         if (controller.lastRefreshAt != null &&

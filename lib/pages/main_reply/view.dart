@@ -139,6 +139,7 @@ class _MainReplyPageState extends State<MainReplyPage>
                     );
                   } else {
                     return ReplyItemGrpc(
+                      key: ValueKey(response[index].id),
                       replyItem: response[index],
                       replyLevel: 1,
                       a11ySortKey: OrdinalSortKey(index.toDouble()),
