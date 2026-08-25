@@ -181,8 +181,6 @@ class VideoCardV extends StatelessWidget {
         Card(
           child: InkWell(
             onTap: onPushDetail,
-            onLongPress: onLongPress,
-            onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
             borderRadius: const .all(.circular(12)),
             child: Column(
               crossAxisAlignment: .start,
