@@ -100,6 +100,7 @@ class VideoCardVMemberHome extends StatelessWidget {
           SmartDialog.showToast('已複製連結');
         },
       },
+      child: ExcludeSemantics(
       child: Card(
       child: InkWell(
         onTap: onPushDetail,
@@ -165,6 +166,7 @@ class VideoCardVMemberHome extends StatelessWidget {
             content(context),
           ],
         ),
+      ),
       ),
       ),
     );

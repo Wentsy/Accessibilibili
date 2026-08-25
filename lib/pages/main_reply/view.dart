@@ -140,6 +140,7 @@ class _MainReplyPageState extends State<MainReplyPage>
                     return ReplyItemGrpc(
                       replyItem: response[index],
                       replyLevel: 1,
+                      a11ySortKey: OrdinalSortKey(index.toDouble()),
                       replyReply: (replyItem, id) =>
                           replyReply(context, replyItem, id, colorScheme),
                       onReply: _controller.onReply,

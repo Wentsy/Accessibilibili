@@ -54,6 +54,7 @@ class VideoCardH extends StatelessWidget {
           SmartDialog.showToast('連結已複製，可直接分享');
         },
       },
+      child: ExcludeSemantics(
       child: Material(
       type: .transparency,
       child: Stack(
@@ -182,6 +183,7 @@ class VideoCardH extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
       ),
     );

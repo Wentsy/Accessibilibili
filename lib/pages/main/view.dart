@@ -487,10 +487,17 @@ class _MainAppState extends PopScopeState<MainApp>
     if (_mainController.useBottomNav) {
       bottomNav = _bottomNav;
       if (bottomNav != null) {
+        // 🔴 無障礙：列表無限載入會讓 VoiceOver 永遠出不了內容區，
+        // 給底部導航 sortKey 讓它在語義樹中優先於內容
         bottomNav = MediaQuery.removePadding(
           context: context,
           removeTop: true,
-          child: bottomNav,
+          child: Semantics(
+            sortKey: const OrdinalSortKey(-1),
+            container: true,
+            explicitChildNodes: false,
+            child: bottomNav,
+          ),
         );
       }
       padding = .only(
