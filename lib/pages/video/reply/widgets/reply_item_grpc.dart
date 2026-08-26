@@ -1240,6 +1240,18 @@ class ReplyItemGrpc extends StatelessWidget {
           ListTile(
             onTap: () {
               Get.back();
+              Get.toNamed('/member?mid=${item.member.mid}');
+            },
+            minLeadingWidth: 0,
+            leading: const Icon(Icons.account_circle_outlined, size: 19),
+            title: Text(
+              '造訪這位評論者（${item.member.name}）',
+              style: style,
+            ),
+          ),
+          ListTile(
+            onTap: () {
+              Get.back();
               Utils.copyText(message);
             },
             minLeadingWidth: 0,
