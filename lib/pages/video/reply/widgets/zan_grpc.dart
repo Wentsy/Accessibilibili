@@ -7,6 +7,14 @@ import 'package:fixnum/fixnum.dart' as $fixnum;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter/semantics.dart';
+
+// 🔴 無障礙：語音即時反饋
+void a11yAnnounce(String message) {
+  try {
+    SemanticsService.announce(message, TextDirection.ltr);
+  } catch (_) {}
+}
+
 import 'package:material_ui/material_ui.dart';
 
 class ZanButtonGrpc extends StatelessWidget {
