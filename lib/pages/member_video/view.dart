@@ -15,6 +15,7 @@ import 'package:PiliPlus/pages/member_video/widgets/video_card_h_member_video.da
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/semantics.dart' show OrdinalSortKey;
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -83,8 +84,6 @@ class _MemberVideoState extends State<MemberVideo>
     final threshold =
         (metrics.viewportDimension * 1.5).clamp(480.0, double.infinity);
     if (remaining <= threshold) {
-      // VoiceOver 的左右滑動/三指翻頁可能一次跨過大量 grid child。
-      // 在真正抵達最後一張卡前預取，讓新卡及早進入 semantics tree。
       _controller.onLoadMore();
     }
     return false;
