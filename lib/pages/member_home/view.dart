@@ -87,8 +87,11 @@ class _MemberHomeState extends State<MemberHome>
                       ),
                       sliver: SliverGrid.builder(
                         gridDelegate: gridDelegateV,
+                        // 🔴 無障礙：semanticChildCount + 穩定 Key
+                        semanticChildCount: res.archive!.item!.length,
                         itemBuilder: (context, index) {
                           return VideoCardVMemberHome(
+                            key: ValueKey(res.archive!.item![index].param), // 穩定 Key
                             videoItem: res.archive!.item![index],
                           );
                         },
@@ -130,8 +133,10 @@ class _MemberHomeState extends State<MemberHome>
                       ),
                       sliver: SliverGrid.builder(
                         gridDelegate: gridDelegateV,
+                        semanticChildCount: res.coinArchive!.item!.length,
                         itemBuilder: (context, index) {
                           return VideoCardVMemberHome(
+                            key: ValueKey(res.coinArchive!.item![index].param),
                             videoItem: res.coinArchive!.item![index],
                           );
                         },
@@ -156,8 +161,10 @@ class _MemberHomeState extends State<MemberHome>
                       ),
                       sliver: SliverGrid.builder(
                         gridDelegate: gridDelegateV,
+                        semanticChildCount: res.likeArchive!.item!.length,
                         itemBuilder: (context, index) {
                           return VideoCardVMemberHome(
+                            key: ValueKey(res.likeArchive!.item![index].param),
                             videoItem: res.likeArchive!.item![index],
                           );
                         },

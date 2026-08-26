@@ -180,12 +180,15 @@ class _MemberVideoState extends State<MemberVideo>
                   _buildHeader(theme),
                   SliverGrid.builder(
                     gridDelegate: gridDelegate,
+                    // 🔴 無障礙：semanticChildCount + 穩定 Key，避免鬼打牆與朗讀不同步
+                    semanticChildCount: response.length,
                     itemBuilder: (context, index) {
                       if (widget.type != .season &&
                           index == response.length - 1) {
                         _controller.onLoadMore();
                       }
                       return VideoCardHMemberVideo(
+                        key: ValueKey(response[index].param), // 🔴 無障礙：穩定 Key
                         videoItem: response[index],
                         fromViewAid: _controller.fromViewAid,
                       );

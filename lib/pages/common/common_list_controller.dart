@@ -44,7 +44,7 @@ abstract class CommonListController<R, T> extends CommonController<R, T> {
         } else if (loadingState.value case Success(:final response)) {
           response!.addAll(dataList);
           checkIsEnd(response.length);
-          loadingState.refresh();
+          loadingState.value = Success(response); // a11y fix: direct assign avoids SliverList rebuild
         }
       }
       page++;

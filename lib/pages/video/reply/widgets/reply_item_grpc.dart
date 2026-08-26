@@ -173,8 +173,10 @@ class ReplyItemGrpc extends StatelessWidget {
           );
           if (res case Success()) {
             SmartDialog.showToast('已點讚');
+            a11yAnnounce('已點讚');
           } else {
             SmartDialog.showToast('點讚失敗（需登入）');
+            a11yAnnounce('點讚失敗，需登入');
           }
         },
         CustomSemanticsAction(label: '點踩這條評論'): () async {
@@ -186,8 +188,10 @@ class ReplyItemGrpc extends StatelessWidget {
           );
           if (res case Success()) {
             SmartDialog.showToast('已點踩');
+            a11yAnnounce('已點踩');
           } else {
             SmartDialog.showToast('點踩失敗（需登入）');
+            a11yAnnounce('點踩失敗，需登入');
           }
         },
       },

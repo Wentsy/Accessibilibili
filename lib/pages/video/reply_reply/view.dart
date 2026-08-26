@@ -360,6 +360,8 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
       ),
       Success(:final response!) => SuperSliverList.builder(
         listController: _controller.listController,
+        // 🔴 無障礙：semanticChildCount + 穩定 Key，避免鬼打牆與朗讀不同步
+        semanticChildCount: response.length,
         itemBuilder: (context, index) {
           if (index == response.length) {
             _controller.onLoadMore();
@@ -403,6 +405,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
 
   Widget _replyItem(BuildContext context, ReplyInfo replyItem, int index) {
     return ReplyItemGrpc(
+      key: ValueKey(replyItem.id),  // 🔴 無障礙：穩定 Key
       replyItem: replyItem,
       replyLevel: isDialogue ? 3 : 2,
       onReply: (replyItem) => _controller.onReply(replyItem, index: index),

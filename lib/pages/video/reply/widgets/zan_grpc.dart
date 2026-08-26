@@ -6,6 +6,7 @@ import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:fixnum/fixnum.dart' as $fixnum;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:flutter/semantics.dart';
 import 'package:material_ui/material_ui.dart';
 
 class ZanButtonGrpc extends StatelessWidget {
@@ -41,6 +42,7 @@ class ZanButtonGrpc extends StatelessWidget {
     // SmartDialog.dismiss();
     if (res.isSuccess) {
       SmartDialog.showToast(isDislike ? '取消踩' : '点踩成功');
+      a11yAnnounce(isDislike ? '取消踩' : '点踩成功');
       if (action == 2) {
         if (isLike) replyItem.like -= $fixnum.Int64.ONE;
         replyItem.replyControl.action = $fixnum.Int64.TWO;
@@ -81,6 +83,7 @@ class ZanButtonGrpc extends StatelessWidget {
     );
     if (res.isSuccess) {
       SmartDialog.showToast(isLike ? '取消赞' : '点赞成功');
+      a11yAnnounce(isLike ? '取消赞' : '点赞成功');
       if (action == 1) {
         replyItem
           ..like += $fixnum.Int64.ONE
