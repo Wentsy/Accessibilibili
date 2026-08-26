@@ -76,8 +76,8 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
         isClampingScrollPhysics: widget.isNested,
         child: ScaffoldLayout(
           body: CustomScrollView(
-            // 🔴 無障礙修復：nested 模式也必須掛 controller，
-            // 否則 VoiceOver 翻頁動作（scrollController 操作）全部靜默失敗
+            // 無障礙：nested 模式也必須掛 controller，讓 VoiceOver 翻頁
+            // 動作與實際 scroll position 使用同一個 ScrollPosition。
             controller: _videoReplyController.scrollController,
             physics: const AlwaysScrollableScrollPhysics(),
             key: const PageStorageKey(_VideoReplyPanelState),
@@ -127,60 +127,59 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 bottom: kFloatingActionButtonMargin + bottom,
               ),
               child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-              // 🔴 載入更多評論：滑到底時觸手可及；「沒有更多了」就隱藏
-              Obx(() {
-                _videoReplyController.loadingState.value; // 註冊依賴
-                if (_videoReplyController.isEnd) {
-                  return const SizedBox.shrink();
-                }
-                return Semantics(
-                  excludeSemantics: true,
-                  sortKey: const OrdinalSortKey(0.4),
-                  button: true,
-                  label: '載入更多評論',
-                  child: FloatingActionButton.small(
-                    heroTag: 'loadMoreReplies',
-                    onPressed: () {
-                      feedBack();
-                      final sc = _videoReplyController.scrollController;
-                      if (sc.hasClients) {
-                        sc.animateTo(
-                          sc.position.maxScrollExtent,
-                          duration: const Duration(milliseconds: 400),
-                          curve: Curves.easeOut,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Obx(() {
+                    _videoReplyController.loadingState.value;
+                    if (_videoReplyController.isEnd) {
+                      return const SizedBox.shrink();
+                    }
+                    return Semantics(
+                      excludeSemantics: true,
+                      sortKey: const OrdinalSortKey(0.4),
+                      button: true,
+                      label: '載入更多評論',
+                      child: FloatingActionButton.small(
+                        heroTag: 'loadMoreReplies',
+                        onPressed: () {
+                          feedBack();
+                          final sc = _videoReplyController.scrollController;
+                          if (sc.hasClients) {
+                            sc.animateTo(
+                              sc.position.maxScrollExtent,
+                              duration: const Duration(milliseconds: 400),
+                              curve: Curves.easeOut,
+                            );
+                          }
+                          _videoReplyController.onLoadMore();
+                        },
+                        tooltip: '载入更多评论',
+                        child: const Icon(Icons.unfold_more),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  Semantics(
+                    excludeSemantics: true,
+                    sortKey: const OrdinalSortKey(0.5),
+                    button: true,
+                    label: '發表評論',
+                    child: FloatingActionButton(
+                      heroTag: null,
+                      onPressed: () {
+                        feedBack();
+                        _videoReplyController.onReply(
+                          null,
+                          oid: _videoReplyController.aid,
+                          replyType: _videoReplyController.videoType.replyType,
                         );
-                      }
-                      _videoReplyController.onLoadMore();
-                    },
-                    tooltip: '载入更多评论',
-                    child: const Icon(Icons.unfold_more),
+                      },
+                      tooltip: '发表评论',
+                      child: const Icon(Icons.reply),
+                    ),
                   ),
-                );
-              }),
-              const SizedBox(height: 12),
-              Semantics(
-                excludeSemantics: true,
-                sortKey: const OrdinalSortKey(0.5),
-                button: true,
-                label: '發表評論',
-                child: FloatingActionButton(
-                heroTag: null,
-                onPressed: () {
-                  feedBack();
-                  _videoReplyController.onReply(
-                    null,
-                    oid: _videoReplyController.aid,
-                    replyType: _videoReplyController.videoType.replyType,
-                  );
-                },
-                tooltip: '发表评论',
-                child: const Icon(Icons.reply),
-                ),
-              ),
-              ],
+                ],
               ),
             ),
           ),
@@ -227,6 +226,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 );
               } else {
                 return ReplyItemGrpc(
+                  key: ValueKey(response[index].id),
                   replyItem: response[index],
                   replyLevel: widget.replyLevel,
                   replyReply: replyReply,
@@ -243,6 +243,9 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                     _videoReplyController.aid,
                     _videoReplyController.videoType.replyType,
                   ),
+                  // 固定語義順序，避免新增頁面資料後 VoiceOver
+                  // focus / touch exploration 與實際列表順序分離。
+                  a11ySortKey: OrdinalSortKey((index + 1).toDouble()),
                 );
               }
             },
@@ -273,9 +276,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
     }
   }
 
-  // 展示二级回复
   void replyReply(ReplyInfo replyItem, int? id) {
-    // 🔴 無障礙：樓中樓打開時隱藏主評論區 FAB（避免 VoiceOver 聽到四個重疊按鈕）
     hideFab();
     EasyThrottle.throttle('replyReply', const Duration(milliseconds: 500), () {
       int oid = replyItem.oid.toInt();
