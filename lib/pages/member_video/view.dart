@@ -15,6 +15,7 @@ import 'package:PiliPlus/pages/member_video/widgets/video_card_h_member_video.da
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -70,6 +71,25 @@ class _MemberVideoState extends State<MemberVideo>
     }
   }
 
+  bool _handleA11yPrefetch(ScrollNotification notification) {
+    if (notification is! ScrollUpdateNotification &&
+        notification is! OverscrollNotification) {
+      return false;
+    }
+    if (_controller.isLoading || _controller.isEnd) return false;
+
+    final metrics = notification.metrics;
+    final remaining = metrics.maxScrollExtent - metrics.pixels;
+    final threshold =
+        (metrics.viewportDimension * 1.5).clamp(480.0, double.infinity);
+    if (remaining <= threshold) {
+      // VoiceOver 的左右滑動/三指翻頁可能一次跨過大量 grid child。
+      // 在真正抵達最後一張卡前預取，讓新卡及早進入 semantics tree。
+      _controller.onLoadMore();
+    }
+    return false;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -105,16 +125,19 @@ class _MemberVideoState extends State<MemberVideo>
           }
         }
       },
-      child: CustomScrollView(
-        physics: ReloadScrollPhysics(controller: _controller),
-        slivers: [
-          SliverPadding(
-            padding: EdgeInsets.only(bottom: padding.bottom + 100),
-            sliver: Obx(
-              () => _buildBody(theme, _controller.loadingState.value),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: _handleA11yPrefetch,
+        child: CustomScrollView(
+          physics: ReloadScrollPhysics(controller: _controller),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.only(bottom: padding.bottom + 100),
+              sliver: Obx(
+                () => _buildBody(theme, _controller.loadingState.value),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
     if (_controller.isVideo && _controller.fromViewAid?.isNotEmpty == true) {
@@ -180,16 +203,16 @@ class _MemberVideoState extends State<MemberVideo>
                   _buildHeader(theme),
                   SliverGrid.builder(
                     gridDelegate: gridDelegate,
-                    // 🔴 無障礙：穩定 Key，避免鬼打牆與朗讀不同步
                     itemBuilder: (context, index) {
                       if (widget.type != .season &&
                           index == response.length - 1) {
                         _controller.onLoadMore();
                       }
                       return VideoCardHMemberVideo(
-                        key: ValueKey(response[index].param), // 🔴 無障礙：穩定 Key
+                        key: ValueKey(response[index].param),
                         videoItem: response[index],
                         fromViewAid: _controller.fromViewAid,
+                        a11ySortKey: OrdinalSortKey((index + 1).toDouble()),
                       );
                     },
                     itemCount: response.length,
