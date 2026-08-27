@@ -1,4 +1,5 @@
 import 'package:flutter/semantics.dart';
+import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -142,6 +143,14 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
     super.dispose();
   }
 
+  String _a11yLabel(ReplyInfo item) {
+    final hasPic = item.content.pictures.isNotEmpty;
+    return '${item.member.name} 說：${item.content.message}'
+        '${hasPic ? '，[圖片]' : ''}'
+        '${item.like > 0 ? '，${item.like} 個讚' : ''}'
+        '${item.count > 0 ? '，共 ${item.count} 條回覆' : ''}';
+  }
+
   @override
   Widget buildPage(ThemeData theme) {
     Widget child() => enableSlide ? slideList(theme) : buildList(theme);
@@ -180,65 +189,64 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                 ],
               )
             : child(),
-            // 🔴 無障礙：樓中樓浮動按鈕（載入更多 + 發表回覆），比照評論區
             Positioned(
               right: 16,
               bottom: 16 + MediaQuery.paddingOf(context).bottom,
               child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Obx(() {
-                  _controller.loadingState.value; // 註冊依賴
-                  if (_controller.isEnd) {
-                    return const SizedBox.shrink();
-                  }
-                  return Semantics(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Obx(() {
+                    _controller.loadingState.value;
+                    if (_controller.isEnd) {
+                      return const SizedBox.shrink();
+                    }
+                    return Semantics(
+                      excludeSemantics: true,
+                      sortKey: const OrdinalSortKey(0.4),
+                      button: true,
+                      label: '載入更多回覆',
+                      child: FloatingActionButton.small(
+                        heroTag: 'loadMoreRepliesSub',
+                        onPressed: () {
+                          feedBack();
+                          final sc = scrollController;
+                          if (sc.hasClients) {
+                            sc.animateTo(
+                              sc.position.maxScrollExtent,
+                              duration: const Duration(milliseconds: 400),
+                              curve: Curves.easeOut,
+                            );
+                          }
+                          _controller.onLoadMore();
+                        },
+                        tooltip: '载入更多回复',
+                        child: const Icon(Icons.unfold_more),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 12),
+                  Semantics(
                     excludeSemantics: true,
-                    sortKey: const OrdinalSortKey(0.4),
+                    sortKey: const OrdinalSortKey(0.5),
                     button: true,
-                    label: '載入更多回覆',
-                    child: FloatingActionButton.small(
-                      heroTag: 'loadMoreRepliesSub',
+                    label: '發表回覆',
+                    child: FloatingActionButton(
+                      heroTag: 'replyReplyFab',
                       onPressed: () {
-                        feedBack();
-                        final sc = scrollController;
-                        if (sc.hasClients) {
-                          sc.animateTo(
-                            sc.position.maxScrollExtent,
-                            duration: const Duration(milliseconds: 400),
-                            curve: Curves.easeOut,
-                          );
+                        final root = widget.firstFloor ?? _controller.firstFloor.value;
+                        if (root != null) {
+                          feedBack();
+                          _controller.onReply(root, index: 0);
+                        } else {
+                          SmartDialog.showToast('請先等待評論載入');
                         }
-                        _controller.onLoadMore();
                       },
-                      tooltip: '载入更多回复',
-                      child: const Icon(Icons.unfold_more),
+                      tooltip: '发表回复',
+                      child: const Icon(Icons.reply),
                     ),
-                  );
-                }),
-                const SizedBox(height: 12),
-                Semantics(
-                excludeSemantics: true,
-                sortKey: const OrdinalSortKey(0.5),
-                button: true,
-                label: '發表回覆',
-                child: FloatingActionButton(
-                heroTag: 'replyReplyFab',
-                onPressed: () {
-                  final root = widget.firstFloor ?? _controller.firstFloor.value;
-                  if (root != null) {
-                    feedBack();
-                    _controller.onReply(root, index: 0);
-                  } else {
-                    SmartDialog.showToast('請先等待評論載入');
-                  }
-                },
-                tooltip: '发表回复',
-                child: const Icon(Icons.reply),
-                ),
-                ),
-              ],
+                  ),
+                ],
               ),
             ),
           ],
@@ -259,7 +267,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
       onRefresh: _controller.onRefresh,
       isClampingScrollPhysics: widget.isNested,
       child: CustomScrollView(
-              cacheExtent: 3000,
+        cacheExtent: 3000,
         key: ValueKey(scrollController.hashCode),
         controller: scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
@@ -287,17 +295,24 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
   }
 
   Widget _header(ThemeData theme, ReplyInfo firstFloor) {
+    final child = ReplyItemGrpc(
+      replyItem: firstFloor,
+      replyLevel: 2,
+      needDivider: false,
+      onReply: (replyItem) => _controller.onReply(replyItem, index: -1),
+      upMid: widget.upMid ?? _controller.upMid,
+      onCheckReply: (item) =>
+          _controller.onCheckReply(item, isManual: true),
+    );
     return SliverMainAxisGroup(
       slivers: [
         SliverToBoxAdapter(
-          child: ReplyItemGrpc(
+          child: ReplyA11ySemantics(
             replyItem: firstFloor,
-            replyLevel: 2,
-            needDivider: false,
-            onReply: (replyItem) => _controller.onReply(replyItem, index: -1),
-            upMid: widget.upMid ?? _controller.upMid,
-            onCheckReply: (item) =>
-                _controller.onCheckReply(item, isManual: true),
+            label: _a11yLabel(firstFloor),
+            onTap: () => _controller.onReply(firstFloor, index: -1),
+            onTapHint: '點兩下回覆這條評論',
+            child: child,
           ),
         ),
         SliverToBoxAdapter(
@@ -377,14 +392,21 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
               ),
             );
           }
-          final child = _replyItem(context, response[index], index);
+          final item = response[index];
+          final reply = _replyItem(context, item, index);
+          final child = ReplyA11ySemantics(
+            replyItem: item,
+            label: _a11yLabel(item),
+            onTap: () => _controller.onReply(item, index: index),
+            onTapHint: '點兩下回覆這條評論',
+            child: reply,
+          );
           if (jumpIndex == index) {
             return ColoredBoxTransition(
               color: _colorAnimation ??= _controller.animController.drive(
                 ColorTween(
                   begin: colorScheme.onInverseSurface,
                   end: colorScheme.surface,
-                  // 前0.8s不变, 后0.2s开始动画
                 ).chain(CurveTween(curve: const Interval(0.8, 1.0))),
               ),
               child: child,
@@ -403,13 +425,17 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
 
   Widget _replyItem(BuildContext context, ReplyInfo replyItem, int index) {
     return ReplyItemGrpc(
+      key: ValueKey(replyItem.id),
       replyItem: replyItem,
       replyLevel: isDialogue ? 3 : 2,
       onReply: (replyItem) => _controller.onReply(replyItem, index: index),
       onDelete: (item, subIndex) => _controller.onRemove(index, item, null),
       upMid: _controller.upMid,
       showDialogue: () => MiniScaffold.of(context).showBottomSheet(
-        constraints: const BoxConstraints(),
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.sizeOf(context).height,
+          maxHeight: MediaQuery.sizeOf(context).height,
+        ),
         (context) => VideoReplyReplyPanel(
           oid: replyItem.oid.toInt(),
           rpid: replyItem.root.toInt(),

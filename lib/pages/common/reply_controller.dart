@@ -14,6 +14,7 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:flutter/semantics.dart';
 import 'package:material_ui/material_ui.dart';
 
 abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
@@ -121,6 +122,13 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
       }
     } catch (_) {}
     return (inputDisable, hint);
+  }
+
+  // 🔴 無障礙：語音即時反饋
+  void a11yAnnounce(String message) {
+    try {
+      SemanticsService.announce(message, TextDirection.ltr);
+    } catch (_) {}
   }
 
   void onReply(

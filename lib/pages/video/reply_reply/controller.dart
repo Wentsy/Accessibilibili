@@ -73,10 +73,12 @@ class VideoReplyReplyController extends ReplyController
     paginationReply = data.paginationReply;
     isEnd = data.cursor.isEnd;
 
-    // reply2Reply // isDialogue.not
     if (data is DetailListReply) {
       count.value = data.root.count.toInt();
-      if (isRefresh && !hasRoot) {
+      // Always retain the root comment returned by the detail endpoint.
+      // This is required by the reply composer even when the thread has only
+      // a small number of child replies or is entered through a dialogue.
+      if (isRefresh) {
         firstFloor.value ??= data.root;
       }
       if (id != null) {
@@ -160,9 +162,16 @@ class VideoReplyReplyController extends ReplyController
       return;
     }
 
-    final oid = replyItem!.oid.toInt();
-    final root = replyItem.id.toInt();
-    final key = oid + root;
+    final reply = replyItem!;
+    final replyOid = reply.oid.toInt();
+
+    // YouTube-style thread semantics:
+    // rpid always remains the root comment of this thread.
+    // parent is the concrete comment/reply being answered.
+    // A nested reply must never become a new root thread.
+    final root = rpid;
+    final parent = reply.id.toInt();
+    final key = replyOid + root;
 
     Get.key.currentState!
         .push(
@@ -170,17 +179,17 @@ class VideoReplyReplyController extends ReplyController
             pageBuilder: (buildContext, animation, secondaryAnimation) {
               return ReplyPage(
                 hint: hint,
-                oid: oid,
+                oid: replyOid,
                 root: root,
-                parent: root,
+                parent: parent,
                 replyType: this.replyType,
-                replyItem: replyItem,
+                replyItem: reply,
                 items: savedReplies[key],
-                onSave: (reply) {
-                  if (reply.isEmpty) {
+                onSave: (items) {
+                  if (items.isEmpty) {
                     savedReplies.remove(key);
                   } else {
-                    savedReplies[key] = reply.toList();
+                    savedReplies[key] = items.toList();
                   }
                 },
               );
@@ -190,11 +199,15 @@ class VideoReplyReplyController extends ReplyController
         .then((replyInfo) {
           if (replyInfo is ReplyInfo) {
             savedReplies.remove(key);
-
             count.value += 1;
-            loadingState
-              ..value.dataOrNull?.insert(index! + 1, replyInfo)
-              ..refresh();
+
+            final data = loadingState.value.dataOrNull;
+            if (data != null) {
+              // This controller displays only replies inside the current root
+              // thread, so insert the new child into this list only.
+              data.insert(index! + 1, replyInfo);
+              loadingState.refresh();
+            }
             if (enableCommAntifraud) {
               onCheckReply(replyInfo, isManual: false);
             }

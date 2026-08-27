@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/custom_tooltip.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -39,6 +40,24 @@ class _EmotePanelState extends State<EmotePanel>
     return Obx(
       () => _buildBody(theme, _emotePanelController.loadingState.value),
     );
+  }
+
+  String _emoteA11yLabel(Emote item) {
+    final alias = item.meta?.alias?.trim();
+    if (alias != null && alias.isNotEmpty) {
+      return '$alias 表情';
+    }
+    final raw = item.text?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      final normalized = raw
+          .replaceFirst(RegExp(r'^\['), '')
+          .replaceFirst(RegExp(r'\]$'), '')
+          .trim();
+      if (normalized.isNotEmpty) {
+        return '$normalized 表情';
+      }
+    }
+    return '表情';
   }
 
   Widget _buildBody(
@@ -143,22 +162,35 @@ class _EmotePanelState extends State<EmotePanel>
                                   child: child,
                                 );
                               }
-                              return Material(
-                                type: MaterialType.transparency,
-                                child: InkWell(
-                                  borderRadius: const BorderRadius.all(
-                                    Radius.circular(6),
+                              final label = _emoteA11yLabel(item);
+                              void choose() {
+                                widget.onChoose(
+                                  item,
+                                  isTextEmote
+                                      ? null
+                                      : flag
+                                      ? 24
+                                      : 42,
+                                  null,
+                                );
+                                a11yActionFeedback(message: '已插入$label');
+                              }
+                              return Semantics(
+                                container: true,
+                                button: true,
+                                excludeSemantics: true,
+                                label: label,
+                                hint: '點兩下插入這個表情',
+                                onTap: choose,
+                                child: Material(
+                                  type: MaterialType.transparency,
+                                  child: InkWell(
+                                    borderRadius: const BorderRadius.all(
+                                      Radius.circular(6),
+                                    ),
+                                    onTap: choose,
+                                    child: child,
                                   ),
-                                  onTap: () => widget.onChoose(
-                                    item,
-                                    isTextEmote
-                                        ? null
-                                        : flag
-                                        ? 24
-                                        : 42,
-                                    null,
-                                  ),
-                                  child: child,
                                 ),
                               );
                             },
@@ -175,18 +207,24 @@ class _EmotePanelState extends State<EmotePanel>
                     children: [
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: iconButton(
-                          iconSize: 20,
-                          iconColor: theme.colorScheme.onSurfaceVariant
-                              .withValues(alpha: 0.8),
-                          onPressed: () => Get.toNamed(
-                            '/webview',
-                            parameters: {
-                              'url':
-                                  'https://www.bilibili.com/h5/mall/emoji-package/home?navhide=1&${ThemeUtils.themeUrl(theme.isDark)}',
-                            },
+                        child: Semantics(
+                          container: true,
+                          button: true,
+                          label: '管理表情包',
+                          hint: '點兩下開啟表情包管理',
+                          child: iconButton(
+                            iconSize: 20,
+                            iconColor: theme.colorScheme.onSurfaceVariant
+                                .withValues(alpha: 0.8),
+                            onPressed: () => Get.toNamed(
+                              '/webview',
+                              parameters: {
+                                'url':
+                                    'https://www.bilibili.com/h5/mall/emoji-package/home?navhide=1&${ThemeUtils.themeUrl(theme.isDark)}',
+                              },
+                            ),
+                            icon: const Icon(Icons.settings),
                           ),
-                          icon: const Icon(Icons.settings),
                         ),
                       ),
                       Expanded(
@@ -196,15 +234,20 @@ class _EmotePanelState extends State<EmotePanel>
                           dividerColor: Colors.transparent,
                           dividerHeight: 0,
                           isScrollable: true,
-                          tabs: response
+                          tabs: response.indexed
                               .map(
-                                (e) => Padding(
-                                  padding: const EdgeInsets.all(8),
-                                  child: NetworkImgLayer(
-                                    width: 24,
-                                    height: 24,
-                                    type: ImageType.emote,
-                                    src: e.url,
+                                (entry) => Semantics(
+                                  container: true,
+                                  button: true,
+                                  label: '表情包第${entry.$1 + 1}組',
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(8),
+                                    child: NetworkImgLayer(
+                                      width: 24,
+                                      height: 24,
+                                      type: ImageType.emote,
+                                      src: entry.$2.url,
+                                    ),
                                   ),
                                 ),
                               )
@@ -222,10 +265,16 @@ class _EmotePanelState extends State<EmotePanel>
   }
 
   Widget _errorWidget([String? errMsg]) => Center(
-    child: TextButton.icon(
-      onPressed: _emotePanelController.onReload,
-      icon: const Icon(Icons.refresh),
-      label: Text(errMsg ?? '没有数据'),
+    child: Semantics(
+      container: true,
+      button: true,
+      label: errMsg == null ? '表情載入失敗' : '表情載入失敗：$errMsg',
+      hint: '點兩下重新載入',
+      child: TextButton.icon(
+        onPressed: _emotePanelController.onReload,
+        icon: const Icon(Icons.refresh),
+        label: Text(errMsg ?? '沒有數據'),
+      ),
     ),
   );
 }

@@ -6,6 +6,9 @@ import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:fixnum/fixnum.dart' as $fixnum;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:flutter/semantics.dart';
+import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
+
 import 'package:material_ui/material_ui.dart';
 
 class ZanButtonGrpc extends StatelessWidget {
@@ -15,6 +18,10 @@ class ZanButtonGrpc extends StatelessWidget {
   });
 
   final ReplyInfo replyItem;
+
+  void _announce(String message) {
+    a11yActionFeedback(message: message);
+  }
 
   Future<void> onHateReply(
     BuildContext context,
@@ -38,9 +45,10 @@ class ZanButtonGrpc extends StatelessWidget {
       oid: oid,
       rpid: rpid,
     );
-    // SmartDialog.dismiss();
     if (res.isSuccess) {
-      SmartDialog.showToast(isDislike ? '取消踩' : '点踩成功');
+      final message = isDislike ? '已取消踩' : '点踩成功';
+      SmartDialog.showToast(message);
+      _announce(message);
       if (action == 2) {
         if (isLike) replyItem.like -= $fixnum.Int64.ONE;
         replyItem.replyControl.action = $fixnum.Int64.TWO;
@@ -51,6 +59,9 @@ class ZanButtonGrpc extends StatelessWidget {
         (context as Element?)?.markNeedsBuild();
       }
     } else {
+      final message = isDislike ? '取消踩失败' : '点踩失败，需要登录';
+      SmartDialog.showToast(message);
+      _announce(message);
       res.toast();
     }
     onDone();
@@ -80,7 +91,9 @@ class ZanButtonGrpc extends StatelessWidget {
       action: action,
     );
     if (res.isSuccess) {
-      SmartDialog.showToast(isLike ? '取消赞' : '点赞成功');
+      final message = isLike ? '已取消赞' : '点赞成功';
+      SmartDialog.showToast(message);
+      _announce(message);
       if (action == 1) {
         replyItem
           ..like += $fixnum.Int64.ONE
@@ -94,6 +107,9 @@ class ZanButtonGrpc extends StatelessWidget {
         (context as Element?)?.markNeedsBuild();
       }
     } else {
+      final message = isLike ? '取消赞失败' : '点赞失败，需要登录';
+      SmartDialog.showToast(message);
+      _announce(message);
       res.toast();
     }
     onDone();
@@ -113,65 +129,86 @@ class ZanButtonGrpc extends StatelessWidget {
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
     );
+
+    Future<void> likeAction() => onLikeReply(
+      context,
+      isProcessing,
+      () => isProcessing = false,
+      isLike: isLike,
+      isDislike: isDislike,
+    );
+
+    Future<void> hateAction() => onHateReply(
+      context,
+      isProcessing,
+      () => isProcessing = false,
+      isLike: isLike,
+      isDislike: isDislike,
+    );
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         SizedBox(
           height: 32,
-          child: TextButton(
-            style: const ButtonStyle(
-              visualDensity: .compact,
-              tapTargetSize: .shrinkWrap,
-              padding: WidgetStatePropertyAll(.zero),
-              minimumSize: WidgetStatePropertyAll(.square(40)),
-            ),
-            onPressed: () => onHateReply(
-              context,
-              isProcessing,
-              () => isProcessing = false,
-              isLike: isLike,
-              isDislike: isDislike,
-            ),
-            child: Icon(
-              isDislike
-                  ? FontAwesomeIcons.solidThumbsDown
-                  : FontAwesomeIcons.thumbsDown,
-              size: 16,
-              color: isDislike ? primary : outline,
-              semanticLabel: isDislike ? '已踩' : '点踩',
+          child: Semantics(
+            container: true,
+            button: true,
+            label: isDislike ? '取消踩' : '点踩',
+            hint: isDislike ? '点两下取消踩' : '点两下点踩这条评论',
+            onTap: hateAction,
+            child: ExcludeSemantics(
+              child: TextButton(
+                style: const ButtonStyle(
+                  visualDensity: .compact,
+                  tapTargetSize: .shrinkWrap,
+                  padding: WidgetStatePropertyAll(.zero),
+                  minimumSize: WidgetStatePropertyAll(.square(40)),
+                ),
+                onPressed: hateAction,
+                child: Icon(
+                  isDislike
+                      ? FontAwesomeIcons.solidThumbsDown
+                      : FontAwesomeIcons.thumbsDown,
+                  size: 16,
+                  color: isDislike ? primary : outline,
+                ),
+              ),
             ),
           ),
         ),
         SizedBox(
           height: 32,
-          child: TextButton(
-            style: style,
-            onPressed: () => onLikeReply(
-              context,
-              isProcessing,
-              () => isProcessing = false,
-              isLike: isLike,
-              isDislike: isDislike,
-            ),
-            child: Row(
-              spacing: 4,
-              children: [
-                Icon(
-                  isLike
-                      ? FontAwesomeIcons.solidThumbsUp
-                      : FontAwesomeIcons.thumbsUp,
-                  size: 16,
-                  color: isLike ? primary : outline,
-                  semanticLabel: isLike ? '已赞' : '点赞',
+          child: Semantics(
+            container: true,
+            button: true,
+            label: isLike ? '取消赞' : '赞评论',
+            hint: isLike ? '点两下取消赞这条评论' : '点两下赞这条评论',
+            onTap: likeAction,
+            child: ExcludeSemantics(
+              child: TextButton(
+                style: style,
+                onPressed: likeAction,
+                child: Row(
+                  spacing: 4,
+                  children: [
+                    Icon(
+                      isLike
+                          ? FontAwesomeIcons.solidThumbsUp
+                          : FontAwesomeIcons.thumbsUp,
+                      size: 16,
+                      color: isLike ? primary : outline,
+                    ),
+                    Text(
+                      NumUtils.numFormat(replyItem.like.toInt()),
+                      style: TextStyle(
+                        color: isLike ? primary : outline,
+                        fontSize: theme.textTheme.labelSmall!.fontSize,
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  NumUtils.numFormat(replyItem.like.toInt()),
-                  style: TextStyle(
-                    color: isLike ? primary : outline,
-                    fontSize: theme.textTheme.labelSmall!.fontSize,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
