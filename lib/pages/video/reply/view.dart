@@ -133,7 +133,9 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 right: kFloatingActionButtonMargin,
                 bottom: kFloatingActionButtonMargin + bottom,
               ),
-              child: Column(
+              child: Semantics(
+                explicitChildNodes: true,
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -187,6 +189,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                     ),
                   ),
                 ],
+                ),
               ),
             ),
           ),
