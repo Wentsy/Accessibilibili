@@ -1311,15 +1311,29 @@ class PlPlayerController with BlockConfigMixin {
       videoPlayerController!.state.completed ||
       durationInMilliseconds - positionInMilliseconds <= 50;
 
-  // 双击播放、暂停
-  Future<void> onDoubleTapCenter() async {
+  /// Accessibility-safe playback toggle.
+  ///
+  /// Always checks the media player's real state instead of relying on the
+  /// cached playerStatus, which can lag behind while buffering/reconnecting.
+  Future<void> togglePlaybackAccessible() async {
+    final player = videoPlayerController;
+    if (player == null || _playerCount == 0) return;
+
     if (!isLive && isCompleted) {
-      await videoPlayerController!.seek(Duration.zero);
-      videoPlayerController!.play();
+      await player.seek(Duration.zero);
+      await play(hideControls: false);
+      return;
+    }
+
+    if (player.state.playing) {
+      await pause();
     } else {
-      videoPlayerController!.playOrPause();
+      await play(hideControls: false);
     }
   }
+
+  // 双击播放、暂停
+  Future<void> onDoubleTapCenter() => togglePlaybackAccessible();
 
   final RxBool mountSeekBackwardButton = false.obs;
   final RxBool mountSeekForwardButton = false.obs;
