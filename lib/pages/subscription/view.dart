@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/view_sliver_safe_area.dart';
@@ -26,7 +27,8 @@ class _SubPageState extends State<SubPage> with GridMixin {
       appBar: AppBar(title: const Text('我的订阅')),
       body: refreshIndicator(
         onRefresh: _subController.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
+          child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             ViewSliverSafeArea(
@@ -34,7 +36,8 @@ class _SubPageState extends State<SubPage> with GridMixin {
                 () => _buildBody(_subController.loadingState.value),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
