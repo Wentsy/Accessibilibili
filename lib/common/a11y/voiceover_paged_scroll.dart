@@ -5,19 +5,21 @@ import 'package:flutter/material.dart';
 class VoiceOverPagedScroll extends StatelessWidget {
   const VoiceOverPagedScroll({
     super.key,
-    required this.controller,
+    this.controller,
     required this.child,
     this.pageFraction = 0.85,
   });
 
-  final ScrollController controller;
+  final ScrollController? controller;
   final Widget child;
   final double pageFraction;
 
-  void _page({required bool forward}) {
-    if (!controller.hasClients) return;
+  void _page(BuildContext context, {required bool forward}) {
+    final scrollController =
+        controller ?? PrimaryScrollController.maybeOf(context);
+    if (scrollController == null || !scrollController.hasClients) return;
 
-    final position = controller.position;
+    final position = scrollController.position;
     final delta = position.viewportDimension * pageFraction;
     final target = (position.pixels + (forward ? delta : -delta)).clamp(
       position.minScrollExtent,
@@ -26,7 +28,7 @@ class VoiceOverPagedScroll extends StatelessWidget {
 
     if ((target - position.pixels).abs() < 1) return;
 
-    controller.animateTo(
+    scrollController.animateTo(
       target.toDouble(),
       duration: const Duration(milliseconds: 280),
       curve: Curves.easeOutCubic,
@@ -42,8 +44,8 @@ class VoiceOverPagedScroll extends StatelessWidget {
     return Semantics(
       container: true,
       explicitChildNodes: true,
-      onScrollUp: () => _page(forward: true),
-      onScrollDown: () => _page(forward: false),
+      onScrollUp: () => _page(context, forward: true),
+      onScrollDown: () => _page(context, forward: false),
       child: child,
     );
   }
