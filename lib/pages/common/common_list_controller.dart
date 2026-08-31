@@ -1,4 +1,5 @@
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/pages/common/common_controller.dart';
 import 'package:get/get.dart';
 
@@ -42,8 +43,13 @@ abstract class CommonListController<R, T> extends CommonController<R, T> {
           checkIsEnd(dataList.length);
           loadingState.value = Success(dataList);
         } else if (loadingState.value case Success(:final response)) {
+          // Preserve the existing list object and append only the new page.
+          // Before notifying widgets, suppress focus-driven ensureVisible for
+          // a brief window so VoiceOver cannot fall back to the first semantic
+          // node and drag the viewport back to the top during the rebuild.
           response!.addAll(dataList);
           checkIsEnd(response.length);
+          suppressA11yFocusScroll();
           loadingState.refresh();
         }
       }
