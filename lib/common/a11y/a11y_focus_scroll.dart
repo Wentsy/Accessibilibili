@@ -40,14 +40,16 @@ void a11yEnsureVisible(BuildContext context) {
     // visible viewport. Previously every focus event used alignment 0.5,
     // which could move an already-visible item and could reset a page when
     // VoiceOver restored focus after navigating back.
+    final viewportRenderObject = scrollable.context.findRenderObject();
+    if (viewportRenderObject == null || !viewportRenderObject.attached) {
+      return;
+    }
+
     final itemRect = MatrixUtils.transformRect(
-      renderObject.getTransformTo(scrollable.context.findRenderObject()),
+      renderObject.getTransformTo(viewportRenderObject),
       renderObject.paintBounds,
     );
-    final viewportSize = scrollable.context.size;
-    if (viewportSize == null) return;
-
-    final viewportRect = Offset.zero & viewportSize;
+    final viewportRect = viewportRenderObject.paintBounds;
     if (viewportRect.overlaps(itemRect)) {
       return;
     }
