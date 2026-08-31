@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/msg_feed_sys_msg_.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -37,7 +38,8 @@ class _SysMsgPageState extends State<SysMsgPage> {
       appBar: AppBar(title: const Text('系统通知')),
       body: refreshIndicator(
         onRefresh: _sysMsgController.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
+          child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverPadding(
@@ -48,7 +50,8 @@ class _SysMsgPageState extends State<SysMsgPage> {
                 () => _buildBody(theme, _sysMsgController.loadingState.value),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
