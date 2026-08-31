@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/http/constants.dart';
@@ -38,7 +39,8 @@ class _ArticleListPageState extends State<ArticleListPage> with GridMixin {
       color: theme.colorScheme.surface,
       child: refreshIndicator(
         onRefresh: _controller.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
+          child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             Obx(() => _buildHeader(theme, _controller.list.value)),
@@ -52,7 +54,8 @@ class _ArticleListPageState extends State<ArticleListPage> with GridMixin {
                 () => _buildBody(theme, _controller.loadingState.value),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
