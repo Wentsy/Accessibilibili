@@ -765,42 +765,67 @@ class RenderProgressBar extends RenderBox implements MouseTrackerAnnotation {
   void describeSemanticsConfiguration(SemanticsConfiguration config) {
     super.describeSemanticsConfiguration(config);
 
-    // description
+    final currentSeconds = _currentThumbDuration();
+    final forwardSeconds = _semanticTargetSeconds(forward: true);
+    final backwardSeconds = _semanticTargetSeconds(forward: false);
+
     config
       ..textDirection = TextDirection.ltr
-      ..label =
-          '进度条' //'Progress bar';
-      ..value = '${(_thumbValue * 100).round()}%'
-      // increase action
-      ..onIncrease = increaseAction;
-    final increased = _thumbValue + _semanticActionUnit;
-    config
-      ..increasedValue = '${((increased).clamp(0.0, 1.0) * 100).round()}%'
-      // decrease action
-      ..onDecrease = decreaseAction;
-    final decreased = _thumbValue - _semanticActionUnit;
-    config.decreasedValue = '${((decreased).clamp(0.0, 1.0) * 100).round()}%';
+      ..label = '影片播放進度'
+      ..value =
+          '${_formatSemanticDuration(currentSeconds)}，'
+          '共 ${_formatSemanticDuration(total)}，'
+          '${(_thumbValue * 100).round()}%'
+      ..hint = '向上滑快轉 $_semanticSeekSeconds 秒，向下滑倒帶 $_semanticSeekSeconds 秒'
+      ..onIncrease = onSeek == null ? null : increaseAction
+      ..onDecrease = onSeek == null ? null : decreaseAction
+      ..increasedValue =
+          '${_formatSemanticDuration(forwardSeconds)}，'
+          '${(_proportionOfTotal(forwardSeconds) * 100).round()}%'
+      ..decreasedValue =
+          '${_formatSemanticDuration(backwardSeconds)}，'
+          '${(_proportionOfTotal(backwardSeconds) * 100).round()}%';
   }
 
-  // This is how much to move the thumb if the move is triggered by a
-  // semantic action rather than a touch event.
-  static const double _semanticActionUnit = 0.02; // 🔴 2% 步進：長影片跳轉更精準
+  // VoiceOver exposes adjustable controls with a one-finger swipe up/down.
+  // A fixed time step is predictable for media controls and avoids huge jumps
+  // on long videos.
+  static const int _semanticSeekSeconds = 10;
 
-  void increaseAction() {
-    final newValue = _thumbValue + _semanticActionUnit;
-    _thumbValue = (newValue).clamp(0.0, 1.0);
-    onSeek?.call(_currentThumbDuration());
+  int _semanticTargetSeconds({required bool forward}) {
+    final delta = forward ? _semanticSeekSeconds : -_semanticSeekSeconds;
+    return (_currentThumbDuration() + delta).clamp(0, total);
+  }
+
+  String _formatSemanticDuration(int seconds) {
+    final safeSeconds = max(0, seconds);
+    final hours = safeSeconds ~/ 3600;
+    final minutes = (safeSeconds % 3600) ~/ 60;
+    final secs = safeSeconds % 60;
+
+    if (hours > 0) {
+      return '$hours 小時 $minutes 分 $secs 秒';
+    }
+    if (minutes > 0) {
+      return '$minutes 分 $secs 秒';
+    }
+    return '$secs 秒';
+  }
+
+  void _performSemanticSeek({required bool forward}) {
+    final targetSeconds = _semanticTargetSeconds(forward: forward);
+    _progress = targetSeconds;
+    _thumbValue = _proportionOfTotal(targetSeconds);
+
+    // OnSeek is documented and consumed as milliseconds throughout the player.
+    onSeek?.call(targetSeconds * Duration.millisecondsPerSecond);
     markNeedsPaint();
     markNeedsSemanticsUpdate();
   }
 
-  void decreaseAction() {
-    final newValue = _thumbValue - _semanticActionUnit;
-    _thumbValue = (newValue).clamp(0.0, 1.0);
-    onSeek?.call(_currentThumbDuration());
-    markNeedsPaint();
-    markNeedsSemanticsUpdate();
-  }
+  void increaseAction() => _performSemanticSeek(forward: true);
+
+  void decreaseAction() => _performSemanticSeek(forward: false);
 
   @override
   MouseCursor get cursor => SystemMouseCursors.click;
