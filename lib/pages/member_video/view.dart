@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/style.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
@@ -105,8 +106,9 @@ class _MemberVideoState extends State<MemberVideo>
           }
         }
       },
-      child: CustomScrollView(
-        physics: ReloadScrollPhysics(controller: _controller),
+      child: VoiceOverPagedScroll(
+        child: CustomScrollView(
+          physics: ReloadScrollPhysics(controller: _controller),
         slivers: [
           SliverPadding(
             padding: EdgeInsets.only(bottom: padding.bottom + 100),
@@ -114,7 +116,8 @@ class _MemberVideoState extends State<MemberVideo>
               () => _buildBody(theme, _controller.loadingState.value),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
     if (_controller.isVideo && _controller.fromViewAid?.isNotEmpty == true) {
