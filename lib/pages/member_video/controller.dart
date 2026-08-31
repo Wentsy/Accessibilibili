@@ -97,10 +97,25 @@ class MemberVideoCtr
     if (page != 0) {
       if (loadingState.value case Success(:final response)) {
         data.item ??= <SpaceArchiveItem>[];
+        final existing = response ?? const <SpaceArchiveItem>[];
+        final seen = existing.map((item) => item.param).whereType<String>().toSet();
+        final incoming = data.item!
+            .where((item) => item.param == null || seen.add(item.param!))
+            .toList();
+
+        // Keep the currently visible list in the same order and only append
+        // genuinely new items when loading the next page. Prepending/replacing
+        // the list causes VoiceOver focus and scroll position to jump.
         if (isLoadPrevious) {
-          data.item!.addAll(response!);
+          data.item = [...incoming, ...existing];
         } else {
-          data.item!.insertAll(0, response!);
+          data.item = [...existing, ...incoming];
+        }
+
+        // If the backend returns the same cursor/page again, stop requesting
+        // more instead of getting stuck in an endless load-more loop.
+        if (incoming.isEmpty && !isLoadPrevious) {
+          isEnd = true;
         }
       }
     }
