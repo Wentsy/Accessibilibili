@@ -372,9 +372,10 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
         itemBuilder: (_, _) => const VideoReplySkeleton(),
         itemCount: 8,
       ),
-      Success(:final response!) => SuperSliverList.builder(
-        listController: _controller.listController,
-        itemBuilder: (context, index) {
+      Success(:final response!) =>
+        MediaQuery.accessibleNavigationOf(context)
+            ? SliverList.builder(
+                itemBuilder: (context, index) {
           if (index == response.length) {
             _controller.onLoadMore();
             return Container(
@@ -418,9 +419,58 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
             key: ValueKey('reply-${item.id}'),
             child: child,
           );
-        },
-        itemCount: response.length + 1,
-      ),
+                },
+                itemCount: response.length + 1,
+              )
+            : SuperSliverList.builder(
+                listController: _controller.listController,
+                itemBuilder: (context, index) {
+                  if (index == response.length) {
+                    _controller.onLoadMore();
+                    return Container(
+                      height: 125,
+                      alignment: Alignment.center,
+                      margin: .only(bottom: MediaQuery.viewPaddingOf(context).bottom),
+                      child: Text(
+                        _controller.isEnd ? '没有更多了' : '加载中...',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.outline,
+                        ),
+                      ),
+                    );
+                  }
+                  final item = response[index];
+                  final reply = _replyItem(context, item, index);
+                  final child = ReplyA11ySemantics(
+                    replyItem: item,
+                    label: _a11yLabel(item),
+                    onTap: () => _controller.onReply(item, index: index),
+                    onTapHint: '點兩下回覆這條評論',
+                    child: reply,
+                  );
+                  if (jumpIndex == index) {
+                    return KeyedSubtree(
+                      key: ValueKey('reply-${item.id}'),
+                      child: ColoredBoxTransition(
+                        color: _colorAnimation ??= _controller.animController.drive(
+                          ColorTween(
+                            begin: colorScheme.onInverseSurface,
+                            end: colorScheme.surface,
+                          ).chain(CurveTween(curve: const Interval(0.8, 1.0))),
+                        ),
+                        child: child,
+                      ),
+                    );
+                  }
+                  return KeyedSubtree(
+                    key: ValueKey('reply-${item.id}'),
+                    child: child,
+                  );
+                },
+                itemCount: response.length + 1,
+              ),
       Error(:final errMsg) => HttpError(
         errMsg: errMsg,
         onReload: _controller.onReload,
