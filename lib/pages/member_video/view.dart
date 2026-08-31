@@ -181,8 +181,11 @@ class _MemberVideoState extends State<MemberVideo>
                   SliverGrid.builder(
                     gridDelegate: gridDelegate,
                     itemBuilder: (context, index) {
+                      // Preload before VoiceOver reaches the final semantic
+                      // node. Waiting for the exact last item can leave swipe
+                      // navigation stuck at the end of the currently loaded page.
                       if (widget.type != .season &&
-                          index == response.length - 1) {
+                          index >= response.length - 4) {
                         _controller.onLoadMore();
                       }
                       final item = response[index];
