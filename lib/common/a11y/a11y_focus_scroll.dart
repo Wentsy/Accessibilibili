@@ -68,14 +68,39 @@ void a11yEnsureVisible(BuildContext context) {
       renderObject.paintBounds,
     );
     final viewportRect = viewportRenderObject.paintBounds;
-    if (viewportRect.overlaps(itemRect)) {
+
+    // If VoiceOver somehow lands on a semantic node that is already outside
+    // the real viewport, bring it back to the middle immediately.
+    if (!viewportRect.overlaps(itemRect)) {
+      Scrollable.ensureVisible(
+        context,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      );
       return;
     }
 
+    // VoiceOver swipe navigation can reach the last semantic node currently
+    // built by a lazy Sliver/List/Grid before Flutter has created the next
+    // offscreen nodes. Pre-scroll when focus enters the top/bottom edge zone
+    // so layout builds the next batch before VoiceOver reaches that boundary.
+    final viewportHeight = viewportRect.height;
+    if (viewportHeight <= 0) return;
+
+    final edgeZone = viewportHeight * 0.20;
+    final nearTop = itemRect.top <= viewportRect.top + edgeZone;
+    final nearBottom = itemRect.bottom >= viewportRect.bottom - edgeZone;
+
+    if (!nearTop && !nearBottom) return;
+
+    // Pull the focused item slightly inward instead of centering it. This
+    // keeps reading direction natural and causes Flutter to lay out semantic
+    // nodes just beyond the visible edge.
     Scrollable.ensureVisible(
       context,
-      alignment: 0.5,
-      duration: const Duration(milliseconds: 220),
+      alignment: nearBottom ? 0.68 : 0.32,
+      duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
     );
   });
