@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/msg_feed_top.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
@@ -24,7 +25,8 @@ abstract class FollowTypePageState<T extends StatefulWidget> extends State<T> {
       appBar: appBar,
       body: refreshIndicator(
         onRefresh: controller.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
+          child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           // controller: controller.scrollController,
           slivers: [
@@ -33,7 +35,8 @@ abstract class FollowTypePageState<T extends StatefulWidget> extends State<T> {
                 () => _buildBody(theme, controller.loadingState.value),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
