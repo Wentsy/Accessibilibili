@@ -1,5 +1,6 @@
 import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/a11y/reply_semantics.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -265,12 +266,14 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
     return refreshIndicator(
       onRefresh: _controller.onRefresh,
       isClampingScrollPhysics: widget.isNested,
-      child: CustomScrollView(
-        key: PageStorageKey('reply-thread-${widget.rpid}-${widget.dialog ?? 0}'),
-        cacheExtent: MediaQuery.accessibleNavigationOf(context) ? 400 : 3000,
+      child: VoiceOverPagedScroll(
         controller: scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
+        child: CustomScrollView(
+          key: PageStorageKey('reply-thread-${widget.rpid}-${widget.dialog ?? 0}'),
+          cacheExtent: MediaQuery.accessibleNavigationOf(context) ? 400 : 3000,
+          controller: scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
           if (!isDialogue) ...[
             if ((widget.firstFloor ?? _controller.firstFloor.value)
                 case final firstFloor?)
@@ -285,10 +288,11 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
               }),
             _sortWidget(theme.colorScheme),
           ],
-          Obx(
-            () => _buildBody(theme.colorScheme, _controller.loadingState.value),
-          ),
-        ],
+            Obx(
+              () => _buildBody(theme.colorScheme, _controller.loadingState.value),
+            ),
+          ],
+        ),
       ),
     );
   }
