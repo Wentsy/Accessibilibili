@@ -37,7 +37,10 @@ class _RcmdPageState extends State<RcmdPage>
         child: CustomScrollView(
           controller: controller.scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
-          cacheExtent: 3000,
+          // A huge offscreen cache keeps stale semantic nodes alive under
+          // VoiceOver. Keep normal smooth scrolling unchanged, but constrain
+          // the semantic viewport when accessibility navigation is active.
+          cacheExtent: MediaQuery.accessibleNavigationOf(context) ? 400 : 3000,
           slivers: [
             SliverPadding(
               padding: const .only(top: Style.cardSpace, bottom: 140),
@@ -116,8 +119,10 @@ class _RcmdPageState extends State<RcmdPage>
                       },
                     );
                   } else {
+                    final item = response[index];
                     return VideoCardV(
-                      videoItem: response[index],
+                      key: ValueKey(item.bvid ?? item.aid ?? index),
+                      videoItem: item,
                       onRemove: () => controller.loadingState
                         ..value.data!.removeAt(index)
                         ..refresh(),
