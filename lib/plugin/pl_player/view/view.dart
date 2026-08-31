@@ -760,7 +760,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       /// 播放速度
       BottomControlType.speed => Obx(
         () => PopupMenuButton<double>(
-          tooltip: '倍速',
+          tooltip: '播放速度，目前 \${plPlayerController.playbackSpeed} 倍',
           requestFocus: false,
           initialValue: plPlayerController.playbackSpeed,
           color: Colors.black.withValues(alpha: 0.8),
@@ -810,7 +810,7 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
               .toSet()
               .length;
           return PopupMenuButton<int>(
-            tooltip: '画质',
+            tooltip: '畫質，目前 \${currentVideoQa.shortDesc}',
             requestFocus: false,
             initialValue: currentVideoQa.code,
             color: Colors.black.withValues(alpha: 0.8),
