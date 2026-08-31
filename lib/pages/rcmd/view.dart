@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/video_card_v.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -34,7 +35,9 @@ class _RcmdPageState extends State<RcmdPage>
       decoration: const BoxDecoration(borderRadius: Style.mdRadius),
       child: refreshIndicator(
         onRefresh: controller.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
+          controller: controller.scrollController,
+          child: CustomScrollView(
           controller: controller.scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           // A huge offscreen cache keeps stale semantic nodes alive under
@@ -48,7 +51,8 @@ class _RcmdPageState extends State<RcmdPage>
                 () => _buildBody(colorScheme, controller.loadingState.value),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
