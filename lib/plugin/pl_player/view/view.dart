@@ -1353,7 +1353,21 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       fit: StackFit.passthrough,
       key: _playerKey,
       children: <Widget>[
-        _videoWidget,
+        Obx(() {
+          final player = plPlayerController.videoPlayerController;
+          final isPlaying = player?.state.playing ?? false;
+          final buffering = plPlayerController.isBuffering.value;
+          return Semantics(
+            container: true,
+            label: '影片播放控制',
+            value: buffering
+                ? (isPlaying ? '正在播放，緩衝中' : '已暫停，緩衝中')
+                : (isPlaying ? '正在播放' : '已暫停'),
+            hint: '點兩下播放或暫停影片',
+            onTap: plPlayerController.togglePlaybackAccessible,
+            child: _videoWidget,
+          );
+        }),
 
         if (widget.danmuWidget case final danmaku?)
           Positioned.fill(top: 4, child: danmaku),
