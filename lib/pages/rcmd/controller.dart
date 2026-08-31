@@ -32,8 +32,31 @@ class RcmdController extends CommonListController {
     return enableSaveLastData;
   }
 
+  Object? _videoIdentity(dynamic item) {
+    try {
+      return item.bvid ?? item.aid;
+    } catch (_) {
+      return null;
+    }
+  }
+
   @override
   void handleListResponse(List dataList) {
+    // Recommendation APIs may return overlapping batches. Re-adding the same
+    // semantic nodes makes VoiceOver appear to loop on the same videos.
+    if (page > 0 && loadingState.value case Success(:final response)) {
+      final seen = <Object?>{};
+      if (response != null) {
+        for (final item in response) {
+          seen.add(_videoIdentity(item));
+        }
+      }
+      dataList.removeWhere((item) {
+        final id = _videoIdentity(item);
+        return id != null && !seen.add(id);
+      });
+    }
+
     if (enableSaveLastData && page == 0) {
       if (loadingState.value case Success(:final response)) {
         if (response != null && response.isNotEmpty) {
