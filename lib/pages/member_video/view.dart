@@ -185,9 +185,13 @@ class _MemberVideoState extends State<MemberVideo>
                           index == response.length - 1) {
                         _controller.onLoadMore();
                       }
-                      return VideoCardHMemberVideo(
-                        videoItem: response[index],
-                        fromViewAid: _controller.fromViewAid,
+                      final item = response[index];
+                      return KeyedSubtree(
+                        key: ValueKey('member-video-${item.param ?? item.bvid ?? index}'),
+                        child: VideoCardHMemberVideo(
+                          videoItem: item,
+                          fromViewAid: _controller.fromViewAid,
+                        ),
                       );
                     },
                     itemCount: response.length,
