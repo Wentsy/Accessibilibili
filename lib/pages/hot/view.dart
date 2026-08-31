@@ -52,8 +52,7 @@ class _HotPageState extends State<HotPage>
             title,
             style: const TextStyle(fontSize: 12),
           ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -68,7 +67,7 @@ class _HotPageState extends State<HotPage>
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           controller: controller.scrollController,
-        slivers: [
+          slivers: [
           if (Pref.showHotRcmd)
             SliverToBoxAdapter(
               child: Padding(
@@ -123,7 +122,6 @@ class _HotPageState extends State<HotPage>
       ),
     );
   }
-
   Widget _buildBody(LoadingState<List<HotVideoItemModel>?> loadingState) {
     return switch (loadingState) {
       Loading() => gridSkeleton,
