@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/msg_feed_top.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -52,7 +53,8 @@ class _AtMePageState extends State<AtMePage> {
       ),
       body: refreshIndicator(
         onRefresh: _atMeController.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
+          child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverPadding(
@@ -63,7 +65,8 @@ class _AtMePageState extends State<AtMePage> {
                 () => _buildBody(theme, _atMeController.loadingState.value),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
