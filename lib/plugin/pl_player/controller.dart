@@ -639,6 +639,12 @@ class PlPlayerController with BlockConfigMixin {
       if (_playerCount == 0) {
         return;
       }
+      // Reset observable playback state before opening the next media so
+      // VoiceOver never keeps announcing the previous video's position.
+      position.value = seekTo?.inSeconds ?? 0;
+      buffered.value = 0;
+      updateDuration(Duration.zero);
+
       // 配置Player 音轨、字幕等等
       await _createVideoController(dataSource, seekTo, volume);
 
@@ -1083,6 +1089,13 @@ class PlPlayerController with BlockConfigMixin {
     if (position < Duration.zero) {
       position = Duration.zero;
     }
+    if (duration.value > 0 && position.inSeconds > duration.value) {
+      position = Duration(seconds: duration.value);
+    }
+
+    // Reflect the requested position immediately in UI and semantics. The
+    // player stream will reconcile it with the actual decoder position later.
+    this.position.value = position.inSeconds;
     _heartDuration = position.inSeconds;
 
     Future<void> seek() async {
