@@ -66,7 +66,16 @@ class ReloadScrollPhysics extends AlwaysScrollableScrollPhysics {
   }) {
     if (controller.reload) {
       controller.reload = false;
-      return 0;
+
+      // Loading another page increases the scroll extent. A stale reload flag
+      // must never turn that pagination/layout change into a jump back to the
+      // top, otherwise VoiceOver loses its current semantic position and
+      // appears to "hit a wall" before returning to the first item.
+      final isAppendingPage =
+          newPosition.maxScrollExtent > oldPosition.maxScrollExtent + 1.0;
+      if (!isAppendingPage) {
+        return 0;
+      }
     }
     return super.adjustPositionForNewDimensions(
       oldPosition: oldPosition,
