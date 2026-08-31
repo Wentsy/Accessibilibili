@@ -113,12 +113,9 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
   void didChangeDependencies() {
     super.didChangeDependencies();
     _colorAnimation = null;
-    final controller = PrimaryScrollController.of(context);
     _controller
       ..didChangeDependencies(context)
-      ..nestedController = controller is ExtendedNestedScrollController
-          ? controller
-          : null;
+      ..nestedController = null;
   }
 
   @override
@@ -258,8 +255,10 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
   ReplyInfo? get firstFloor =>
       widget.firstFloor ?? _controller.firstFloor.value;
 
-  ScrollController get scrollController =>
-      _controller.nestedController ?? _controller.scrollController;
+  // A reply thread must own its viewport. Reusing the parent video's
+  // nested scroll position makes VoiceOver focus move independently from what
+  // is actually visible on screen.
+  ScrollController get scrollController => _controller.scrollController;
 
   @override
   Widget buildList(ThemeData theme) {
@@ -267,7 +266,8 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
       onRefresh: _controller.onRefresh,
       isClampingScrollPhysics: widget.isNested,
       child: CustomScrollView(
-        cacheExtent: 3000,
+        key: PageStorageKey('reply-thread-${widget.rpid}-${widget.dialog ?? 0}'),
+        cacheExtent: MediaQuery.accessibleNavigationOf(context) ? 400 : 3000,
         controller: scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
