@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show ReloadMixin;
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/member.dart';
 import 'package:PiliPlus/http/search.dart';
@@ -97,28 +98,38 @@ class MemberVideoCtr
     if (page != 0) {
       if (loadingState.value case Success(:final response)) {
         data.item ??= <SpaceArchiveItem>[];
-        final existing = response ?? const <SpaceArchiveItem>[];
+        final existing = response ?? <SpaceArchiveItem>[];
         final seen = existing.map((item) => item.param).whereType<String>().toSet();
         final incoming = data.item!
             .where((item) => item.param == null || seen.add(item.param!))
             .toList();
 
-        // Keep the currently visible list in the same order and only append
-        // genuinely new items when loading the next page. Prepending/replacing
-        // the list causes VoiceOver focus and scroll position to jump.
+        // Preserve the exact list instance that existing semantic nodes were
+        // built from. Replacing it with a new [...existing, ...incoming] list
+        // can make iOS VoiceOver drop the current accessibility focus.
         if (isLoadPrevious) {
-          data.item = [...incoming, ...existing];
+          existing.insertAll(0, incoming);
         } else {
-          data.item = [...existing, ...incoming];
+          existing.addAll(incoming);
         }
+        data.item = existing;
 
         // If the backend returns the same cursor/page again, stop requesting
         // more instead of getting stuck in an endless load-more loop.
         if (incoming.isEmpty && !isLoadPrevious) {
           isEnd = true;
         }
+
+        firstAid = existing.firstOrNull?.param;
+        lastAid = existing.lastOrNull?.param;
+        isLoadPrevious = false;
+
+        suppressA11yFocusScroll();
+        loadingState.refresh();
+        return true;
       }
     }
+
     firstAid = data.item?.firstOrNull?.param;
     lastAid = data.item?.lastOrNull?.param;
     isLoadPrevious = false;
