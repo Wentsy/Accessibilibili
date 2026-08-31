@@ -37,6 +37,9 @@ class PlayOrPauseButtonState extends State<PlayOrPauseButton>
       } else {
         controller.reverse();
       }
+      if (mounted) {
+        setState(() {});
+      }
     });
   }
 
