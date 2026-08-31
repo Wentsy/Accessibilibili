@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/whisper_item.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
@@ -94,7 +95,8 @@ class _WhisperPageState extends State<WhisperPage> {
       ),
       body: refreshIndicator(
         onRefresh: _controller.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
+          child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             _buildTopItems(theme, padding),
@@ -102,7 +104,8 @@ class _WhisperPageState extends State<WhisperPage> {
               padding: EdgeInsets.only(bottom: padding.bottom + 100),
               sliver: Obx(() => _buildBody(_controller.loadingState.value)),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
