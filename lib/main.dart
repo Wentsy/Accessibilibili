@@ -295,9 +295,9 @@ class MyApp extends StatelessWidget {
         routeObserver,
         FlutterSmartDialog.observer,
       ],
-      scrollBehavior: PlatformUtils.isDesktop
-          ? const CustomScrollBehavior()
-          : null,
+      // Use one app-wide scroll behavior so iOS VoiceOver three-finger
+      // paging always moves the real viewport on every vertical scrollable.
+      scrollBehavior: const CustomScrollBehavior(),
     );
   }
 
