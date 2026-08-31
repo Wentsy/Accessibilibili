@@ -22,15 +22,26 @@ class ComBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final child = SizedBox(
-      width: width,
-      height: height,
-      child: GestureDetector(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        onSecondaryTap: onSecondaryTap,
-        behavior: HitTestBehavior.opaque,
-        child: icon,
+    final child = Semantics(
+      button: onTap != null,
+      enabled: onTap != null,
+      label: tooltip,
+      hint: onTap != null ? '點兩下啟用' : null,
+      excludeSemantics: tooltip != null,
+      onTap: onTap,
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: ExcludeSemantics(
+          excluding: tooltip != null,
+          child: GestureDetector(
+            onTap: onTap,
+            onLongPress: onLongPress,
+            onSecondaryTap: onSecondaryTap,
+            behavior: HitTestBehavior.opaque,
+            child: icon,
+          ),
+        ),
       ),
     );
     if (tooltip != null) {
