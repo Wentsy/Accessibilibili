@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/video_card_v.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/button/more_btn.dart';
@@ -55,8 +56,10 @@ class _LivePageState extends State<LivePage>
       decoration: const BoxDecoration(borderRadius: Style.mdRadius),
       child: refreshIndicator(
         onRefresh: controller.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
           controller: controller.scrollController,
+          child: CustomScrollView(
+            controller: controller.scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverPadding(
@@ -71,7 +74,8 @@ class _LivePageState extends State<LivePage>
                 ],
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
