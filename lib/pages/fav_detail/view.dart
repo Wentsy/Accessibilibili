@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -99,7 +100,9 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
             ),
             body: refreshIndicator(
               onRefresh: _favDetailController.onRefresh,
-              child: CustomScrollView(
+              child: VoiceOverPagedScroll(
+                controller: _favDetailController.scrollController,
+                child: CustomScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 controller: _favDetailController.scrollController,
                 slivers: [
@@ -118,7 +121,8 @@ class _FavDetailPageState extends State<FavDetailPage> with GridMixin {
                       ),
                     ),
                   ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
