@@ -1,5 +1,6 @@
 import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/a11y/reply_semantics.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -84,11 +85,13 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
         onRefresh: _videoReplyController.onRefresh,
         isClampingScrollPhysics: widget.isNested,
         child: ScaffoldLayout(
-          body: CustomScrollView(
+          body: VoiceOverPagedScroll(
             controller: _videoReplyController.scrollController,
-            physics: const AlwaysScrollableScrollPhysics(),
-            key: const PageStorageKey(_VideoReplyPanelState),
-            slivers: [
+            child: CustomScrollView(
+              controller: _videoReplyController.scrollController,
+              physics: const AlwaysScrollableScrollPhysics(),
+              key: const PageStorageKey(_VideoReplyPanelState),
+              slivers: [
               SliverFloatingHeaderWidget(
                 backgroundColor: colorScheme.surface,
                 child: Padding(
@@ -123,8 +126,9 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                   }),
                 ),
               ),
-              Obx(() => _buildBody(_videoReplyController.loadingState.value)),
-            ],
+                Obx(() => _buildBody(_videoReplyController.loadingState.value)),
+              ],
+            ),
           ),
           fab: SlideTransition(
             position: fabAnimation,
