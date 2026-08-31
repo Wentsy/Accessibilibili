@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -52,9 +53,11 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
     super.build(context);
     return refreshIndicator(
       onRefresh: onRefresh,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
+      child: VoiceOverPagedScroll(
         controller: controller.scrollController,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          controller: controller.scrollController,
         slivers: [
           SliverPadding(
             padding: const EdgeInsets.only(bottom: 100),
@@ -62,7 +65,8 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
               Obx(() => _buildBody(controller.loadingState.value)),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
