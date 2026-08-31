@@ -402,7 +402,9 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
             child: reply,
           );
           if (jumpIndex == index) {
-            return ColoredBoxTransition(
+            return KeyedSubtree(
+              key: ValueKey('reply-${item.id}'),
+              child: ColoredBoxTransition(
               color: _colorAnimation ??= _controller.animController.drive(
                 ColorTween(
                   begin: colorScheme.onInverseSurface,
@@ -410,9 +412,13 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                 ).chain(CurveTween(curve: const Interval(0.8, 1.0))),
               ),
               child: child,
+            ),
             );
           }
-          return child;
+          return KeyedSubtree(
+            key: ValueKey('reply-${item.id}'),
+            child: child,
+          );
         },
         itemCount: response.length + 1,
       ),
