@@ -1,4 +1,5 @@
 import 'package:flutter/semantics.dart' show CustomSemanticsAction, OrdinalSortKey;
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -48,6 +49,7 @@ class VideoCardHMemberVideo extends StatelessWidget {
       excludeSemantics: true,
       label: '${videoItem.title}，播放 ${videoItem.stat?.view ?? "?"} 次',
       hint: '點兩下開啟影片。上滑有更多操作',
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(label: '分享'): () {
           if (bvid?.isNotEmpty != true) return;
