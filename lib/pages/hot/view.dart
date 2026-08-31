@@ -66,8 +66,8 @@ class _HotPageState extends State<HotPage>
       child: VoiceOverPagedScroll(
         controller: controller.scrollController,
         child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        controller: controller.scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          controller: controller.scrollController,
         slivers: [
           if (Pref.showHotRcmd)
             SliverToBoxAdapter(
@@ -118,7 +118,8 @@ class _HotPageState extends State<HotPage>
               () => _buildBody(controller.loadingState.value),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
