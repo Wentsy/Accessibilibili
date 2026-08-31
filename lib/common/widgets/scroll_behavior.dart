@@ -41,16 +41,7 @@ class CustomScrollBehavior extends MaterialScrollBehavior {
     // Apply the VoiceOver paging bridge app-wide to every vertical Scrollable.
     // This covers CustomScrollView, ListView, GridView and future list pages
     // without requiring each screen to opt in separately.
-    if (Platform.isIOS &&
-        axisDirectionToAxis(details.direction) == Axis.vertical) {
-      result = _VoiceOverGlobalScrollBridge(
-        direction: details.direction,
-        controller: details.controller,
-        child: result,
-      );
-    }
-
-    return result;
+    return _wrapVoiceOverPaging(result, details);
   }
 
   @override
@@ -83,8 +74,10 @@ class _VoiceOverGlobalScrollBridge extends StatelessWidget {
       final position = scrollController.position;
       final amount = position.viewportDimension * 0.85;
       final sign = switch (direction) {
-        AxisDirection.down || AxisDirection.right => 1.0,
-        AxisDirection.up || AxisDirection.left => -1.0,
+        AxisDirection.down => 1.0,
+        AxisDirection.right => 1.0,
+        AxisDirection.up => -1.0,
+        AxisDirection.left => -1.0,
       };
       final delta = amount * sign * (forward ? 1.0 : -1.0);
       final target = (position.pixels + delta).clamp(
@@ -128,6 +121,21 @@ class _VoiceOverGlobalScrollBridge extends StatelessWidget {
   }
 }
 
+Widget _wrapVoiceOverPaging(
+  Widget child,
+  ScrollableDetails details,
+) {
+  if (Platform.isIOS &&
+      axisDirectionToAxis(details.direction) == Axis.vertical) {
+    return _VoiceOverGlobalScrollBridge(
+      direction: details.direction,
+      controller: details.controller,
+      child: child,
+    );
+  }
+  return child;
+}
+
 class NoOverscrollIndicator extends CustomScrollBehavior {
   const NoOverscrollIndicator();
 
@@ -136,5 +144,5 @@ class NoOverscrollIndicator extends CustomScrollBehavior {
     BuildContext context,
     Widget child,
     ScrollableDetails details,
-  ) => child;
+  ) => _wrapVoiceOverPaging(child, details);
 }
