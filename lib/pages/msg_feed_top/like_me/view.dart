@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/skeleton/msg_feed_top.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/dialog/simple_dialog_option.dart';
 import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
@@ -54,7 +55,8 @@ class _LikeMePageState extends State<LikeMePage> {
       ),
       body: refreshIndicator(
         onRefresh: _likeMeController.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
+          child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverPadding(
@@ -65,7 +67,8 @@ class _LikeMePageState extends State<LikeMePage> {
                 () => _buildBody(theme, _likeMeController.loadingState.value),
               ),
             ),
-          ],
+            ],
+          ),
         ),
       ),
     );
