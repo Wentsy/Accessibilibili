@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
@@ -28,7 +29,9 @@ class _FavVideoPageState extends State<FavVideoPage>
     super.build(context);
     return refreshIndicator(
       onRefresh: _favController.onRefresh,
-      child: CustomScrollView(
+      child: VoiceOverPagedScroll(
+        controller: _favController.scrollController,
+        child: CustomScrollView(
         controller: _favController.scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
@@ -41,7 +44,8 @@ class _FavVideoPageState extends State<FavVideoPage>
               () => _buildBody(_favController.loadingState.value),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
