@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart' show ReplyInfo;
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/reply.dart';
@@ -90,6 +91,7 @@ class ReplyA11ySemantics extends StatelessWidget {
       textDirection: TextDirection.ltr,
       onTap: onTap,
       onTapHint: onTapHint,
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(
           label: action == Int64.ONE ? '取消赞' : '点赞这条评论',
