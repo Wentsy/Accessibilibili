@@ -194,36 +194,6 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Obx(() {
-                    _controller.loadingState.value;
-                    if (_controller.isEnd) {
-                      return const SizedBox.shrink();
-                    }
-                    return Semantics(
-                      excludeSemantics: true,
-                      sortKey: const OrdinalSortKey(0.4),
-                      button: true,
-                      label: '載入更多回覆',
-                      child: FloatingActionButton.small(
-                        heroTag: 'loadMoreRepliesSub',
-                        onPressed: () {
-                          feedBack();
-                          final sc = scrollController;
-                          if (sc.hasClients) {
-                            sc.animateTo(
-                              sc.position.maxScrollExtent,
-                              duration: const Duration(milliseconds: 400),
-                              curve: Curves.easeOut,
-                            );
-                          }
-                          _controller.onLoadMore();
-                        },
-                        tooltip: '载入更多回复',
-                        child: const Icon(Icons.unfold_more),
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
                   Semantics(
                     excludeSemantics: true,
                     sortKey: const OrdinalSortKey(0.5),
