@@ -143,36 +143,6 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Obx(() {
-                    _videoReplyController.loadingState.value;
-                    if (_videoReplyController.isEnd) {
-                      return const SizedBox.shrink();
-                    }
-                    return Semantics(
-                      excludeSemantics: true,
-                      sortKey: const OrdinalSortKey(0.4),
-                      button: true,
-                      label: '載入更多評論',
-                      child: FloatingActionButton.small(
-                        heroTag: 'loadMoreReplies',
-                        onPressed: () {
-                          feedBack();
-                          final sc = _videoReplyController.scrollController;
-                          if (sc.hasClients) {
-                            sc.animateTo(
-                              sc.position.maxScrollExtent,
-                              duration: const Duration(milliseconds: 400),
-                              curve: Curves.easeOut,
-                            );
-                          }
-                          _videoReplyController.onLoadMore();
-                        },
-                        tooltip: '载入更多评论',
-                        child: const Icon(Icons.unfold_more),
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
                   Semantics(
                     excludeSemantics: true,
                     sortKey: const OrdinalSortKey(0.5),
