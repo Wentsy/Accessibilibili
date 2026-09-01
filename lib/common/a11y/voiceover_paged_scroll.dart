@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/ios_accessibility_actions.dart';
 import 'package:flutter/material.dart';
 
 /// Bridges VoiceOver's standard scroll semantic actions to the real Flutter
@@ -28,11 +29,13 @@ class VoiceOverPagedScroll extends StatelessWidget {
 
     if ((target - position.pixels).abs() < 1) return;
 
-    scrollController.animateTo(
-      target.toDouble(),
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
-    );
+    scrollController
+        .animateTo(
+          target.toDouble(),
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+        )
+        .whenComplete(notifyIosVoiceOverPageScrolled);
   }
 
   @override
