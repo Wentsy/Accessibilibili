@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:PiliPlus/common/a11y/ios_accessibility_actions.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:material_ui/material_ui.dart';
 
@@ -85,11 +86,13 @@ class _VoiceOverGlobalScrollBridge extends StatelessWidget {
         position.maxScrollExtent,
       );
       if ((target - position.pixels).abs() < 1) return;
-      scrollController.animateTo(
-        target.toDouble(),
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOutCubic,
-      );
+      scrollController
+          .animateTo(
+            target.toDouble(),
+            duration: const Duration(milliseconds: 280),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(notifyIosVoiceOverPageScrolled);
       return;
     }
 
@@ -102,6 +105,10 @@ class _VoiceOverGlobalScrollBridge extends StatelessWidget {
         type: ScrollIncrementType.page,
       ),
       context,
+    );
+    Future<void>.delayed(
+      const Duration(milliseconds: 300),
+      notifyIosVoiceOverPageScrolled,
     );
   }
 
