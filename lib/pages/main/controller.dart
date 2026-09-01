@@ -22,6 +22,7 @@ import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/update.dart';
 import 'package:collection/collection.dart';
 import 'package:easy_debounce/easy_throttle.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -286,17 +287,34 @@ class MainController extends GetxController
     }
   }
 
+  void _switchMainPage(int value) {
+    if (mainTabBarView) {
+      final tabController = controller as TabController;
+      tabController.animateTo(value);
+      selectedIndex.value = value;
+      return;
+    }
+
+    final pageController = controller as PageController;
+    void jump() {
+      if (!pageController.hasClients) return;
+      pageController.jumpToPage(value);
+      selectedIndex.value = value;
+    }
+
+    if (pageController.hasClients) {
+      jump();
+    } else {
+      SchedulerBinding.instance.addPostFrameCallback((_) => jump());
+    }
+  }
+
   void setIndex(int value) {
     feedBack();
 
     final currentNav = navigationBars[value];
     if (value != selectedIndex.value) {
-      selectedIndex.value = value;
-      if (mainTabBarView) {
-        controller.animateTo(value);
-      } else {
-        controller.jumpToPage(value);
-      }
+      _switchMainPage(value);
       if (currentNav == NavigationBarType.home) {
         checkDefaultSearch();
         checkUnread();
