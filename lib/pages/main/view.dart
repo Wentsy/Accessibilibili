@@ -469,7 +469,7 @@ class _MainAppState extends PopScopeState<MainApp>
     // The main sections are navigation destinations, not a user-scrollable
     // pager. Use selectedIndex as the single source of truth so the selected
     // bottom-tab state and the visible page can never diverge.
-    final child = Obx(
+    Widget child = Obx(
       () => IndexedStack(
         index: _mainController.selectedIndex.value,
         children: _mainController.navigationBars.map((i) => i.page).toList(),
