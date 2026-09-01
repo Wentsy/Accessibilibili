@@ -274,7 +274,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
     EasyThrottle.throttle('replyReply', const Duration(milliseconds: 500), () {
       int oid = replyItem.oid.toInt();
       int rpid = replyItem.id.toInt();
-      MiniScaffold.of(context).showBottomSheet(
+      final bottomSheet = MiniScaffold.of(context).showBottomSheet(
         constraints: BoxConstraints(
           minHeight: MediaQuery.sizeOf(context).height,
           maxHeight: MediaQuery.sizeOf(context).height,
@@ -290,6 +290,9 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
           upMid: _videoReplyController.upMid,
         ),
       );
+      bottomSheet.completer.future.whenComplete(() {
+        if (mounted) showFab();
+      });
     });
   }
 }
