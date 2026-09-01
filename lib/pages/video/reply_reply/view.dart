@@ -158,65 +158,58 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
         body: Stack(
           children: [
             widget.isVideoDetail
-            ? Column(
-                children: [
-                  Container(
-                    height: 45,
-                    decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(
-                          width: 1,
-                          color: theme.dividerColor.withValues(alpha: 0.1),
+                ? Column(
+                    children: [
+                      Container(
+                        height: 45,
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              width: 1,
+                              color: theme.dividerColor.withValues(alpha: 0.1),
+                            ),
+                          ),
+                        ),
+                        padding: const EdgeInsets.only(left: 12, right: 2),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: <Widget>[
+                            Text(isDialogue ? '对话列表' : '评论详情'),
+                            IconButton(
+                              tooltip: '关闭',
+                              icon: const Icon(Icons.close, size: 20),
+                              onPressed: Get.back,
+                            ),
+                          ],
                         ),
                       ),
+                      Expanded(child: child()),
+                    ],
+                  )
+                : child(),
+            if (!MediaQuery.accessibleNavigationOf(context))
+              Positioned(
+                right: 16,
+                bottom: 16 + MediaQuery.paddingOf(context).bottom,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Semantics(
+                      excludeSemantics: true,
+                      sortKey: const OrdinalSortKey(0.5),
+                      button: true,
+                      label: '發表回覆',
+                      child: FloatingActionButton(
+                        heroTag: 'replyReplyFab',
+                        onPressed: _replyToThread,
+                        tooltip: '发表回复',
+                        child: const Icon(Icons.reply),
+                      ),
                     ),
-                    padding: const EdgeInsets.only(left: 12, right: 2),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: <Widget>[
-                        Text(isDialogue ? '对话列表' : '评论详情'),
-                        IconButton(
-                          tooltip: '关闭',
-                          icon: const Icon(Icons.close, size: 20),
-                          onPressed: Get.back,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(child: child()),
-                ],
-              )
-            : child(),
-            Positioned(
-              right: 16,
-              bottom: 16 + MediaQuery.paddingOf(context).bottom,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Semantics(
-                    excludeSemantics: true,
-                    sortKey: const OrdinalSortKey(0.5),
-                    button: true,
-                    label: '發表回覆',
-                    child: FloatingActionButton(
-                      heroTag: 'replyReplyFab',
-                      onPressed: () {
-                        final root = widget.firstFloor ?? _controller.firstFloor.value;
-                        if (root != null) {
-                          feedBack();
-                          _controller.onReply(root, index: 0);
-                        } else {
-                          SmartDialog.showToast('請先等待評論載入');
-                        }
-                      },
-                      tooltip: '发表回复',
-                      child: const Icon(Icons.reply),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -225,6 +218,19 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
 
   ReplyInfo? get firstFloor =>
       widget.firstFloor ?? _controller.firstFloor.value;
+
+  void _replyToThread() {
+    final root = firstFloor;
+    if (root == null) {
+      SmartDialog.showToast('請先等待評論載入');
+      return;
+    }
+    feedBack();
+    // Replying to the root keeps this as a thread-level reply. ReplyPage only
+    // adds an @mention when replyItem.root != 0, so this composer is generic
+    // and does not target a specific nested commenter.
+    _controller.onReply(root, index: -1);
+  }
 
   // A reply thread must own its viewport. Reusing the parent video's
   // nested scroll position makes VoiceOver focus move independently from what
@@ -244,20 +250,20 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
           controller: scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-          if (!isDialogue) ...[
-            if ((widget.firstFloor ?? _controller.firstFloor.value)
-                case final firstFloor?)
-              _header(theme, firstFloor)
-            else
-              Obx(() {
-                final firstFloor = _controller.firstFloor.value;
-                if (firstFloor == null) {
-                  return const SliverToBoxAdapter();
-                }
-                return _header(theme, firstFloor);
-              }),
-            _sortWidget(theme.colorScheme),
-          ],
+            if (!isDialogue) ...[
+              if ((widget.firstFloor ?? _controller.firstFloor.value)
+                  case final firstFloor?)
+                _header(theme, firstFloor)
+              else
+                Obx(() {
+                  final firstFloor = _controller.firstFloor.value;
+                  if (firstFloor == null) {
+                    return const SliverToBoxAdapter();
+                  }
+                  return _header(theme, firstFloor);
+                }),
+              _sortWidget(theme.colorScheme),
+            ],
             Obx(
               () => _buildBody(theme.colorScheme, _controller.loadingState.value),
             ),
@@ -305,7 +311,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
       child: Padding(
         padding: const .fromLTRB(12, 2.5, 6, 2.5),
         child: Row(
-          mainAxisAlignment: .spaceBetween,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Obx(
               () {
@@ -350,49 +356,36 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
         MediaQuery.accessibleNavigationOf(context)
             ? SliverList.builder(
                 itemBuilder: (context, index) {
-          if (index == response.length) {
-            _controller.onLoadMore();
-            return Container(
-              height: 125,
-              alignment: Alignment.center,
-              margin: .only(bottom: MediaQuery.viewPaddingOf(context).bottom),
-              child: Text(
-                _controller.isEnd ? '没有更多了' : '加载中...',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: colorScheme.outline,
-                ),
-              ),
-            );
-          }
-          final item = response[index];
-          final reply = _replyItem(context, item, index);
-          final child = ReplyA11ySemantics(
-            replyItem: item,
-            label: _a11yLabel(item),
-            onTap: () => _controller.onReply(item, index: index),
-            onTapHint: '點兩下回覆這條評論',
-            child: reply,
-          );
-          if (jumpIndex == index) {
-            return KeyedSubtree(
-              key: ValueKey('reply-${item.id}'),
-              child: ColoredBoxTransition(
-              color: _colorAnimation ??= _controller.animController.drive(
-                ColorTween(
-                  begin: colorScheme.onInverseSurface,
-                  end: colorScheme.surface,
-                ).chain(CurveTween(curve: const Interval(0.8, 1.0))),
-              ),
-              child: child,
-            ),
-            );
-          }
-          return KeyedSubtree(
-            key: ValueKey('reply-${item.id}'),
-            child: child,
-          );
+                  if (index == response.length) {
+                    return _threadFooter(colorScheme);
+                  }
+                  final item = response[index];
+                  final reply = _replyItem(context, item, index);
+                  final child = ReplyA11ySemantics(
+                    replyItem: item,
+                    label: _a11yLabel(item),
+                    onTap: () => _controller.onReply(item, index: index),
+                    onTapHint: '點兩下回覆這條評論',
+                    child: reply,
+                  );
+                  if (jumpIndex == index) {
+                    return KeyedSubtree(
+                      key: ValueKey('reply-${item.id}'),
+                      child: ColoredBoxTransition(
+                        color: _colorAnimation ??= _controller.animController.drive(
+                          ColorTween(
+                            begin: colorScheme.onInverseSurface,
+                            end: colorScheme.surface,
+                          ).chain(CurveTween(curve: const Interval(0.8, 1.0))),
+                        ),
+                        child: child,
+                      ),
+                    );
+                  }
+                  return KeyedSubtree(
+                    key: ValueKey('reply-${item.id}'),
+                    child: child,
+                  );
                 },
                 itemCount: response.length + 1,
               )
@@ -400,20 +393,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                 listController: _controller.listController,
                 itemBuilder: (context, index) {
                   if (index == response.length) {
-                    _controller.onLoadMore();
-                    return Container(
-                      height: 125,
-                      alignment: Alignment.center,
-                      margin: .only(bottom: MediaQuery.viewPaddingOf(context).bottom),
-                      child: Text(
-                        _controller.isEnd ? '没有更多了' : '加载中...',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colorScheme.outline,
-                        ),
-                      ),
-                    );
+                    return _threadFooter(colorScheme);
                   }
                   final item = response[index];
                   final reply = _replyItem(context, item, index);
@@ -450,6 +430,39 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
         onReload: _controller.onReload,
       ),
     };
+  }
+
+  Widget _threadFooter(ColorScheme colorScheme) {
+    _controller.onLoadMore();
+    final isEnd = _controller.isEnd;
+    return Container(
+      constraints: const BoxConstraints(minHeight: 125),
+      alignment: Alignment.center,
+      padding: EdgeInsets.fromLTRB(
+        16,
+        20,
+        16,
+        20 + MediaQuery.viewPaddingOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            isEnd ? '没有更多了' : '加载中...',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: colorScheme.outline),
+          ),
+          if (isEnd && !isDialogue) ...[
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _replyToThread,
+              icon: const Icon(Icons.reply),
+              label: const Text('發表回覆'),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _replyItem(BuildContext context, ReplyInfo replyItem, int index) {
