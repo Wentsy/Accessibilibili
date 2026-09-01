@@ -9,7 +9,6 @@ import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/main_layout.dart';
 import 'package:PiliPlus/common/widgets/route_aware_mixin.dart';
-import 'package:PiliPlus/common/widgets/scroll_behavior.dart';
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
 import 'package:PiliPlus/pages/home/view.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
@@ -39,78 +38,266 @@ class MainApp extends StatefulWidget {
 }
 
 class _MainAppState extends PopScopeState<MainApp>
-    with WindowListener, TrayListener, RouteAwareMixin {
-  late final MainController _mainController = Get.find<MainController>();
-  late ColorScheme _colorScheme;
+    with
+        RouteAware,
+        RouteAwareMixin,
+        WidgetsBindingObserver,
+        WindowListener,
+        TrayListener {
+  final _mainController = Get.put(MainController());
+  late final _setting = GStorage.setting;
   late EdgeInsets _padding;
+  late ColorScheme _colorScheme;
+  Brightness? _brightness;
+
+  @override
+  bool get initCanPop => false;
 
   @override
   void initState() {
     super.initState();
+    addObserverMobile(this);
+    if (Platform.isMacOS) {
+      HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+    }
     if (PlatformUtils.isDesktop) {
-      windowManager.addListener(this);
-      trayManager.addListener(this);
+      windowManager
+        ..addListener(this)
+        ..setPreventClose(true);
+      if (_mainController.showTrayIcon) {
+        trayManager.addListener(this);
+        _handleTray();
+      }
+    } else {
+      // FlutterSmartDialog throws
+      PiliScheme.init();
     }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _padding = MediaQuery.viewPaddingOf(context);
     _colorScheme = ColorScheme.of(context);
-    _padding = MediaQuery.paddingOf(context);
+    final brightness = _colorScheme.brightness;
+    NetworkImgLayer.reduce =
+        NetworkImgLayer.reduceLuxColor != null && brightness.isDark;
+    if (PlatformUtils.isDesktop) {
+      if (_brightness != brightness) {
+        _brightness = brightness;
+        windowManager.setBrightness(brightness);
+      }
+    }
+    if (!_mainController.useSideBar) {
+      _mainController.useBottomNav = MediaQuery.sizeOf(context).isPortrait;
+    }
+  }
+
+  @override
+  void didPopNext() {
+    addObserverMobile(this);
+    _mainController
+      ..checkUnreadDynamic()
+      ..checkDefaultSearch(true)
+      ..checkUnread(_mainController.useBottomNav);
+    super.didPopNext();
+  }
+
+  @override
+  void didPushNext() {
+    removeObserverMobile(this);
+    super.didPushNext();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _mainController
+        ..checkUnreadDynamic()
+        ..checkDefaultSearch(true)
+        ..checkUnread(_mainController.useBottomNav);
+    }
   }
 
   @override
   void dispose() {
-    if (PlatformUtils.isDesktop) {
-      windowManager.removeListener(this);
-      trayManager.removeListener(this);
+    if (Platform.isMacOS) {
+      HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     }
+    if (PlatformUtils.isDesktop) {
+      trayManager.removeListener(this);
+      windowManager.removeListener(this);
+    }
+    removeObserverMobile(this);
+    PiliScheme.listener?.cancel();
+    GStorage.close();
     super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    return event is KeyDownEvent &&
+        event.logicalKey == LogicalKeyboardKey.keyR &&
+        HardwareKeyboard.instance.isMetaPressed &&
+        _mainController.refreshRecommendations();
+  }
+
+  @override
+  void onWindowMaximize() {
+    _setting.put(SettingBoxKey.isWindowMaximized, true);
+  }
+
+  @override
+  void onWindowUnmaximize() {
+    _setting.put(SettingBoxKey.isWindowMaximized, false);
+  }
+
+  @override
+  Future<void> onWindowMoved() async {
+    if (PlPlayerController.instance?.isDesktopPip ?? false) {
+      return;
+    }
+    final Offset offset = await windowManager.getPosition();
+    _setting.put(SettingBoxKey.windowPosition, [offset.dx, offset.dy]);
+  }
+
+  @override
+  Future<void> onWindowResized() async {
+    if (PlPlayerController.instance?.isDesktopPip ?? false) {
+      return;
+    }
+    final Rect bounds = await windowManager.getBounds();
+    _setting.putAll({
+      SettingBoxKey.windowSize: [bounds.width, bounds.height],
+      SettingBoxKey.windowPosition: [bounds.left, bounds.top],
+    });
   }
 
   @override
   void onWindowClose() {
-    if (_mainController.directExitOnBack) {
-      windowManager.destroy();
+    if (_mainController.showTrayIcon && _mainController.minimizeOnExit) {
+      _hide();
+      _onHideWindow();
     } else {
-      windowManager.hide();
+      _onClose();
+    }
+  }
+
+  Future<void> _onClose() async {
+    await GStorage.compact();
+    await GStorage.close();
+    await trayManager.destroy();
+    if (Platform.isWindows) {
+      // flutter_inappwebview
+      // 6.2.0-beta.2+ https://github.com/pichillilorenzo/flutter_inappwebview/issues/2482
+      // 6.1.5 https://github.com/pichillilorenzo/flutter_inappwebview/issues/2512#issuecomment-3031039587
+      final hProcess = kernel32.GetCurrentProcess();
+      kernel32.TerminateProcess(hProcess, 0);
+    } else {
+      exit(0);
     }
   }
 
   @override
-  void onTrayIconMouseDown() {
-    windowManager.show();
-    windowManager.focus();
+  void onWindowMinimize() {
+    _onHideWindow();
   }
 
   @override
-  void onTrayIconRightMouseDown() {
-    trayManager.popUpContextMenu();
+  void onWindowRestore() {
+    _onShowWindow();
+  }
+
+  void _onHideWindow() {
+    if (_mainController.pauseOnMinimize) {
+      if (PlPlayerController.instance case final player?) {
+        if (_mainController.isPlaying = player.playerStatus.isPlaying) {
+          player.pause();
+        }
+      } else {
+        _mainController.isPlaying = false;
+      }
+    }
+  }
+
+  void _onShowWindow() {
+    if (_mainController.pauseOnMinimize && _mainController.isPlaying) {
+      PlPlayerController.instance?.play();
+    }
+  }
+
+  /// https://github.com/leanflutter/window_manager/issues/571
+  Future<void> _hide() async {
+    if (Platform.isWindows) {
+      await windowManager.setOpacity(0.0);
+    }
+    await windowManager.hide();
+  }
+
+  Future<void> _show() async {
+    if (Platform.isWindows) {
+      await windowManager.setOpacity(1.0);
+    }
+    await windowManager.show();
+  }
+
+  @override
+  Future<void> onTrayIconMouseDown() async {
+    if (await windowManager.isVisible()) {
+      _onHideWindow();
+      _hide();
+    } else {
+      _onShowWindow();
+      _show();
+    }
+  }
+
+  @override
+  Future<void> onTrayIconRightMouseDown() async {
+    // ignore: deprecated_member_use
+    trayManager.popUpContextMenu(bringAppToFront: true);
   }
 
   @override
   void onTrayMenuItemClick(MenuItem menuItem) {
     switch (menuItem.key) {
-      case 'show_window':
-        windowManager.show();
-        windowManager.focus();
-      case 'exit_app':
-        windowManager.destroy();
+      case 'show':
+        _show();
+      case 'exit':
+        _onClose();
     }
   }
 
-  void _onBack() {
-    if (_mainController.useSideBar) {
-      if (_mainController.selectedIndex.value != 0) {
-        _mainController
-          ..setIndex(0)
-          ..barOffset?.value = 0.0
-          ..showBottomBar?.value = true
-          ..setSearchBar();
-      } else {
-        _onBack();
-      }
+  Future<void> _handleTray() async {
+    if (Platform.isWindows) {
+      await trayManager.setIcon(Assets.logoIco);
+    } else {
+      await trayManager.setIcon(Assets.logoLarge);
+    }
+    if (!Platform.isLinux) {
+      await trayManager.setToolTip(Constants.appName);
+    }
+
+    Menu trayMenu = Menu(
+      items: [
+        MenuItem(key: 'show', label: '显示窗口'),
+        MenuItem.separator(),
+        MenuItem(key: 'exit', label: '退出 ${Constants.appName}'),
+      ],
+    );
+    await trayManager.setContextMenu(trayMenu);
+  }
+
+  @pragma('vm:prefer-inline')
+  static void _onBack() {
+    if (Platform.isAndroid) {
+      PiliAndroidHelper.back();
+    }
+  }
+
+  @override
+  void onPopInvokedWithResult(bool didPop, Object? result) {
+    if (_mainController.directExitOnBack) {
+      _onBack();
     } else {
       if (_mainController.selectedIndex.value != 0) {
         _mainController
@@ -222,6 +409,7 @@ class _MainAppState extends PopScopeState<MainApp>
               data: DrawerThemeData(width: 130 + _padding.left),
               child: Obx(
                 () => NavigationDrawer(
+                  /// apply `lib/scripts/navigation_drawer.patch`
                   flex: 5,
                   backgroundColor: Colors.transparent,
                   onDestinationSelected: _mainController.setIndex,
@@ -278,27 +466,14 @@ class _MainAppState extends PopScopeState<MainApp>
 
   @override
   Widget build(BuildContext context) {
-    Widget child;
-    final pageBody = _mainController.mainTabBarView
-        ? TabBarView(
-            controller: _mainController.controller,
-            physics: const NeverScrollableScrollPhysics(),
-            scrollDirection:
-                _mainController.useBottomNav ? .horizontal : .vertical,
-            children: _mainController.navigationBars.map((i) => i.page).toList(),
-          )
-        : PageView(
-            controller: _mainController.controller,
-            physics: const NeverScrollableScrollPhysics(),
-            children: _mainController.navigationBars.map((i) => i.page).toList(),
-          );
-
-    // The outer main navigation pager is not content scrolling. Exclude it
-    // from the app-wide VoiceOver paging bridge; the actual lists inside each
-    // tab keep using CustomScrollBehavior normally.
-    child = ScrollConfiguration(
-      behavior: const MaterialScrollBehavior(),
-      child: pageBody,
+    // The main sections are navigation destinations, not a user-scrollable
+    // pager. Use selectedIndex as the single source of truth so the selected
+    // bottom-tab state and the visible page can never diverge.
+    final child = Obx(
+      () => IndexedStack(
+        index: _mainController.selectedIndex.value,
+        children: _mainController.navigationBars.map((i) => i.page).toList(),
+      ),
     );
 
     Widget? sideBar;
@@ -307,6 +482,8 @@ class _MainAppState extends PopScopeState<MainApp>
     if (_mainController.useBottomNav) {
       bottomNav = _bottomNav;
       if (bottomNav != null) {
+        // 🔴 無障礙：列表無限載入會讓 VoiceOver 永遠出不了內容區，
+        // 給底部導航 sortKey 讓它在語義樹中優先於內容
         bottomNav = MediaQuery.removePadding(
           context: context,
           removeTop: true,
@@ -318,6 +495,7 @@ class _MainAppState extends PopScopeState<MainApp>
           ),
         );
       }
+      // 🔴 無障礙：底部留白給導航列，避免列表覆蓋導航按鈕
       final navHeight = 75.0;
       padding = .only(
         top: _padding.top,
@@ -336,26 +514,68 @@ class _MainAppState extends PopScopeState<MainApp>
         ),
         child: _sideBar(),
       );
-      padding = .only(
-        top: _padding.top,
-        right: _padding.right,
-        bottom: _padding.bottom,
+      padding = .only(top: _padding.top, right: _padding.right);
+    }
+
+    child = Material(
+      child: MainLayout(
+        sideBar: sideBar,
+        bottomNav: bottomNav,
+        body: Padding(padding: padding, child: child),
+      ),
+    );
+
+    if (PlatformUtils.isMobile) {
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarBrightness: _colorScheme.brightness,
+          statusBarIconBrightness: _colorScheme.brightness.reverse,
+          systemStatusBarContrastEnforced: false,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarIconBrightness: _colorScheme.brightness.reverse,
+        ),
+        child: child,
       );
     }
 
-    return MainLayout(
-      padding: padding,
-      sideBar: sideBar,
-      bottomNav: bottomNav,
-      child: child,
-    );
+    return child;
   }
 
   Widget _buildIcon({required NavigationBarType type, bool selected = false}) {
-    return selected ? type.selectIcon : type.icon;
+    final icon = selected ? type.selectIcon : type.icon;
+    return type == .dynamics
+        ? Obx(
+            () {
+              final dynCount = _mainController.dynCount.value;
+              return Badge(
+                isLabelVisible: dynCount > 0,
+                label: _mainController.dynamicBadgeMode == .number
+                    ? Text(dynCount.toString())
+                    : null,
+                padding: const .symmetric(horizontal: 6),
+                child: icon,
+              );
+            },
+          )
+        : icon;
   }
 
-  Widget userAndSearchVertical() => const SizedBox.shrink();
-
-  void setSearchBar() {}
+  Widget userAndSearchVertical() {
+    return Column(
+      children: [
+        userAvatar(colorScheme: _colorScheme, mainController: _mainController),
+        const SizedBox(height: 8),
+        msgBadge(_mainController),
+        IconButton(
+          tooltip: '搜索',
+          icon: const Icon(
+            Icons.search_outlined,
+            semanticLabel: '搜索',
+          ),
+          onPressed: () => Get.toNamed('/search'),
+        ),
+      ],
+    );
+  }
 }
