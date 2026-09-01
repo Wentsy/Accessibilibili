@@ -1,3 +1,44 @@
+# Accessibilibili — PiliPlus 無障礙版
+
+這是以 [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) 為基礎的無障礙 fork，主要針對 iOS VoiceOver 使用情境進行實際改造與測試。目標不是重做 Bilibili，而是讓原本已有的功能更容易被 VoiceOver 使用者操作、瀏覽和理解。
+
+## 相較原版 PiliPlus 的無障礙優化
+
+### VoiceOver 導覽與焦點
+
+- 將首頁、搜尋結果、UP 主頁等影片卡整理成清楚的單一語義節點，VoiceOver 可一次讀到標題、UP 主、時長及播放／彈幕等資訊。
+- 為影片卡加入 VoiceOver 操作：點讚、分享、更多。
+- 改善垂直捲動與 VoiceOver 焦點的同步，降低滑到某個項目後焦點卡住、只能聽到操作音效的「鬼打牆」狀況。
+- 支援 VoiceOver 翻頁後的原生 iOS `pageScrolled` 回饋，並加入去重處理，避免同一個手勢重複觸發。
+- 底部導覽列改以目前選取索引作為唯一內容來源，首頁、動態、我的之間切換時，選中狀態和主畫面保持一致。
+
+### 評論區與樓中樓
+
+- 將整則評論整理成 VoiceOver 容易理解的語義節點，包含作者、內容、讚數和回覆數。
+- 提供評論的點讚、點踩及更多操作，並讓評論圖片能被朗讀為圖片內容提示。
+- 改善主樓與樓中樓的瀏覽、載入更多及回覆操作。
+- 樓中樓滑到「沒有更多了」後，會出現「發表回覆」按鈕，可對整個樓層發表回覆。
+- VoiceOver 開啟時隱藏重複的浮動回覆按鈕，避免旁白遇到兩顆相同按鈕。
+- 關閉樓中樓後，原本的「發表評論」按鈕會正確恢復。
+
+### 播放與操作
+
+- 接通影片進度條的 VoiceOver 調整操作，支援以 ±5% 方式調整播放位置。
+- 將部分會被 VoiceOver 誤讀成「顯示選單」的長按／手勢行為，改為明確的語義操作。
+- 在不影響原有播放器和其他主要功能的前提下，優先改善可操作性與焦點穩定性。
+
+## 使用與編譯
+
+- 本專案仍保留 PiliPlus 原有的功能與平台支援，這個 fork 的主要差異是無障礙語義、VoiceOver 導覽和 iOS 操作回饋。
+- iOS IPA 透過 GitHub Actions 編譯。使用者需要自行處理簽名與側載；本專案不提供 TestFlight。
+- 目前的無障礙行為主要以 iOS VoiceOver 實機測試，其他平台的無障礙表現可能不同。
+
+## 專案來源與聲明
+
+Accessibilibili 是非官方的個人無障礙改造 fork，感謝 PiliPlus 原作者及所有上游開源貢獻者。本專案不隸屬於 Bilibili 或 PiliPlus 官方。請遵守所在地法律、PiliPlus 授權條款及相關服務的使用規範。
+
+---
+
 <div align="center">
     <img width="200" height="200" src="assets/images/logo/logo.png">
 </div>
