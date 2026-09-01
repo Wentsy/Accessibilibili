@@ -2,15 +2,18 @@
 
 這是以 [PiliPlus](https://github.com/bggRGjQaUbCoE/PiliPlus) 為基礎的無障礙 fork，主要針對 iOS VoiceOver 使用情境進行實際改造與測試。目標不是重做 Bilibili，而是讓原本已有的功能更容易被 VoiceOver 使用者操作、瀏覽和理解。
 
-## 相較原版 PiliPlus 的無障礙優化
+## Accessibilibili 已整合的完整功能與無障礙改造
 
-Accessibilibili 保留 PiliPlus 原本的 Bilibili 功能，另外集中針對 iOS VoiceOver 的語義、焦點、捲動和操作方式進行改造。以下是本 fork 目前已加入的主要無障礙功能。
+Accessibilibili 保留 PiliPlus 原本的 Bilibili 功能，並將本 fork 的所有無障礙改動整合在下面這份總覽中；這些項目不代表先後順序，而是目前相較原版所加入或修正的完整範圍。主要針對 iOS VoiceOver 的語義、焦點、捲動和操作方式進行改造。
 
 ### VoiceOver 語義與導覽
 
 - 首頁、搜尋結果、UP 主頁、歷史紀錄等影片列表的卡片，整理成清楚的單一語義節點。VoiceOver 可讀取標題、UP 主、時長、播放／彈幕等資訊。
 - 為影片卡加入 VoiceOver 操作：點讚、分享、更多。
 - 評論整則整理成容易理解的語義節點，包含作者、內容、讚數、回覆數和圖片提示。
+- 歷史紀錄影片卡、互動結果按鈕和狀態訊息補上語義、按鈕角色與 live region；點讚、投幣、收藏等結果會向 VoiceOver 正確宣告。
+- 評論區的「發表評論」與相關 FAB 設置語義邊界，避免 VoiceOver 焦點從按鈕穿透到背後的評論列表。
+- 在評論更多操作中加入可直接前往評論者的操作，主樓與樓中樓都能使用。
 - 評論、影片卡、操作按鈕與 FAB 設置正確的語義邊界，避免焦點穿透到不該讀取的列表內容，也避免同一顆按鈕被讀成兩次。
 - 移除或改寫會被 VoiceOver 誤讀成「顯示選單」但實際無法正常使用的長按操作，改成明確的自訂語義操作。
 
@@ -18,7 +21,7 @@ Accessibilibili 保留 PiliPlus 原本的 Bilibili 功能，另外集中針對 i
 
 - 為全域垂直列表、追蹤列表、評論區和樓中樓加入 VoiceOver 三指上下翻頁支援。
 - 支援巢狀捲動與不同的 scroll configuration，確保 VoiceOver 操作真的連到正確的 scroll controller。
-- 翻頁完成後接上 iOS 原生 `UIAccessibility.Notification.pageScrolled` 回饋，並以 120ms 去重，避免同一次手勢重複觸發。
+- 翻頁完成後接上 iOS 原生 `UIAccessibility.Notification.pageScrolled` 回饋，並以 120ms 去重，避免同一次手勢重複觸發；由 VoiceOver 提供原生翻頁回饋，而不是自製音效。
 - 讓目前被 VoiceOver 聚焦的項目自動保持在可見範圍，降低焦點跑出畫面或滑到某個項目後只能聽到音效、無法繼續移動的「鬼打牆」問題。
 - 改善分頁載入時的焦點保留、列表身份、預載、頁面去重和可視範圍計算，避免載入更多後焦點跳回第一項或列表重新排列。
 - 移除會吞掉捲動操作或造成重複載入按鈕的語義容器，讓載入更多和排序等操作能被正常找到。
@@ -36,7 +39,7 @@ Accessibilibili 保留 PiliPlus 原本的 Bilibili 功能，另外集中針對 i
 ### 播放器與 VoiceOver 操作
 
 - 接通影片進度條的 VoiceOver 調整操作，支援以 ±5% 方式調整播放位置。
-- 播放／暫停狀態與 VoiceOver 保持同步，播放設定變更會向 VoiceOver 正確宣告。
+- 播放／暫停狀態與 VoiceOver 保持同步，播放設定變更會向 VoiceOver 正確宣告；緩衝、播放速度、畫質等狀態也維持可理解的回饋。
 - 保留可持續使用的 VoiceOver 播放控制，並支援 iOS VoiceOver Magic Tap 播放／暫停。
 - 緩衝期間仍維持播放控制可操作，避免控制項暫時消失或失去焦點。
 
@@ -45,6 +48,10 @@ Accessibilibili 保留 PiliPlus 原本的 Bilibili 功能，另外集中針對 i
 - 底部導覽列以目前選取索引作為唯一內容來源，首頁、動態、我的之間切換時，選中狀態和主畫面保持一致。
 - 修正推薦列表、UP 主影片列表、相關影片和樓中樓分頁時的項目身份與 VoiceOver 焦點穩定性。
 - iOS IPA 透過 GitHub Actions 編譯，使用者自行處理簽名與側載；本專案不提供 TestFlight。
+
+## 改造範圍說明
+
+上面列出的項目是 Accessibilibili fork 實際整合的改動總覽，不是另一套取代 PiliPlus 的功能清單；PiliPlus 原本的影音、搜尋、動態、帳號、收藏、私信、直播、設定等功能仍以原 README 的清單為準。
 
 ## 使用與編譯
 
