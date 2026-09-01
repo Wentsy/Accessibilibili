@@ -15,10 +15,26 @@ import UIKit
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
 
-    accessibilityChannel = FlutterMethodChannel(
+    let channel = FlutterMethodChannel(
       name: "accessibilibili/accessibility",
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
     )
+    accessibilityChannel = channel
+
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "pageScrolled":
+        if UIAccessibility.isVoiceOverRunning {
+          // pageScrolled is the UIKit-native accessibility notification for a
+          // completed VoiceOver scroll gesture. An empty position string keeps
+          // the native scroll cue without adding extra spoken wording.
+          UIAccessibility.post(notification: .pageScrolled, argument: "")
+        }
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 
   override func accessibilityPerformMagicTap() -> Bool {
