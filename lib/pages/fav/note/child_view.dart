@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -41,17 +42,20 @@ class _FavNoteChildPageState extends State<FavNoteChildPage>
     return PgcLayout(
       body: refreshIndicator(
         onRefresh: _favNoteController.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
           controller: _favNoteController.scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: EdgeInsets.only(bottom: padding.bottom + 100),
-              sliver: Obx(
-                () => _buildBody(_favNoteController.loadingState.value),
+          child: CustomScrollView(
+            controller: _favNoteController.scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.only(bottom: padding.bottom + 100),
+                sliver: Obx(
+                  () => _buildBody(_favNoteController.loadingState.value),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       toolbar: Obx(
