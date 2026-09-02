@@ -1,4 +1,3 @@
-import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
 import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/flutter/popup_menu.dart';
@@ -7,7 +6,6 @@ import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart'
     show platformClampingPhysics;
 import 'package:PiliPlus/http/live.dart';
-import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/live/live_danmaku/danmaku_msg.dart';
 import 'package:PiliPlus/models_new/live/live_superchat/item.dart';
 import 'package:PiliPlus/pages/live_room/controller.dart';
@@ -71,50 +69,6 @@ class LiveRoomChatPanel extends StatelessWidget {
       return '${item.name} 回覆 ${reply.name}：$message';
     }
     return '${item.name} 說：$message';
-  }
-
-  void _revealQueuedMessages() {
-    if (liveRoomController.shouldRefresh) {
-      liveRoomController.refreshMsgIfNeeded();
-    } else {
-      liveRoomController.disableAutoScroll.value = false;
-    }
-  }
-
-  Future<void> _refreshChatHistory() async {
-    if (!liveRoomController.autoScroll) return;
-
-    final wasDisabled = liveRoomController.disableAutoScroll.value;
-    liveRoomController
-      ..autoScroll = false
-      ..closeLiveMsg();
-    a11yActionFeedback(message: '正在重新整理彈幕');
-
-    final res = await LiveHttp.liveRoomDmPrefetch(roomId: roomId);
-    if (res case Success(:final response)) {
-      liveRoomController.messages.assignAll(
-        response ?? const <DanmakuMsg>[],
-      );
-      liveRoomController
-        ..builtLength = liveRoomController.messages.length
-        ..disableAutoScroll.value = true;
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final controller = liveRoomController.scrollController;
-        if (controller.hasClients) {
-          controller.jumpTo(controller.position.minScrollExtent);
-        }
-        a11yActionFeedback(message: '彈幕已重新整理');
-      });
-    } else {
-      liveRoomController.disableAutoScroll.value = wasDisabled;
-      res.toast();
-      a11yActionFeedback(message: '彈幕重新整理失敗');
-    }
-
-    liveRoomController
-      ..autoScroll = true
-      ..startLiveMsg();
   }
 
   void _showA11yMsgMenu(BuildContext context, DanmakuMsg item) {
@@ -213,9 +167,10 @@ class LiveRoomChatPanel extends StatelessWidget {
           () => VoiceOverPagedScroll(
             controller: liveRoomController.scrollController,
             onScrollBackwardAtStart: () {
-              _refreshChatHistory();
+              liveRoomController.refreshA11yChatHistory();
             },
-            onScrollForwardAtEnd: _revealQueuedMessages,
+            onScrollForwardAtEnd:
+                liveRoomController.revealQueuedMessagesForA11y,
             child: ListView.separated(
               key: const PageStorageKey(LiveRoomChatPanel),
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -259,6 +214,9 @@ class LiveRoomChatPanel extends StatelessWidget {
                             () => _showA11yMsgMenu(context, item),
                       };
                       return Semantics(
+                        key: ValueKey(
+                          'live-dm-${item.extra.id}-${item.extra.ct}',
+                        ),
                         container: true,
                         explicitChildNodes: false,
                         label: _a11yMessageLabel(item),
@@ -268,14 +226,10 @@ class LiveRoomChatPanel extends StatelessWidget {
                         onTap: canInteract ? () => onAtUser(item) : null,
                         onTapHint: canInteract ? '回覆這條彈幕' : null,
                         onDidGainAccessibilityFocus: () {
-                          // While VoiceOver reads older chat, keep incoming
-                          // messages queued so they cannot yank focus. Reaching
-                          // the newest visible message reveals any queued batch;
-                          // reaching the true newest message resumes live mode.
-                          if (index < liveRoomController.builtLength - 1) {
-                            liveRoomController.disableAutoScroll.value = true;
-                          } else if (liveRoomController.disableAutoScroll.value) {
-                            _revealQueuedMessages();
+                          liveRoomController.pauseA11yChat();
+                          if (index == liveRoomController.builtLength - 1 &&
+                              liveRoomController.shouldRefresh) {
+                            liveRoomController.revealQueuedMessagesForA11y();
                           }
                           a11yEnsureVisible(itemContext);
                         },
