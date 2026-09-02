@@ -55,7 +55,10 @@ class HistoryItem extends StatelessWidget {
             : '，觀看至 ${DurationUtils.formatDuration(item.progress)}，時長 ${DurationUtils.formatDuration(item.duration)}')
         : '';
     final authorPart = item.authorName?.isNotEmpty == true ? '，${item.authorName}' : '';
-    final String a11yLabel = '${item.title}$authorPart$progressPart';
+    final viewedAt = DateFormatUtils.a11yDateFormat(item.viewAt);
+    final viewedAtPart = viewedAt.isNotEmpty ? '，$viewedAt看過' : '';
+    final String a11yLabel =
+        '${item.title}$authorPart$progressPart$viewedAtPart';
 
     return Semantics(
       container: true,
