@@ -185,7 +185,8 @@ class FavDetailController
           break;
         }
         currentPage++;
-      } else {
+      } else if (res case Error(:final errMsg, :final code)) {
+        loadingState.value = Error(errMsg, code: code);
         res.toast();
         _sortingAll = false;
         return;
