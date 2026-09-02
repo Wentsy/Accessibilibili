@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -54,23 +55,26 @@ class _SubDetailPageState extends State<SubDetailPage> with GridMixin {
       color: theme.colorScheme.surface,
       child: refreshIndicator(
         onRefresh: _subDetailController.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
           controller: _subDetailController.scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            _appBar(theme, padding),
-            SliverPadding(
-              padding: EdgeInsets.only(
-                top: 7,
-                left: padding.left,
-                right: padding.right,
-                bottom: padding.bottom + 100,
+          child: CustomScrollView(
+            controller: _subDetailController.scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              _appBar(theme, padding),
+              SliverPadding(
+                padding: EdgeInsets.only(
+                  top: 7,
+                  left: padding.left,
+                  right: padding.right,
+                  bottom: padding.bottom + 100,
+                ),
+                sliver: Obx(
+                  () => _buildBody(_subDetailController.loadingState.value),
+                ),
               ),
-              sliver: Obx(
-                () => _buildBody(_subDetailController.loadingState.value),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -151,6 +155,20 @@ class _SubDetailPageState extends State<SubDetailPage> with GridMixin {
           ),
         ],
       ),
+      actions: [
+        Obx(() {
+          final newestFirst = _subDetailController.newestFirst.value;
+          return IconButton(
+            tooltip: newestFirst
+                ? '目前最新優先，切換為最舊優先'
+                : '目前最舊優先，切換為最新優先',
+            onPressed: _subDetailController.toggleSort,
+            icon: Icon(
+              newestFirst ? Icons.arrow_downward : Icons.arrow_upward,
+            ),
+          );
+        }),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         background: Container(
           decoration: BoxDecoration(
