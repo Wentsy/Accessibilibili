@@ -682,7 +682,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                           "sourceID": _liveRoomController.roomId.toString(),
                           "title": roomInfo.roomInfo!.title!,
                           "url": liveUrl,
-                          "authorID": _liveRoomController.roomId.toString(),
+                          "authorID": roomInfo.roomInfo!.uid.toString(),
                           "source": "直播",
                           "desc": roomInfo.roomInfo!.title!,
                           "author": roomInfo.anchorInfo!.baseInfo!.uname,
