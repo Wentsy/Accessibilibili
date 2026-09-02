@@ -35,6 +35,25 @@ enum DynType implements EnumWithLabel {
   const DynType(this.label);
 }
 
+class _DynamicReplyFocusSemantics extends StatelessWidget {
+  const _DynamicReplyFocusSemantics({
+    super.key,
+    required this.child,
+  });
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MergeSemantics(
+      child: Semantics(
+        onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+        child: child,
+      ),
+    );
+  }
+}
+
 abstract class CommonDynPageState<T extends StatefulWidget> extends State<T>
     with
         SingleTickerProviderStateMixin<T>,
@@ -177,29 +196,25 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
                 // the stable video and nested-reply lists. This pre-scrolls
                 // the lazy SliverList before VoiceOver reaches its built-node
                 // boundary instead of letting focus escape to outer content.
-                return MergeSemantics(
+                return _DynamicReplyFocusSemantics(
                   key: ValueKey('dynamic-reply-${item.id}'),
-                  child: Semantics(
-                    onDidGainAccessibilityFocus: () =>
-                        a11yEnsureVisible(context),
-                    child: ReplyItemGrpc(
-                      replyItem: item,
-                      replyLevel: 1,
-                      replyReply: (replyItem, id) =>
-                          replyReply(context, replyItem, id),
-                      onReply: controller.onReply,
-                      onDelete: (item, subIndex) =>
-                          controller.onRemove(index, item, subIndex),
-                      upMid: controller.upMid,
-                      onViewImage: hideFab,
-                      onCheckReply: (item) =>
-                          controller.onCheckReply(item, isManual: true),
-                      onToggleTop: (item) => controller.onToggleTop(
-                        item,
-                        index,
-                        controller.oid,
-                        controller.replyType,
-                      ),
+                  child: ReplyItemGrpc(
+                    replyItem: item,
+                    replyLevel: 1,
+                    replyReply: (replyItem, id) =>
+                        replyReply(context, replyItem, id),
+                    onReply: controller.onReply,
+                    onDelete: (item, subIndex) =>
+                        controller.onRemove(index, item, subIndex),
+                    upMid: controller.upMid,
+                    onViewImage: hideFab,
+                    onCheckReply: (item) =>
+                        controller.onCheckReply(item, isManual: true),
+                    onToggleTop: (item) => controller.onToggleTop(
+                      item,
+                      index,
+                      controller.oid,
+                      controller.replyType,
                     ),
                   ),
                 );
