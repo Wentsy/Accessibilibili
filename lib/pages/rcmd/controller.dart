@@ -88,7 +88,9 @@ class RcmdController extends CommonListController {
       // waits for per-video detail requests.
       const batchSize = 3;
       for (var start = 0; start < pending.length; start += batchSize) {
-        final end = (start + batchSize).clamp(0, pending.length);
+        final end = start + batchSize < pending.length
+            ? start + batchSize
+            : pending.length;
         final batch = pending.sublist(start, end);
         final results = await Future.wait(
           batch.map((item) async {
