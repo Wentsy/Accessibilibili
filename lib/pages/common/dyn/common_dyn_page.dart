@@ -1,4 +1,5 @@
-import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
+import 'package:flutter/semantics.dart';
+import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
@@ -33,25 +34,6 @@ enum DynType implements EnumWithLabel {
   @override
   final String label;
   const DynType(this.label);
-}
-
-class _DynamicReplyFocusSemantics extends StatelessWidget {
-  const _DynamicReplyFocusSemantics({
-    super.key,
-    required this.child,
-  });
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return MergeSemantics(
-      child: Semantics(
-        onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
-        child: child,
-      ),
-    );
-  }
 }
 
 abstract class CommonDynPageState<T extends StatefulWidget> extends State<T>
@@ -116,6 +98,14 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
     return false;
   }
 
+  String _replyA11yLabel(ReplyInfo item) {
+    final hasPic = item.content.pictures.isNotEmpty;
+    return '${item.member.name} 說：${item.content.message}'
+        '${hasPic ? '，[圖片]' : ''}'
+        '${item.like > 0 ? '，${item.like} 個讚' : ''}'
+        '${item.count > 0 ? '，共 ${item.count} 條回覆' : ''}';
+  }
+
   Widget buildReplyHeader([bool _ = true]) {
     final secondary = theme.colorScheme.secondary;
     return SliverPinnedHeader(
@@ -167,6 +157,13 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
           }
           return SliverList.builder(
             itemCount: count,
+            findChildIndexCallback: (key) {
+              final itemIndex = response.indexWhere(
+                (item) => ValueKey('dynamic-reply-${item.id}') == key,
+              );
+              if (itemIndex < 0) return null;
+              return itemIndex + (hasVote ? 1 : 0);
+            },
             itemBuilder: (context, index) {
               if (hasVote) {
                 if (index == 0) {
@@ -192,40 +189,51 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
               } else {
                 final item = response[index];
 
-                // VoiceOver swipe navigation only knows about semantic nodes
-                // that the lazy sliver has already built. Start fetching the
-                // next page a few rows early so focus can keep moving forward
-                // instead of reaching the built-node boundary and escaping to
-                // outer dynamic content.
-                if (!controller.isEnd && index >= response.length - 3) {
+                // Fetch ahead of the semantic boundary. Doing this several
+                // rows early gives the append/rebuild time to settle before
+                // VoiceOver reaches the final currently-built comment.
+                if (!controller.isEnd && index >= response.length - 5) {
                   controller.onLoadMore();
                 }
 
-                // Keep a stable identity for every comment across pagination.
-                // Appending a page rebuilds this sliver; without stable keys,
-                // iOS may restore accessibility focus to the first comment.
-                return _DynamicReplyFocusSemantics(
-                  key: ValueKey('dynamic-reply-${item.id}'),
-                  child: ReplyItemGrpc(
-                    key: ValueKey(item.id),
-                    replyItem: item,
-                    replyLevel: 1,
-                    replyReply: (replyItem, id) =>
-                        replyReply(context, replyItem, id),
-                    onReply: controller.onReply,
-                    onDelete: (item, subIndex) =>
-                        controller.onRemove(index, item, subIndex),
-                    upMid: controller.upMid,
-                    onViewImage: hideFab,
-                    onCheckReply: (item) =>
-                        controller.onCheckReply(item, isManual: true),
-                    onToggleTop: (item) => controller.onToggleTop(
-                      item,
-                      index,
-                      controller.oid,
-                      controller.replyType,
-                    ),
+                // Match the proven video-comment accessibility structure:
+                // one stable outer semantic node owns focus while the visual
+                // ReplyItemGrpc remains excluded beneath it. The outer key and
+                // findChildIndexCallback let Flutter preserve that same node
+                // when another page is appended instead of falling back to the
+                // route's first focusable control (the Back button).
+                final reply = ReplyItemGrpc(
+                  key: ValueKey(item.id),
+                  replyItem: item,
+                  replyLevel: 1,
+                  replyReply: (replyItem, id) =>
+                      replyReply(context, replyItem, id),
+                  onReply: controller.onReply,
+                  onDelete: (item, subIndex) =>
+                      controller.onRemove(index, item, subIndex),
+                  upMid: controller.upMid,
+                  onViewImage: hideFab,
+                  onCheckReply: (item) =>
+                      controller.onCheckReply(item, isManual: true),
+                  onToggleTop: (item) => controller.onToggleTop(
+                    item,
+                    index,
+                    controller.oid,
+                    controller.replyType,
                   ),
+                  a11ySortKey: OrdinalSortKey((index + 1).toDouble()),
+                );
+                return ReplyA11ySemantics(
+                  key: ValueKey('dynamic-reply-${item.id}'),
+                  replyItem: item,
+                  label: _replyA11yLabel(item),
+                  onTap: item.count.toInt() > 0
+                      ? () => replyReply(context, item, null)
+                      : () => controller.onReply(item),
+                  onTapHint: item.count.toInt() > 0
+                      ? '點兩下展開回覆'
+                      : '點兩下回覆這條評論',
+                  child: reply,
                 );
               }
             },
