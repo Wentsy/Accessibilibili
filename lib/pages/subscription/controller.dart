@@ -64,7 +64,7 @@ class SubController extends CommonListController<SubData, SubItemModel> {
     while (true) {
       final res = await UserHttp.userSubFolder(
         pn: currentPage,
-        ps: 70,
+        ps: 20,
         mid: account.mid,
       );
       if (res case Success(:final response)) {
