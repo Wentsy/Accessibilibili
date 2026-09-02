@@ -72,7 +72,11 @@ class _FavSearchPageState
           onSelected: (value) => controller
             ..order.value = value
             ..onReload(),
+          // Search stays server-paginated, so expose only the three native
+          // descending modes here. Full ascending modes are available in the
+          // favorite-folder detail page where all pages can be loaded safely.
           itemBuilder: (context) => FavOrderType.values
+              .where((e) => e.descending)
               .map(
                 (e) => PopupMenuItem(
                   value: e,
