@@ -6,6 +6,8 @@ abstract final class DateFormatUtils {
   static final _shortFormatD = DateFormat('MM-dd HH:mm');
   static final longFormatD = DateFormat('yyyy-MM-dd HH:mm');
   static final longFormatDs = DateFormat('yyyy-MM-dd HH:mm:ss');
+  static final _a11yShortFormat = DateFormat('M月d日');
+  static final _a11yLongFormat = DateFormat('yyyy年M月d日');
 
   static String dateFormat(
     int? time, {
@@ -41,6 +43,15 @@ abstract final class DateFormatUtils {
         : long ?? longFormat;
     return sdf.format(date);
   }
+
+  /// VoiceOver-friendly variant of [dateFormat]. Relative times keep the same
+  /// concise wording, while absolute dates use natural spoken Chinese instead
+  /// of numeric hyphen notation (for example, 9月2日 rather than 09-02).
+  static String a11yDateFormat(int? time) => dateFormat(
+    time,
+    short: _a11yShortFormat,
+    long: _a11yLongFormat,
+  );
 
   static String _twoDigits(int n) => n.toString().padLeft(2, '0');
 
