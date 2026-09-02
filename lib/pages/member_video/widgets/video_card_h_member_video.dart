@@ -33,13 +33,20 @@ class VideoCardHMemberVideo extends StatelessWidget {
   final dynamic bvid;
   final String? fromViewAid;
 
-  String _publishTime() {
+  String _publishTime({bool a11y = false}) {
     if (videoItem.season != null) {
-      return DateFormatUtils.dateFormat(videoItem.season!.mtime);
+      return a11y
+          ? DateFormatUtils.a11yDateFormat(videoItem.season!.mtime)
+          : DateFormatUtils.dateFormat(videoItem.season!.mtime);
+    }
+    if (a11y && videoItem.ctime != null && videoItem.ctime != 0) {
+      return DateFormatUtils.a11yDateFormat(videoItem.ctime);
     }
     final text = videoItem.publishTimeText;
     if (text?.isNotEmpty == true) return text!;
-    return DateFormatUtils.dateFormat(videoItem.ctime);
+    return a11y
+        ? DateFormatUtils.a11yDateFormat(videoItem.ctime)
+        : DateFormatUtils.dateFormat(videoItem.ctime);
   }
 
   @override
@@ -52,7 +59,7 @@ class VideoCardHMemberVideo extends StatelessWidget {
     );
     // 🔴 無障礙：整卡一個語義節點（比照首頁）
     final bvid = videoItem.bvid;
-    final publishTime = _publishTime();
+    final publishTime = _publishTime(a11y: true);
     final publishTimePart = publishTime.isNotEmpty ? '，$publishTime發佈' : '';
     return Semantics(
       container: true,
