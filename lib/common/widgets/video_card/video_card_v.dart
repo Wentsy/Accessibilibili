@@ -178,7 +178,7 @@ class VideoCardV extends StatelessWidget {
       short: shortFormat,
       long: longFormat,
     );
-    final pubdatePart = pubdate.isNotEmpty ? '，發布時間 $pubdate' : '';
+    final pubdatePart = pubdate.isNotEmpty ? '，$pubdate發佈' : '';
     final String a11yLabel =
         '${videoItem.title}，${videoItem.owner.name}$durationPart'
         '，播放 ${videoItem.stat.view} 次，彈幕 ${videoItem.stat.danmu}$pubdatePart';
