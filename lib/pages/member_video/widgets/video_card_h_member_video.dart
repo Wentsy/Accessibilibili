@@ -33,6 +33,15 @@ class VideoCardHMemberVideo extends StatelessWidget {
   final dynamic bvid;
   final String? fromViewAid;
 
+  String _publishTime() {
+    if (videoItem.season != null) {
+      return DateFormatUtils.dateFormat(videoItem.season!.mtime);
+    }
+    final text = videoItem.publishTimeText;
+    if (text?.isNotEmpty == true) return text!;
+    return DateFormatUtils.dateFormat(videoItem.ctime);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -43,11 +52,14 @@ class VideoCardHMemberVideo extends StatelessWidget {
     );
     // 🔴 無障礙：整卡一個語義節點（比照首頁）
     final bvid = videoItem.bvid;
+    final publishTime = _publishTime();
+    final publishTimePart = publishTime.isNotEmpty ? '，$publishTime發佈' : '';
     return Semantics(
       container: true,
       explicitChildNodes: false,
       excludeSemantics: true,
-      label: '${videoItem.title}，播放 ${videoItem.stat?.view ?? "?"} 次',
+      label:
+          '${videoItem.title}，播放 ${videoItem.stat?.view ?? "?"} 次$publishTimePart',
       hint: '點兩下開啟影片。上滑有更多操作',
       onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
@@ -241,9 +253,7 @@ class VideoCardHMemberVideo extends StatelessWidget {
             ),
           ),
           Text(
-            videoItem.season != null
-                ? DateFormatUtils.dateFormat(videoItem.season!.mtime)
-                : videoItem.publishTimeText ?? '',
+            _publishTime(),
             maxLines: 1,
             style: TextStyle(
               fontSize: 12,
