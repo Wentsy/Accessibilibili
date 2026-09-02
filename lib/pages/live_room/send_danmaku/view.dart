@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:PiliPlus/common/widgets/button/toolbar_icon_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/text_field.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/http/live.dart';
@@ -85,6 +86,37 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
     },
   );
 
+  Widget get _liveEmojiBtn => Obx(
+    () {
+      final isEmoji = panelType.value == PanelType.emoji;
+
+      void togglePanel() {
+        if (isEmoji) {
+          updatePanelType(PanelType.keyboard);
+        } else {
+          updatePanelType(PanelType.emoji);
+        }
+      }
+
+      return Semantics(
+        container: true,
+        button: true,
+        excludeSemantics: true,
+        label: isEmoji ? '鍵盤' : '表情與貼圖',
+        hint: isEmoji ? '點兩下返回鍵盤' : '點兩下選擇表情與貼圖',
+        onTap: togglePanel,
+        child: ToolbarIconButton(
+          tooltip: isEmoji ? '輸入' : '表情與貼圖',
+          onPressed: togglePanel,
+          icon: isEmoji
+              ? const Icon(Icons.keyboard, size: 22)
+              : const Icon(Icons.emoji_emotions, size: 22),
+          selected: isEmoji,
+        ),
+      );
+    },
+  );
+
   List<Widget> buildInputView(ThemeData theme) {
     return [
       Padding(
@@ -132,7 +164,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
         child: Row(
           mainAxisAlignment: .spaceBetween,
           children: [
-            emojiBtn,
+            _liveEmojiBtn,
             Obx(
               () => FilledButton.tonal(
                 onPressed: enablePublish.value ? onPublishThrottle : null,
