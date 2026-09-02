@@ -24,18 +24,36 @@ class _SubPageState extends State<SubPage> with GridMixin {
   @override
   Widget build(BuildContext context) {
     return SimpleScaffold(
-      appBar: AppBar(title: const Text('我的订阅')),
+      appBar: AppBar(
+        title: const Text('我的订阅'),
+        actions: [
+          Obx(() {
+            final newestFirst = _subController.newestFirst.value;
+            return IconButton(
+              tooltip: newestFirst
+                  ? '訂閱排序，目前最新優先，點兩下切換為最舊優先'
+                  : '訂閱排序，目前最舊優先，點兩下切換為最新優先',
+              onPressed: _subController.toggleSort,
+              icon: Icon(
+                newestFirst
+                    ? Icons.arrow_downward_rounded
+                    : Icons.arrow_upward_rounded,
+              ),
+            );
+          }),
+        ],
+      ),
       body: refreshIndicator(
         onRefresh: _subController.onRefresh,
         child: VoiceOverPagedScroll(
           child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            ViewSliverSafeArea(
-              sliver: Obx(
-                () => _buildBody(_subController.loadingState.value),
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              ViewSliverSafeArea(
+                sliver: Obx(
+                  () => _buildBody(_subController.loadingState.value),
+                ),
               ),
-            ),
             ],
           ),
         ),
