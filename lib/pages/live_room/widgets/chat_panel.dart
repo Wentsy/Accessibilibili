@@ -213,8 +213,17 @@ class LiveRoomChatPanel extends StatelessWidget {
                           : '上滑有更多操作',
                       onTap: canInteract ? () => onAtUser(item) : null,
                       onTapHint: canInteract ? '回覆這條彈幕' : null,
-                      onDidGainAccessibilityFocus: () =>
-                          a11yEnsureVisible(itemContext),
+                      onDidGainAccessibilityFocus: () {
+                        // Live chat is continuously changing. Once VoiceOver
+                        // moves away from the newest built message, freeze the
+                        // visible list so incoming messages cannot yank focus
+                        // back to the bottom. The existing "回到底部" action
+                        // resumes the live stream and flushes queued messages.
+                        if (index < liveRoomController.builtLength - 1) {
+                          liveRoomController.disableAutoScroll.value = true;
+                        }
+                        a11yEnsureVisible(itemContext);
+                      },
                       customSemanticsActions: a11yActions,
                       child: ExcludeSemantics(
                         child: Align(
