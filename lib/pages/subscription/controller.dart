@@ -6,6 +6,7 @@ import 'package:PiliPlus/models_new/sub/sub/data.dart';
 import 'package:PiliPlus/models_new/sub/sub/list.dart';
 import 'package:PiliPlus/pages/common/common_list_controller.dart';
 import 'package:PiliPlus/utils/accounts.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
@@ -93,9 +94,14 @@ class SubController extends CommonListController<SubData, SubItemModel> {
     _sortedModeActive = true;
 
     if (await _loadAllSubscriptions()) {
-      a11yActionFeedback(
-        message: newestFirst.value ? '已切換為最新優先' : '已切換為最舊優先',
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (scrollController.hasClients) {
+          scrollController.jumpTo(scrollController.position.minScrollExtent);
+        }
+        a11yActionFeedback(
+          message: newestFirst.value ? '已切換為最新優先' : '已切換為最舊優先',
+        );
+      });
     } else {
       newestFirst.value = previous;
     }
