@@ -32,7 +32,7 @@ class VoiceOverPagedScroll extends StatelessWidget {
     scrollController
         .animateTo(
           target.toDouble(),
-          duration: const Duration(milliseconds: 280),
+          duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutCubic,
         )
         .whenComplete(notifyIosVoiceOverPageScrolled);
