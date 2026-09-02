@@ -103,8 +103,9 @@ class HistoryItem extends StatelessWidget {
                 } else if (business == 'live') {
                   if (item.liveStatus == 1) {
                     PageUtils.toLiveRoom(item.history.oid);
-                  } else {
+                  } else if (MediaQuery.accessibleNavigationOf(context)) {
                     a11yActionFeedback(message: '主播目前未開播');
+                  } else {
                     SmartDialog.showToast('主播目前未開播');
                   }
                 } else if (business == 'pgc') {
