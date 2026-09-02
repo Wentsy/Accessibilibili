@@ -8,7 +8,7 @@
 
 - `docs/ACCESSIBILITY_MAINTENANCE.md`
 - `docs/VOICEOVER_SEMANTICS_BASELINE.md`
-- `docs/ACCESSIBILITY_UPSTREAM_AUDIT.md`（若檔名後續調整，以目前 upstream audit 文件為準）
+- `docs/UPSTREAM_ACCESSIBILITY_AUDIT.md`
 
 ## 1. 直播推薦卡：一滑一個直播
 
