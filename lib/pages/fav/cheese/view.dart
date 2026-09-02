@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -29,20 +30,23 @@ class _FavCheesePageState extends State<FavCheesePage>
     final ThemeData theme = Theme.of(context);
     return refreshIndicator(
       onRefresh: _controller.onRefresh,
-      child: CustomScrollView(
+      child: VoiceOverPagedScroll(
         controller: _controller.scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverPadding(
-            padding: EdgeInsets.only(
-              top: 7,
-              bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+        child: CustomScrollView(
+          controller: _controller.scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.only(
+                top: 7,
+                bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+              ),
+              sliver: Obx(
+                () => _buildBody(theme, _controller.loadingState.value),
+              ),
             ),
-            sliver: Obx(
-              () => _buildBody(theme, _controller.loadingState.value),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
