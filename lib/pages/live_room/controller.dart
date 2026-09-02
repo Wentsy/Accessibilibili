@@ -394,7 +394,7 @@ class LiveRoomController extends GetxController {
     disableAutoScroll.value = true;
   }
 
-  void revealQueuedMessagesForA11y() {
+  void revealQueuedMessagesWithoutJumpForA11y() {
     pauseA11yChat();
     if (!shouldRefresh || _a11yRevealScheduled) return;
     _a11yRevealScheduled = true;
@@ -406,14 +406,33 @@ class LiveRoomController extends GetxController {
     });
   }
 
-  Future<void> refreshA11yChatHistory() async {
+  void revealQueuedMessagesForA11y() {
+    if (shouldRefresh) {
+      a11yChatPaused = false;
+      disableAutoScroll.value = false;
+      messages.refresh();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _jumpToBottom();
+        a11yActionFeedback(message: '已更新至最新彈幕');
+      });
+      return;
+    }
+    _refreshLatestA11yChat();
+  }
+
+  void refreshA11yChatHistory() {
+    a11yActionFeedback(message: '已到最舊彈幕');
+  }
+
+  Future<void> _refreshLatestA11yChat() async {
     if (_a11yRefreshingHistory) {
       a11yActionFeedback(message: '正在重新整理彈幕');
       return;
     }
 
     _a11yRefreshingHistory = true;
-    pauseA11yChat();
+    final wasPaused = a11yChatPaused;
+    final wasDisabled = disableAutoScroll.value;
     final wasAutoScroll = autoScroll;
     autoScroll = false;
     closeLiveMsg();
@@ -424,13 +443,15 @@ class LiveRoomController extends GetxController {
       if (res case Success(:final response)) {
         messages.assignAll(response ?? const <DanmakuMsg>[]);
         builtLength = messages.length;
+        a11yChatPaused = false;
+        disableAutoScroll.value = false;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (scrollController.hasClients) {
-            scrollController.jumpTo(scrollController.position.minScrollExtent);
-          }
+          _jumpToBottom();
           a11yActionFeedback(message: '彈幕已重新整理');
         });
       } else {
+        a11yChatPaused = wasPaused;
+        disableAutoScroll.value = wasDisabled;
         res.toast();
         a11yActionFeedback(message: '彈幕重新整理失敗');
       }
