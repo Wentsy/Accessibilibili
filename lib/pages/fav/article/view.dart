@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -30,20 +31,23 @@ class _FavArticlePageState extends State<FavArticlePage>
     super.build(context);
     return refreshIndicator(
       onRefresh: _favArticleController.onRefresh,
-      child: CustomScrollView(
+      child: VoiceOverPagedScroll(
         controller: _favArticleController.scrollController,
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverPadding(
-            padding: EdgeInsets.only(
-              top: 7,
-              bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+        child: CustomScrollView(
+          controller: _favArticleController.scrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.only(
+                top: 7,
+                bottom: MediaQuery.viewPaddingOf(context).bottom + 100,
+              ),
+              sliver: Obx(
+                () => _buildBody(_favArticleController.loadingState.value),
+              ),
             ),
-            sliver: Obx(
-              () => _buildBody(_favArticleController.loadingState.value),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
