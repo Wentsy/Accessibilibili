@@ -42,11 +42,13 @@ class VideoCardH extends StatelessWidget {
     final theme = Theme.of(context);
     // 🔴 無障礙：整卡語義節點（比照首頁）
     final bvid = videoItem.bvid;
+    final pubdate = DateFormatUtils.dateFormat(videoItem.pubdate);
+    final pubdatePart = pubdate.isNotEmpty ? '，發布時間 $pubdate' : '';
     return Semantics(
       container: true,
       explicitChildNodes: false,
       excludeSemantics: true,
-      label: '${videoItem.title}，播放 ${videoItem.stat?.view ?? ''} 次',
+      label: '${videoItem.title}，播放 ${videoItem.stat?.view ?? ''} 次$pubdatePart',
       hint: '點兩下開啟影片。上滑有更多操作',
       onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
