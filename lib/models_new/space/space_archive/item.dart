@@ -3,6 +3,7 @@ import 'package:PiliPlus/models/model_video.dart';
 import 'package:PiliPlus/models_new/space/space_archive/badge.dart';
 import 'package:PiliPlus/models_new/space/space_archive/history.dart';
 import 'package:PiliPlus/models_new/space/space_archive/season.dart';
+import 'package:PiliPlus/utils/parse_string.dart';
 
 class SpaceArchiveItem extends BaseSimpleVideoItemModel {
   String? uri;
@@ -35,7 +36,7 @@ class SpaceArchiveItem extends BaseSimpleVideoItemModel {
     isPugv = json['is_pugv'];
     bvid = json['bvid'];
     cid = json['first_cid'];
-    ctime = json['ctime'];
+    ctime = parseIntOrNull(json['ctime']?.toString());
     publishTimeText = json['publish_time_text'];
     badges = (json['badges'] as List<dynamic>?)
         ?.map((e) => Badge.fromJson(e as Map<String, dynamic>))
