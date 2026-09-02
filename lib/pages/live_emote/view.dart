@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
 import 'package:PiliPlus/common/widgets/custom_tooltip.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
@@ -50,6 +51,20 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
     return Obx(() => _buildBody(_emotePanelController.loadingState.value));
   }
 
+  String _emoteA11yLabel(Emoticon item) {
+    final raw = item.emoji?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      final normalized = raw
+          .replaceFirst(RegExp(r'^\['), '')
+          .replaceFirst(RegExp(r'\]$'), '')
+          .trim();
+      if (normalized.isNotEmpty) {
+        return '$normalized 貼圖';
+      }
+    }
+    return '貼圖';
+  }
+
   Widget _buildBody(LoadingState<List<LiveEmoteDatum>?> loadingState) {
     late final theme = Theme.of(context);
     late final color = ElevationOverlay.colorWithOverlay(
@@ -98,68 +113,84 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
                             itemCount: emote.length,
                             itemBuilder: (context, index) {
                               final e = emote[index];
-                              return Material(
-                                type: MaterialType.transparency,
-                                child: InkWell(
-                                  borderRadius: const BorderRadius.all(
-                                    Radius.circular(6),
-                                  ),
-                                  onTap: () {
-                                    if (item.pkgType == 3) {
-                                      widget.onChoose(e, width, height);
-                                    } else {
-                                      widget.onSendEmoticonUnique(e);
-                                    }
-                                  },
-                                  child: CustomTooltip(
-                                    indicator: () => Triangle(
-                                      color: color,
-                                      size: const Size(14, 8),
+                              final label = _emoteA11yLabel(e);
+
+                              void choose() {
+                                if (item.pkgType == 3) {
+                                  widget.onChoose(e, width, height);
+                                  a11yActionFeedback(message: '已插入$label');
+                                } else {
+                                  widget.onSendEmoticonUnique(e);
+                                  a11yActionFeedback(message: '已送出$label');
+                                }
+                              }
+
+                              return Semantics(
+                                container: true,
+                                button: true,
+                                excludeSemantics: true,
+                                label: label,
+                                hint: item.pkgType == 3
+                                    ? '點兩下插入這個貼圖'
+                                    : '點兩下送出這個貼圖',
+                                onTap: choose,
+                                child: Material(
+                                  type: MaterialType.transparency,
+                                  child: InkWell(
+                                    borderRadius: const BorderRadius.all(
+                                      Radius.circular(6),
                                     ),
-                                    overlayWidget: () => Container(
-                                      padding: const EdgeInsets.all(8),
-                                      decoration: BoxDecoration(
+                                    onTap: choose,
+                                    child: CustomTooltip(
+                                      indicator: () => Triangle(
                                         color: color,
-                                        borderRadius: const BorderRadius.all(
-                                          Radius.circular(8),
+                                        size: const Size(14, 8),
+                                      ),
+                                      overlayWidget: () => Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: color,
+                                          borderRadius: const BorderRadius.all(
+                                            Radius.circular(8),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          spacing: 4,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            NetworkImgLayer(
+                                              src: e.url,
+                                              width: 65,
+                                              height: 65,
+                                              type: ImageType.emote,
+                                              fit: BoxFit.contain,
+                                            ),
+                                            Text(
+                                              e.emoji == null
+                                                  ? ''
+                                                  : e.emoji!.startsWith('[')
+                                                  ? e.emoji!.substring(
+                                                      1,
+                                                      e.emoji!.length - 1,
+                                                    )
+                                                  : e.emoji!,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                      child: Column(
-                                        spacing: 4,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          NetworkImgLayer(
-                                            src: e.url,
-                                            width: 65,
-                                            height: 65,
-                                            type: ImageType.emote,
-                                            fit: BoxFit.contain,
-                                          ),
-                                          Text(
-                                            e.emoji == null
-                                                ? ''
-                                                : e.emoji!.startsWith('[')
-                                                ? e.emoji!.substring(
-                                                    1,
-                                                    e.emoji!.length - 1,
-                                                  )
-                                                : e.emoji!,
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(6),
-                                      child: NetworkImgLayer(
-                                        fit: BoxFit.contain,
-                                        src: e.url,
-                                        width: width,
-                                        height: height,
-                                        type: ImageType.emote,
-                                        quality: item.pkgType == 3 ? 1 : 80,
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(6),
+                                        child: NetworkImgLayer(
+                                          fit: BoxFit.contain,
+                                          src: e.url,
+                                          width: width,
+                                          height: height,
+                                          type: ImageType.emote,
+                                          quality: item.pkgType == 3 ? 1 : 80,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -181,15 +212,21 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
                     dividerColor: Colors.transparent,
                     dividerHeight: 0,
                     isScrollable: true,
-                    tabs: response
+                    tabs: response.indexed
                         .map(
-                          (item) => Padding(
-                            padding: const EdgeInsets.all(8),
-                            child: NetworkImgLayer(
-                              width: 24,
-                              height: 24,
-                              type: ImageType.emote,
-                              src: item.currentCover,
+                          (entry) => Semantics(
+                            container: true,
+                            button: true,
+                            excludeSemantics: true,
+                            label: '貼圖包第${entry.$1 + 1}組',
+                            child: Padding(
+                              padding: const EdgeInsets.all(8),
+                              child: NetworkImgLayer(
+                                width: 24,
+                                height: 24,
+                                type: ImageType.emote,
+                                src: entry.$2.currentCover,
+                              ),
                             ),
                           ),
                         )
