@@ -2,6 +2,7 @@ import 'dart:async' show Timer, StreamSubscription;
 import 'dart:convert' show jsonDecode;
 import 'dart:math' as math;
 
+import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
 import 'package:PiliPlus/common/widgets/dialog/report.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/controller.dart';
 import 'package:PiliPlus/http/live.dart';
@@ -109,6 +110,9 @@ class LiveRoomController extends GetxController {
   late final RxList<SuperChatItem> superChatMsg = <SuperChatItem>[].obs;
   final disableAutoScroll = false.obs;
   bool autoScroll = true;
+  bool a11yChatPaused = false;
+  bool _a11yRevealScheduled = false;
+  bool _a11yRefreshingHistory = false;
   LiveMessageStream? _msgStream;
   late final ScrollController scrollController;
   late final RxInt pageIndex = 0.obs;
@@ -369,6 +373,7 @@ class LiveRoomController extends GetxController {
   }
 
   void handleJumpToBottom() {
+    a11yChatPaused = false;
     disableAutoScroll.value = false;
     if (shouldRefresh) {
       messages.refresh();
@@ -381,6 +386,58 @@ class LiveRoomController extends GetxController {
   void _jumpToBottom([_]) {
     if (scrollController.hasClients) {
       scrollController.jumpTo(scrollController.position.maxScrollExtent);
+    }
+  }
+
+  void pauseA11yChat() {
+    a11yChatPaused = true;
+    disableAutoScroll.value = true;
+  }
+
+  void revealQueuedMessagesForA11y() {
+    pauseA11yChat();
+    if (!shouldRefresh || _a11yRevealScheduled) return;
+    _a11yRevealScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _a11yRevealScheduled = false;
+      if (shouldRefresh) {
+        messages.refresh();
+      }
+    });
+  }
+
+  Future<void> refreshA11yChatHistory() async {
+    if (_a11yRefreshingHistory) {
+      a11yActionFeedback(message: '正在重新整理彈幕');
+      return;
+    }
+
+    _a11yRefreshingHistory = true;
+    pauseA11yChat();
+    final wasAutoScroll = autoScroll;
+    autoScroll = false;
+    closeLiveMsg();
+    a11yActionFeedback(message: '正在重新整理彈幕');
+
+    try {
+      final res = await LiveHttp.liveRoomDmPrefetch(roomId: roomId);
+      if (res case Success(:final response)) {
+        messages.assignAll(response ?? const <DanmakuMsg>[]);
+        builtLength = messages.length;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (scrollController.hasClients) {
+            scrollController.jumpTo(scrollController.position.minScrollExtent);
+          }
+          a11yActionFeedback(message: '彈幕已重新整理');
+        });
+      } else {
+        res.toast();
+        a11yActionFeedback(message: '彈幕重新整理失敗');
+      }
+    } finally {
+      autoScroll = wasAutoScroll;
+      startLiveMsg();
+      _a11yRefreshingHistory = false;
     }
   }
 
@@ -437,6 +494,7 @@ class LiveRoomController extends GetxController {
   }
 
   void listener() {
+    if (a11yChatPaused) return;
     final userScrollDirection = scrollController.position.userScrollDirection;
     if (userScrollDirection == .forward) {
       disableAutoScroll.value = true;
@@ -450,6 +508,7 @@ class LiveRoomController extends GetxController {
   }
 
   void refreshMsgIfNeeded() {
+    if (a11yChatPaused) return;
     if (shouldRefresh) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         messages.refresh();
@@ -511,7 +570,7 @@ class LiveRoomController extends GetxController {
       if (item != null && plPlayerController.enableShowLiveDanmaku.value) {
         danmakuController?.addDanmaku(item);
       }
-      if (autoScroll && !disableAutoScroll.value) {
+      if (autoScroll && !disableAutoScroll.value && !a11yChatPaused) {
         messages.add(msg);
         scrollToBottom();
         return;
