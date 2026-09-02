@@ -59,6 +59,7 @@ class RcmdController extends CommonListController {
     }
 
     bool changed = false;
+    const maxHydratePerPass = 20;
     final pending = <RcmdVideoItemAppModel>[];
     for (final item in items) {
       final bvid = item.bvid;
@@ -68,7 +69,8 @@ class RcmdController extends CommonListController {
       if (cached != null) {
         item.pubdate = cached;
         changed = true;
-      } else if (_appPubdateAttempted.add(bvid)) {
+      } else if (pending.length < maxHydratePerPass &&
+          _appPubdateAttempted.add(bvid)) {
         pending.add(item);
       }
     }
@@ -83,9 +85,9 @@ class RcmdController extends CommonListController {
 
     _isHydratingAppPubdates = true;
     try {
-      // The app recommendation feed does not expose pubdate. Hydrate it in
-      // small background batches so the first recommendation render never
-      // waits for per-video detail requests.
+      // The app recommendation feed does not expose pubdate. Hydrate a bounded
+      // number of cards in small background batches so first render stays fast
+      // and saved recommendation history cannot create a request storm.
       const batchSize = 3;
       for (var start = 0; start < pending.length; start += batchSize) {
         final end = start + batchSize < pending.length
