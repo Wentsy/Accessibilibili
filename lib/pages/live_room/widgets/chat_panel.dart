@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/widgets/flutter/popup_menu.dart';
 import 'package:PiliPlus/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -13,6 +14,7 @@ import 'package:PiliPlus/pages/video/widgets/header_control.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/semantics.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
@@ -32,6 +34,117 @@ class LiveRoomChatPanel extends StatelessWidget {
   final ValueChanged<DanmakuMsg> onAtUser;
 
   bool get disableAutoScroll => liveRoomController.disableAutoScroll.value;
+
+  String _stripEmoteBrackets(String value) {
+    final text = value.trim();
+    if (text.length > 2 && text.startsWith('[') && text.endsWith(']')) {
+      return text.substring(1, text.length - 1).trim();
+    }
+    return text;
+  }
+
+  String _a11yMessageText(DanmakuMsg item) {
+    var text = item.text.trim();
+
+    if (item.emots case final emots?) {
+      for (final key in emots.keys) {
+        final name = _stripEmoteBrackets(key);
+        text = text.replaceAll(key, name.isEmpty ? '貼圖' : '$name 貼圖');
+      }
+    }
+
+    if (item.uemote != null) {
+      final name = _stripEmoteBrackets(text);
+      if (name.isEmpty) return '貼圖';
+      return name.endsWith('貼圖') ? name : '$name 貼圖';
+    }
+
+    return text.isEmpty ? '空白彈幕' : text;
+  }
+
+  String _a11yMessageLabel(DanmakuMsg item) {
+    final message = _a11yMessageText(item);
+    if (item.reply case final reply?) {
+      return '${item.name} 回覆 ${reply.name}：$message';
+    }
+    return '${item.name} 說：$message';
+  }
+
+  void _showA11yMsgMenu(BuildContext context, DanmakuMsg item) {
+    final canVisitUser = item.extra.mid != 0;
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.reply),
+              title: const Text('回覆這條彈幕'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                onAtUser(item);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('複製彈幕資訊'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                Utils.copyText(Utils.jsonEncoder.convert(item.toJson()));
+                SmartDialog.showToast('已複製彈幕資訊');
+              },
+            ),
+            if (canVisitUser)
+              ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: Text('造訪 ${item.name} 的個人空間'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Get.toNamed('/member?mid=${item.extra.mid}');
+                },
+              ),
+            if (canVisitUser)
+              ListTile(
+                leading: const Icon(Icons.block),
+                title: const Text('屏蔽發送者'),
+                onTap: () async {
+                  Navigator.pop(sheetContext);
+                  if (!liveRoomController.isLogin) {
+                    SmartDialog.showToast('屏蔽功能需要登入');
+                    return;
+                  }
+                  final res = await LiveHttp.liveShieldUser(
+                    uid: item.extra.mid,
+                    roomid: roomId,
+                    type: 1,
+                  );
+                  if (res.isSuccess) {
+                    SmartDialog.showToast('屏蔽成功');
+                  } else {
+                    res.toast();
+                  }
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.report_outlined),
+              title: const Text('檢舉這條彈幕'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                HeaderControl.reportLiveDanmaku(
+                  context,
+                  roomId: roomId,
+                  msg: item.text,
+                  extra: item.extra,
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -78,54 +191,84 @@ class LiveRoomChatPanel extends StatelessWidget {
                     }
                   }
                 }
-                return Align(
-                  alignment: Alignment.centerLeft,
-                  child: Builder(
-                    builder: (itemContext) {
-                      return Container(
-                        padding: const .symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: bg,
-                          borderRadius: const .all(.circular(14)),
-                        ),
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              ?medal,
+                return Builder(
+                  builder: (itemContext) {
+                    final canInteract = item.extra.mid != 0;
+                    final a11yActions = <CustomSemanticsAction, VoidCallback>{
+                      if (canInteract)
+                        const CustomSemanticsAction(label: '回覆這條彈幕'):
+                            () => onAtUser(item),
+                      if (canInteract)
+                        const CustomSemanticsAction(label: '造訪使用者'):
+                            () => Get.toNamed('/member?mid=${item.extra.mid}'),
+                      const CustomSemanticsAction(label: '更多操作'):
+                          () => _showA11yMsgMenu(context, item),
+                    };
+                    return Semantics(
+                      container: true,
+                      explicitChildNodes: false,
+                      label: _a11yMessageLabel(item),
+                      hint: canInteract
+                          ? '點兩下回覆這條彈幕。上滑有更多操作'
+                          : '上滑有更多操作',
+                      onTap: canInteract ? () => onAtUser(item) : null,
+                      onTapHint: canInteract ? '回覆這條彈幕' : null,
+                      onDidGainAccessibilityFocus: () =>
+                          a11yEnsureVisible(itemContext),
+                      customSemanticsActions: a11yActions,
+                      child: ExcludeSemantics(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Container(
+                            padding: const .symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: bg,
+                              borderRadius: const .all(.circular(14)),
+                            ),
+                            child: Text.rich(
                               TextSpan(
-                                text: '${item.name}: ',
-                                style: TextStyle(
-                                  color: nameColor,
-                                  fontSize: 14,
-                                ),
-                                recognizer: item.extra.mid == 0
-                                    ? null
-                                    : (NoDeadlineTapGestureRecognizer()
-                                        ..onTapUp = (e) => _showMsgMenu(
-                                          context,
-                                          itemContext,
-                                          e,
-                                          item,
-                                        )),
-                              ),
-                              if (item.reply case final reply?)
-                                TextSpan(
-                                  text: '@${reply.name} ',
-                                  style: TextStyle(
-                                    color: primary,
-                                    fontSize: 14,
+                                children: [
+                                  ?medal,
+                                  TextSpan(
+                                    text: '${item.name}: ',
+                                    style: TextStyle(
+                                      color: nameColor,
+                                      fontSize: 14,
+                                    ),
+                                    recognizer: item.extra.mid == 0
+                                        ? null
+                                        : (NoDeadlineTapGestureRecognizer()
+                                            ..onTapUp = (e) => _showMsgMenu(
+                                              context,
+                                              itemContext,
+                                              e,
+                                              item,
+                                            )),
                                   ),
-                                  recognizer: NoDeadlineTapGestureRecognizer()
-                                    ..onTap = () =>
-                                        Get.toNamed('/member?mid=${reply.mid}'),
-                                ),
-                              _buildMsg(devicePixelRatio, item),
-                            ],
+                                  if (item.reply case final reply?)
+                                    TextSpan(
+                                      text: '@${reply.name} ',
+                                      style: TextStyle(
+                                        color: primary,
+                                        fontSize: 14,
+                                      ),
+                                      recognizer: NoDeadlineTapGestureRecognizer()
+                                        ..onTap = () => Get.toNamed(
+                                          '/member?mid=${reply.mid}',
+                                        ),
+                                    ),
+                                  _buildMsg(devicePixelRatio, item),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                      );
-                    },
-                  ),
+                      ),
+                    );
+                  },
                 );
               }
               if (item is SuperChatItem) {
