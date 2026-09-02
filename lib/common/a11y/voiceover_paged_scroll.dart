@@ -9,11 +9,15 @@ class VoiceOverPagedScroll extends StatelessWidget {
     this.controller,
     required this.child,
     this.pageFraction = 0.85,
+    this.onScrollBackwardAtStart,
+    this.onScrollForwardAtEnd,
   });
 
   final ScrollController? controller;
   final Widget child;
   final double pageFraction;
+  final VoidCallback? onScrollBackwardAtStart;
+  final VoidCallback? onScrollForwardAtEnd;
 
   void _page(BuildContext context, {required bool forward}) {
     final scrollController =
@@ -27,7 +31,14 @@ class VoiceOverPagedScroll extends StatelessWidget {
       position.maxScrollExtent,
     );
 
-    if ((target - position.pixels).abs() < 1) return;
+    if ((target - position.pixels).abs() < 1) {
+      if (forward) {
+        onScrollForwardAtEnd?.call();
+      } else {
+        onScrollBackwardAtStart?.call();
+      }
+      return;
+    }
 
     scrollController
         .animateTo(
