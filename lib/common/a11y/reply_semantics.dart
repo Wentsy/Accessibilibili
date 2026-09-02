@@ -87,7 +87,7 @@ class ReplyA11ySemantics extends StatelessWidget {
     final commentTime = DateFormatUtils.dateFormat(replyItem.ctime.toInt());
     final semanticsLabel = commentTime.isEmpty
         ? label
-        : '$label，評論時間 $commentTime';
+        : '$label，$commentTime評論';
     return Semantics(
       container: true,
       explicitChildNodes: false,
