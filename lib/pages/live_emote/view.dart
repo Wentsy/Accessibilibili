@@ -217,7 +217,6 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
                           (entry) => Semantics(
                             container: true,
                             button: true,
-                            excludeSemantics: true,
                             label: '貼圖包第${entry.$1 + 1}組',
                             child: Padding(
                               padding: const EdgeInsets.all(8),
