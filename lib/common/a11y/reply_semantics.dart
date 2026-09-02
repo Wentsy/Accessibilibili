@@ -3,6 +3,7 @@ import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart' show ReplyInfo;
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/reply.dart';
+import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -83,10 +84,14 @@ class ReplyA11ySemantics extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final action = replyItem.replyControl.action;
+    final commentTime = DateFormatUtils.dateFormat(replyItem.ctime.toInt());
+    final semanticsLabel = commentTime.isEmpty
+        ? label
+        : '$label，評論時間 $commentTime';
     return Semantics(
       container: true,
       explicitChildNodes: false,
-      label: label,
+      label: semanticsLabel,
       hint: onTapHint,
       textDirection: TextDirection.ltr,
       onTap: onTap,
