@@ -83,6 +83,8 @@ class FavDetailController
   final RxBool _isOwner = false.obs;
   final Rx<FavOrderType> order = FavOrderType.mtime.obs;
 
+  bool _sortingAll = false;
+
   @override
   bool get isOwner => _isOwner.value;
 
@@ -90,6 +92,13 @@ class FavDetailController
 
   late double dx = 0;
   late final RxBool isPlayAll = Pref.enablePlayAll.obs;
+
+  FavOrderType get _requestOrder => switch (order.value) {
+    FavOrderType.mtimeAsc => FavOrderType.mtime,
+    FavOrderType.viewAsc => FavOrderType.view,
+    FavOrderType.pubtimeAsc => FavOrderType.pubtime,
+    final value => value,
+  };
 
   void setIsPlayAll(bool isPlayAll) {
     if (this.isPlayAll.value == isPlayAll) return;
@@ -147,8 +156,56 @@ class FavDetailController
         pn: page,
         ps: 20,
         mediaId: mediaId,
-        order: order.value,
+        order: _requestOrder,
       );
+
+  Future<void> _loadAllAscending() async {
+    if (_sortingAll) return;
+    _sortingAll = true;
+
+    final items = <FavDetailItemModel>[];
+    var currentPage = 1;
+
+    while (true) {
+      final res = await FavHttp.userFavFolderDetail(
+        pn: currentPage,
+        ps: 20,
+        mediaId: mediaId,
+        order: _requestOrder,
+      );
+      if (res case Success(:final response)) {
+        if (currentPage == 1 && response.info != null) {
+          folderInfo.value = response.info!;
+          _isOwner.value = response.info?.mid == account.mid;
+        }
+
+        final batch = response.medias ?? const <FavDetailItemModel>[];
+        items.addAll(batch);
+        if (response.hasMore == false || batch.isEmpty) {
+          break;
+        }
+        currentPage++;
+      } else {
+        res.toast();
+        _sortingAll = false;
+        return;
+      }
+    }
+
+    loadingState.value = Success(items.reversed.toList(growable: false));
+    page = currentPage + 1;
+    isEnd = true;
+    _sortingAll = false;
+  }
+
+  @override
+  Future<void> onRefresh() async {
+    if (!order.value.descending) {
+      await _loadAllAscending();
+      return;
+    }
+    await super.onRefresh();
+  }
 
   void toViewPlayAll() {
     if (loadingState.value case Success(:final response)) {
@@ -166,9 +223,16 @@ class FavDetailController
   }
 
   @override
-  Future<void> onReload() {
+  Future<void> onReload() async {
     scrollController.jumpToTop();
-    return super.onReload();
+    if (!order.value.descending) {
+      page = 1;
+      isEnd = false;
+      loadingState.value = LoadingState<List<FavDetailItemModel>?>.loading();
+      await _loadAllAscending();
+      return;
+    }
+    await super.onReload();
   }
 
   Future<void> onFav(bool isFav) async {
