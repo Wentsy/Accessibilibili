@@ -11,6 +11,7 @@ class LaterItemModel with MultiSelectData {
   String? title;
   String? subtitle;
   int? pubdate;
+  int? addAt;
   int? duration;
   String? redirectUrl;
   Rights? rights;
@@ -32,6 +33,7 @@ class LaterItemModel with MultiSelectData {
     this.title,
     this.subtitle,
     this.pubdate,
+    this.addAt,
     this.duration,
     this.redirectUrl,
     this.rights,
@@ -53,6 +55,7 @@ class LaterItemModel with MultiSelectData {
     pic: json['pic'] as String?,
     title: json['title'] as String?,
     pubdate: json['pubdate'] as int?,
+    addAt: json['add_at'] as int?,
     duration: json['duration'] as int?,
     redirectUrl: json['redirect_url'] as String?,
     rights: json['rights'] == null
