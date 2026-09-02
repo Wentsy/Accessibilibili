@@ -1,4 +1,3 @@
-import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
 import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
@@ -58,8 +57,10 @@ class HistoryItem extends StatelessWidget {
     final authorPart = item.authorName?.isNotEmpty == true ? '，${item.authorName}' : '';
     final viewedAt = DateFormatUtils.a11yDateFormat(item.viewAt);
     final viewedAtPart = viewedAt.isNotEmpty ? '，$viewedAt看過' : '';
+    final isOfflineLive = business == 'live' && item.liveStatus != 1;
+    final liveStatusPart = isOfflineLive ? '，主播目前未開播' : '';
     final String a11yLabel =
-        '${item.title}$authorPart$progressPart$viewedAtPart';
+        '${item.title}$authorPart$progressPart$viewedAtPart$liveStatusPart';
 
     return Semantics(
       container: true,
@@ -67,7 +68,9 @@ class HistoryItem extends StatelessWidget {
       excludeSemantics: true,
       button: false,
       label: a11yLabel,
-      hint: '點兩下繼續觀看。上滑有更多操作',
+      hint: isOfflineLive
+          ? '上滑有更多操作'
+          : '點兩下繼續觀看。上滑有更多操作',
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         if (item.authorMid != null && item.authorName?.isNotEmpty == true)
           CustomSemanticsAction(label: '造訪UP主'): () =>
@@ -103,9 +106,7 @@ class HistoryItem extends StatelessWidget {
                 } else if (business == 'live') {
                   if (item.liveStatus == 1) {
                     PageUtils.toLiveRoom(item.history.oid);
-                  } else if (MediaQuery.accessibleNavigationOf(context)) {
-                    a11yActionFeedback(message: '主播目前未開播');
-                  } else {
+                  } else if (!MediaQuery.accessibleNavigationOf(context)) {
                     SmartDialog.showToast('主播目前未開播');
                   }
                 } else if (business == 'pgc') {
