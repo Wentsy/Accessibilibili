@@ -116,7 +116,7 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
     return false;
   }
 
-  Widget buildReplyHeader() {
+  Widget buildReplyHeader([bool _ = true]) {
     final secondary = theme.colorScheme.secondary;
     return SliverPinnedHeader(
       backgroundColor: theme.colorScheme.surface,
@@ -191,14 +191,23 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
                 );
               } else {
                 final item = response[index];
-                // Keep the existing ReplyItemGrpc semantics/actions intact,
-                // but merge in the same focus-to-viewport alignment used by
-                // the stable video and nested-reply lists. This pre-scrolls
-                // the lazy SliverList before VoiceOver reaches its built-node
-                // boundary instead of letting focus escape to outer content.
+
+                // VoiceOver swipe navigation only knows about semantic nodes
+                // that the lazy sliver has already built. Start fetching the
+                // next page a few rows early so focus can keep moving forward
+                // instead of reaching the built-node boundary and escaping to
+                // outer dynamic content.
+                if (!controller.isEnd && index >= response.length - 3) {
+                  controller.onLoadMore();
+                }
+
+                // Keep a stable identity for every comment across pagination.
+                // Appending a page rebuilds this sliver; without stable keys,
+                // iOS may restore accessibility focus to the first comment.
                 return _DynamicReplyFocusSemantics(
                   key: ValueKey('dynamic-reply-${item.id}'),
                   child: ReplyItemGrpc(
+                    key: ValueKey(item.id),
                     replyItem: item,
                     replyLevel: 1,
                     replyReply: (replyItem, id) =>
