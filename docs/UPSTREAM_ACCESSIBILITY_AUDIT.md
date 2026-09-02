@@ -1,42 +1,80 @@
 # Accessibilibili 與 PiliPlus 官方版無障礙差異稽核
 
-這份文件用來記錄 Accessibilibili 相對 PiliPlus 官方版已確認存在的 VoiceOver／無障礙差異，避免未來同步上游時，只記得近期改動，卻把早期已經成熟的無障礙行為弄丟。
+這份文件記錄 Accessibilibili 相對 PiliPlus 官方版已確認存在、且需要在未來上游同步時保留的 VoiceOver／無障礙差異。
 
-本文件應與以下兩份文件一起使用：
+本文件應與以下文件一起使用：
 
 - `docs/ACCESSIBILITY_MAINTENANCE.md`：上游同步流程與整體驗收。
-- `docs/VOICEOVER_SEMANTICS_BASELINE.md`：一滑一整條的語義品質基準。
+- `docs/VOICEOVER_SEMANTICS_BASELINE.md`：完整內容單位、一滑一整條與全域貼圖／表情基準。
+- `docs/LIVE_ACCESSIBILITY_BASELINE.md`：直播推薦、直播貼圖、即時彈幕、三指翻頁與刷新專項穩定基準。
 
-> 注意：這是一份「差異與驗收基準」文件，不代表 PiliPlus 官方永遠不會加入相同功能。每次同步官方新版時，都應重新比對上游現況。
+> 注意：這是一份「差異與驗收基準」文件，不代表 PiliPlus 官方永遠不會加入相同功能。每次同步官方新版時，都應重新比對上游現況，保留使用體驗而不是盲目保留舊程式碼。
 
-## 2026-09-02 稽核摘要
+## 2026-09-03 稽核摘要
 
-此次直接以 `Wentsy/Accessibilibili:main` 對照 `bggRGjQaUbCoE/PiliPlus:main`，確認除了已經記錄的影片卡、評論、三指翻頁、焦點同步、日期朗讀與 Magic Tap 之外，還有以下容易被遺漏的無障礙差異。
+目前 Accessibilibili 已實機確認的核心無障礙差異包含：
 
-## 1. 貼圖／表情選擇面板
+- 影片卡、評論、直播推薦與直播彈幕的一滑一整條。
+- 焦點與真實 viewport 同步。
+- 多頁面 VoiceOver 三指翻頁。
+- 直播聊天室整頁三指翻頁、最新端更新／刷新與最舊端提示。
+- 直播新彈幕閱讀暫停與焦點穩定。
+- 全域貼圖／表情命名、可操作語義、Grid 焦點同步與分類 Tab。
+- 直播彈幕精確到秒的 VoiceOver 發送時間。
+- 觀看紀錄未開播直播狀態直接併入卡片語義。
+- 播放器進度 ±10 秒、播放／暫停狀態語義與 Magic Tap。
+- 圖片／Badge／Icon 的語義降噪。
+- 日期與相對時間的 VoiceOver 友善格式。
 
-### Accessibilibili 目前已確認的行為
+以下分項是未來同步 PiliPlus 時的高風險差異。
 
-一般表情面板 `lib/pages/emote/view.dart` 會：
+---
 
-- 每個可插入的表情建立獨立、可操作的 `Semantics` 節點。
-- 優先使用 alias，沒有 alias 時使用表情文字名稱。
-- 朗讀例如「○○ 表情」，而不是只讓 VoiceOver 遇到一張沒有名稱的圖片。
-- 提供「點兩下插入這個表情」提示。
-- 視覺點擊與 VoiceOver `onTap` 共用同一個 `choose()` callback。
-- 插入成功後透過無障礙回饋朗讀「已插入○○表情」。
-- 「管理表情包」按鈕有明確 label 與 hint。
-- 表情包分組 Tab 有「表情包第 N 組」語義，不只暴露一張封面圖。
+## 1. 貼圖／表情選擇面板是全域無障礙標準
 
-PiliPlus 官方同一個表情面板目前沒有上述這組明確的 `Semantics` 包裝、插入回饋與表情包分組標籤。
+### 一般表情面板
 
-### 直播貼圖範圍特別說明
+重點檔案例如：
 
-曾經有一次嘗試把相同策略套到 `lib/pages/live_emote/view.dart`，但該程式修改隨後已完整 revert，以保留既有穩定行為。
+```text
+lib/pages/emote/view.dart
+```
 
-因此目前文件中的「貼圖／表情面板都要驗收」應理解為**維護與驗收原則**，不能解讀成「直播貼圖目前已完成同樣的無障礙改造」。
+Accessibilibili 會：
 
-同步上游時至少要確認一般表情面板不退化；如果未來重新處理直播貼圖，應單獨實機驗證後再把它列為已完成基準。
+- 每個可插入表情建立獨立、可操作的 `Semantics` 節點。
+- 優先使用 alias／文字名稱，而不是只暴露圖片。
+- 提供「點兩下插入這個表情」等與實際行為一致的提示。
+- 視覺點擊與 VoiceOver `onTap` 共用同一個 callback。
+- 插入成功後提供簡短 VoiceOver 回饋。
+- 管理表情包按鈕與分組 Tab 有明確 label／hint。
+- 分組圖片不額外搶焦點。
+
+### 直播貼圖已完成，不再是 revert 狀態
+
+重點檔案：
+
+```text
+lib/pages/live_emote/view.dart
+lib/pages/live_room/send_danmaku/view.dart
+```
+
+舊稽核曾寫過「直播貼圖試驗性改造已 revert，因此尚未完成」。**這已不是目前狀態。**
+
+2026-09-03 前後的實機驗收已確認直播貼圖完整支援：
+
+- 貼圖名稱可朗讀。
+- 無名稱有「貼圖」fallback。
+- 插入型／直接送出型貼圖可正常操作。
+- 插入／送出後有 VoiceOver 回饋。
+- Grid viewport 跟著 VoiceOver 焦點移動。
+- 分組 Tab 可朗讀、可點兩下切換。
+- Tab 外層不能使用會吃掉 TabBar 操作的 `excludeSemantics: true`。
+- 入口使用「表情與貼圖」、「鍵盤」、「快速發送貼圖」等功能名稱，而不是只念笑臉圖或「按鈕」。
+
+因此未來同步上游時，**一般表情與直播貼圖都屬於已完成、需保留的無障礙功能。**
+
+---
 
 ## 2. 共用網路圖片的語義降噪
 
@@ -46,20 +84,17 @@ PiliPlus 官方同一個表情面板目前沒有上述這組明確的 `Semantics
 lib/common/widgets/image/network_img_layer.dart
 ```
 
-Accessibilibili 會在共用 `CachedNetworkImage` 外層排除圖片本身的內部語義，避免下列視覺元素自動變成沒有操作價值的 VoiceOver 焦點：
+Accessibilibili 會排除共用圖片本身沒有操作價值的內部語義，避免影片封面、頭像、角標、縮圖等自動變成 VoiceOver 獨立焦點。
 
-- 影片封面
-- 頭像
-- 角標／縮圖
-- 上層 widget 已經提供完整 label 的圖片
-
-這是「一滑一整條」能保持乾淨的重要底層條件。PiliPlus 官方目前的共用網路圖片層沒有這個排除語義包裝。
+這是「一滑一整條」能保持乾淨的重要底層條件。
 
 ### 維護原則
 
-- 裝飾性圖片不應搶 VoiceOver 焦點。
-- 真正需要被理解的圖片，應由更高層的內容 widget 提供有意義的 label，而不是依賴圖片 URL 或底層 image widget 自動產生語義。
-- 如果上游重寫圖片元件，要特別檢查首頁、評論、UP 頁、通知、貼圖面板是否突然多出大量「圖片」焦點。
+- 裝飾性圖片不應搶焦點。
+- 真正需要被理解的圖片資訊，應由更高層內容 widget 的完整 label 提供。
+- 上游若重寫圖片元件，要抽查首頁、評論、UP 頁、通知、觀看紀錄、貼圖與直播頁是否突然多出大量「圖片」焦點。
+
+---
 
 ## 3. 播放器進度條的完整可調整語義
 
@@ -69,49 +104,48 @@ Accessibilibili 會在共用 `CachedNetworkImage` 外層排除圖片本身的內
 lib/common/widgets/progress_bar/audio_video_progress_bar.dart
 ```
 
-Accessibilibili 的播放進度條不是只把官方「進度條」保留下來，而是重新整理成適合 VoiceOver 的可調整控制：
+Accessibilibili 的影片播放進度條包含：
 
-- label：`影片播放進度`
-- value 同時包含目前時間、總時長與百分比。
-- hint 明確說明「向上滑快轉 10 秒，向下滑倒帶 10 秒」。
-- VoiceOver Increase / Decrease 固定以 ±10 秒移動，不使用影片長度百分比。
-- `increasedValue` / `decreasedValue` 會回報調整後的時間與百分比。
-- seek callback 使用播放器實際需要的毫秒單位，避免秒／毫秒錯位造成錯誤跳轉。
-
-PiliPlus 官方目前主要以百分比朗讀，Increase / Decrease 使用 ±5%，資訊量與可預測性都不同。
+- label：`影片播放進度`。
+- value：目前時間、總時長與百分比。
+- hint：向上滑快轉 10 秒、向下滑倒帶 10 秒。
+- VoiceOver Increase / Decrease 固定 ±10 秒，不以影片百分比調整。
+- `increasedValue` / `decreasedValue` 回報調整後時間與百分比。
+- seek callback 使用正確毫秒單位。
 
 ### 驗收
 
-- [ ] VoiceOver 聚焦進度條時會知道這是影片播放進度。
+- [ ] 聚焦進度條時知道它是影片播放進度。
 - [ ] 能聽到目前時間、總時長與百分比。
-- [ ] 向上滑實際快轉約 10 秒。
-- [ ] 向下滑實際倒帶約 10 秒。
-- [ ] 調整一次不是只跳 10 毫秒，也不應因影片很長而一次跳很大段。
+- [ ] 向上滑約快轉 10 秒。
+- [ ] 向下滑約倒帶 10 秒。
 
-## 4. 播放器按鈕與播放狀態語義
+---
 
-重點檔案：
+## 4. 播放器按鈕、播放狀態與 Magic Tap
+
+重點檔案例如：
 
 ```text
 lib/plugin/pl_player/widgets/common_btn.dart
 lib/plugin/pl_player/widgets/play_pause_btn.dart
+ios/Runner/AppDelegate.swift
 ```
 
-Accessibilibili 對播放器控制按鈕增加了明確的按鈕角色、label、enabled 狀態與操作提示，避免只剩 icon／GestureDetector。
+Accessibilibili 對播放器控制補上：
 
-播放／暫停按鈕還會：
+- 明確按鈕角色與功能名稱。
+- 播放／暫停 label 隨即時狀態更新。
+- value 表達「正在播放」／「已暫停」。
+- hint 與下一步操作一致。
+- 狀態 stream 更新後語義同步重建。
+- iOS 原生 Magic Tap 保留既有穩定行為。
 
-- 依即時播放狀態更新 label 為「播放」或「暫停」。
-- value 會說明「正在播放」或「已暫停」。
-- hint 會跟著目前狀態改變。
-- 播放狀態 stream 更新後會重建語義，避免畫面已暫停但 VoiceOver 還說「暫停」或反過來。
+### 維護原則
 
-### 驗收
+不要因上游重寫播放器 UI 就把明確 semantics 或 native Magic Tap 丟掉。
 
-- [ ] 播放／暫停按鈕不只朗讀一個無意義 icon。
-- [ ] 播放中時操作名稱為「暫停」，暫停時為「播放」。
-- [ ] 狀態切換後 VoiceOver 語義立即同步。
-- [ ] 其他播放器 icon 若有 tooltip，VoiceOver 可取得相同名稱與「點兩下啟用」提示。
+---
 
 ## 5. 影片詳情互動按鈕的狀態與即時回饋
 
@@ -122,21 +156,17 @@ lib/pages/video/introduction/ugc/widgets/action_item.dart
 lib/common/a11y/a11y_action_feedback.dart
 ```
 
-Accessibilibili 對影片詳情頁常見的互動控制補上明確的狀態語義：
+Accessibilibili 對讚、收藏等控制補上：
 
-- 按鈕有完整 label。
-- `selected` 反映已點讚／已收藏等選取狀態。
-- `value` 會表達「已啟用／未啟用」。
-- 使用 `liveRegion`，狀態變化時 VoiceOver 能即時察覺。
-- 另外有共用 `a11yActionFeedback()`，讓成功／失敗等結果不只顯示視覺 Toast，也能有語音回饋。
+- 完整 label。
+- `selected` 狀態。
+- value 表達已啟用／未啟用。
+- `liveRegion` 讓狀態更新可被 VoiceOver 察覺。
+- 關鍵成功／失敗結果可透過 `a11yActionFeedback()` 提供語音回饋。
 
-PiliPlus 官方同一個 `ActionItem` 目前沒有這層外部 `Semantics` 狀態包裝。
+但不要機械地把 announce 用在所有場景；若已知狀態可在聚焦時直接放入原本 `Semantics.label`，應優先使用穩定的完整語義，避免公告被後續焦點事件中斷。
 
-### 驗收
-
-- [ ] 點讚、收藏等控制能讀出目前是否已啟用。
-- [ ] 執行操作後狀態不需離開再回來才更新。
-- [ ] 關鍵成功／失敗結果不能只有 Toast、沒有 VoiceOver 回饋。
+---
 
 ## 6. 底部浮動導航列的完整按鈕與選中語義
 
@@ -146,25 +176,26 @@ PiliPlus 官方同一個 `ActionItem` 目前沒有這層外部 `Semantics` 狀�
 lib/common/widgets/floating_navigation_bar.dart
 ```
 
-Accessibilibili 對每個 navigation destination 明確建立：
+每個 destination 應具有：
 
-- `button: true`
-- 完整頁籤 label
-- `selected` 狀態
-- 排除 icon 與文字重複形成多個子焦點
+- `button: true`。
+- 完整頁籤 label。
+- `selected` 狀態。
+- icon 與文字不拆成重複焦點。
 
-PiliPlus 官方目前該位置主要仍是 `GestureDetector` 包裹視覺 layout，沒有 Accessibilibili 這層明確的完整 destination 語義。
+同步上游後要確認首頁底部導航沒有退回成只有 GestureDetector／icon 的半無障礙狀態。
 
-### 驗收
+---
 
-- [ ] VoiceOver 能以一個焦點找到一個底部分頁。
-- [ ] 會朗讀分頁名稱。
-- [ ] 目前所在分頁會被標示為已選取。
-- [ ] icon 與文字不應拆成兩個重複焦點。
+## 7. 三指翻頁是全域能力，不只首頁與評論
 
-## 7. 三指翻頁不只涵蓋影片與評論頁
+重點元件：
 
-`VoiceOverPagedScroll` 已套用到多種非影片內容列表。已確認的差異檔案包含例如：
+```text
+lib/common/a11y/voiceover_paged_scroll.dart
+```
+
+`VoiceOverPagedScroll` 已套用到多種長列表，例如：
 
 ```text
 lib/pages/article_list/view.dart
@@ -185,48 +216,228 @@ lib/pages/video/related/view.dart
 lib/pages/whisper/view.dart
 ```
 
-以「@我的」頁面為例，Accessibilibili 會用 `VoiceOverPagedScroll` 包住真正的 `CustomScrollView`；PiliPlus 官方目前同一頁面直接使用 `CustomScrollView`。
+共用體感基準約：
+
+```text
+0.85 viewport / 160ms / easeOutCubic
+```
+
+並透過 iOS `pageScrolled` 提供原生 VoiceOver 翻頁回饋。
 
 ### 維護原則
 
-不要把「三指翻頁」只當成首頁與評論區功能。同步上游後，至少抽查：
+不要只驗首頁。上游重寫任何 ScrollView，都可能讓單一頁面失去三指翻頁。
 
-- [ ] 動態／熱門／追蹤類列表
-- [ ] 收藏與收藏詳情
-- [ ] 通知：@我的、讚我的、回覆我的、系統通知
-- [ ] 私訊列表
-- [ ] 訂閱／文章／直播等長列表
+至少抽查：
 
-如果上游重寫某一頁的 ScrollView，該頁可能單獨失去三指翻頁，即使首頁仍然正常。
-
-## 8. 「一滑一整條」與圖片降噪必須一起驗收
-
-影片卡與評論的一滑一整條已在 `VOICEOVER_SEMANTICS_BASELINE.md` 詳細記錄，但此次官方比對再次確認：這個體驗不只依賴最外層 `Semantics`，也依賴共用圖片、Badge、Icon 等子元件不要重新暴露語義。
-
-因此未來若出現以下現象，即使卡片 label 看起來還在，也應視為 regression：
-
-- 一支影片先讀「圖片」再讀完整影片卡。
-- 一則評論前面多出頭像焦點。
-- 播放器按鈕同時被讀成 icon 與按鈕兩次。
-- 表情面板同一個表情要滑兩次才能操作。
-
-## 上游同步後建議新增的快速驗收項目
-
-除了原維護指南的清單，再補以下項目：
-
-- [ ] 一般表情面板每個表情有可理解名稱，可點兩下插入，插入後有簡短 VoiceOver 回饋。
-- [ ] 表情包管理按鈕與表情包分組 Tab 都有清楚語義。
-- [ ] 影片／評論／通知列表沒有大量無意義的「圖片」獨立焦點。
-- [ ] 播放器進度條能讀目前時間／總時長／百分比，並以 ±10 秒調整。
-- [ ] 播放／暫停按鈕名稱與目前播放狀態一致。
-- [ ] 影片詳情的讚／收藏等控制能讀出 selected 狀態，操作後狀態會更新。
-- [ ] 底部導航每一頁是一個按鈕焦點，且目前頁籤有 selected 狀態。
-- [ ] 至少抽查一個通知頁與一個非影片長列表，確認三指翻頁沒有只剩首頁能用。
-
-## 不應誤記為目前已完成的項目
-
-- 直播貼圖面板曾有試驗性 VoiceOver Semantics 改造，但該程式變更已 revert；在重新實作並實機驗證以前，不應把它列為目前穩定功能。
+- [ ] 動態／熱門／追蹤類列表。
+- [ ] 收藏與收藏詳情。
+- [ ] 觀看紀錄。
+- [ ] 通知：@我的、讚我的、回覆我的、系統通知。
+- [ ] 私訊列表。
+- [ ] 訂閱／文章／直播等長列表。
 
 ---
 
-這份稽核的目的不是追求「跟官方不同越多越好」，而是把已經真正改善 VoiceOver 日常操作的差異留下可驗收的規格。同步 PiliPlus 上游時，應保留這些使用體驗，同時吸收上游的新功能與 bug fix。
+## 8. 直播觀看頁三指翻頁是特殊高風險差異
+
+重點檔案：
+
+```text
+lib/pages/live_room/view.dart
+lib/pages/live_room/widgets/chat_panel.dart
+lib/pages/live_room/controller.dart
+lib/common/a11y/voiceover_paged_scroll.dart
+```
+
+直播聊天室不是單純把 `VoiceOverPagedScroll` 包在 ListView 外而已。
+
+### 已實機確認的穩定行為
+
+- 聊天室方向：**上方較舊、下方較新**。
+- 三指向下：往較舊彈幕。
+- 三指向上：往較新彈幕。
+- 三指翻頁作用範圍涵蓋整個非全螢幕直播觀看頁。
+- VoiceOver 焦點在發送彈幕、主播資訊或其他控制時，三指仍操作聊天室 ScrollController。
+- 最舊端再三指向下只提示「已到最舊彈幕」。
+- 最新端再三指向上：有排隊訊息則更新到最新；無排隊訊息則重新抓最新彈幕。
+- 最新端刷新有「正在重新整理彈幕」與成功／失敗回饋。
+- 刷新不重新載入播放器／直播串流。
+
+### 上游同步風險
+
+如果只把 `chat_panel.dart` 的 ListView 保留下來、卻移除直播頁外層的翻頁語義，會退化成「只有焦點在彈幕區才可翻頁」。這已在 5452 實機出現過，屬於已知 regression。
+
+---
+
+## 9. 直播新彈幕不得打斷舊訊息閱讀
+
+直播即時訊息需要額外保護：
+
+- VoiceOver 開始閱讀聊天室後，使用獨立閱讀暫停狀態（目前 `a11yChatPaused`）。
+- 一般 ScrollController listener 不得解除這個狀態。
+- 新彈幕可接收但先排隊，不立即讓列表 rebuild／自動捲動。
+- 新彈幕不得把焦點拉到底部，也不得因 rebuild 把焦點跳回列表第一條。
+- 每條彈幕需要穩定 semantic key。
+- 單指讀到目前最後一條時可揭露排隊內容，但不強制跳到底部。
+- 使用者主動三指更新或使用「回到底部」時，才解除暫停並回到最新端。
+
+這一套行為已實機確認通過，未來不能退回只靠 `disableAutoScroll` 的一般觸控邏輯。
+
+---
+
+## 10. 直播彈幕是一滑一條，且時間精確到秒
+
+重點檔案：
+
+```text
+lib/pages/live_room/widgets/chat_panel.dart
+```
+
+Accessibilibili 將一條彈幕整合成一個完整 semantic node：
+
+一般：
+
+```text
+某某 說：內容，今天1點23分45秒發送
+```
+
+回覆：
+
+```text
+某某 回覆 某某：內容，今天1點23分45秒發送
+```
+
+規則：
+
+- 發送者、回覆對象、內容、貼圖文字與時間不拆成多個焦點。
+- 內嵌貼圖有名稱或「貼圖」fallback。
+- 時間取可靠 UNIX 秒級 `ts`。
+- 精確到秒並放在最後。
+- 小時使用「點」而不是「時」，例如 `1點13分45秒`；這是實機高語速辨識後確認的可讀性修正。
+
+---
+
+## 11. 「回到底部」對 VoiceOver 是有價值的快速操作
+
+「回到底部」是上游原有介面，不是 Accessibilibili 新造按鈕。
+
+在舊彈幕閱讀不再被新訊息搶焦點後，實機確認這顆按鈕對 VoiceOver 有實際價值，因此目前基準是：
+
+- VoiceOver 可聚焦「回到底部」。
+- 點兩下解除閱讀暫停。
+- 揭露排隊的新訊息。
+- 跳到列表最新端。
+- 它是快速捷徑，不是唯一方法；三指向上與單指閱讀仍可回到最新內容。
+
+未來不要因舊的 workaround 紀錄再次把它對 VoiceOver 隱藏。
+
+---
+
+## 12. 觀看紀錄中的未開播直播狀態
+
+重點檔案：
+
+```text
+lib/pages/history/widgets/item.dart
+```
+
+當 `business == 'live' && liveStatus != 1` 時，Accessibilibili 會把狀態直接併入觀看紀錄卡片完整語義：
+
+```text
+直播標題，主播名稱，觀看時間，主播目前未開播
+```
+
+並移除「點兩下繼續觀看」這種不符合實際狀態的 hint。
+
+### 為什麼不依賴點擊後 announce
+
+實機曾確認：點兩下未開播直播後呼叫 `SemanticsService.announce('主播目前未開播')`，公告雖開始但可能立刻被後續 semantics／焦點事件中斷，只聽到第一個字。
+
+因此穩定策略是：
+
+- VoiceOver 聚焦卡片時就直接知道未開播狀態。
+- 不要求點兩下才取得關鍵狀態資訊。
+- 非 VoiceOver 模式仍可保留視覺 Toast。
+
+穩定修正：
+
+```text
+0c29eaca1473485ee8781657bbb7aca5bce18bdd
+```
+
+---
+
+## 13. 「一滑一整條」與圖片降噪必須一起驗收
+
+外層完整 `Semantics` 不是全部；共用圖片、Badge、Icon 等子元件也不能重新暴露無意義語義。
+
+以下都屬 regression：
+
+- 一支影片先讀「圖片」再讀完整影片卡。
+- 一則評論前面多出頭像焦點。
+- 一條彈幕被拆成名字、內容、貼圖、時間多個焦點。
+- 播放器按鈕同時被讀成 icon 與按鈕兩次。
+- 同一個表情／貼圖需要滑兩次才能操作。
+- rebuild 後焦點跳回列表第一項。
+
+---
+
+## 14. 上游同步後快速驗收
+
+除 `ACCESSIBILITY_MAINTENANCE.md` 外，至少抽查：
+
+### 一般列表
+
+- [ ] 首頁影片一滑一整條。
+- [ ] 搜尋、UP 頁、相關影片、觀看紀錄、稍後再看語義完整。
+- [ ] 主評論與樓中樓一滑一整條，時間在最後。
+- [ ] 長列表三指翻頁仍正常。
+- [ ] 沒有大量無意義圖片／Icon 焦點。
+
+### 貼圖／表情
+
+- [ ] 一般表情有名稱、可插入、有回饋。
+- [ ] 直播貼圖有名稱／fallback，可插入或直接送出。
+- [ ] 貼圖 Grid viewport 跟焦點同步。
+- [ ] 分組 Tab 可朗讀、可點兩下，沒有被 `excludeSemantics` 吃掉。
+
+### 播放器
+
+- [ ] 進度條可讀目前時間／總時長／百分比並 ±10 秒調整。
+- [ ] 播放／暫停名稱與即時狀態一致。
+- [ ] Magic Tap 沒有退化。
+
+### 直播
+
+- [ ] 推薦卡一滑一個直播。
+- [ ] 一條彈幕一個完整焦點，回覆與貼圖朗讀正確。
+- [ ] 彈幕時間精確到秒、放最後、小時用「點」。
+- [ ] 閱讀舊彈幕時新訊息不搶焦點。
+- [ ] 焦點在直播頁任何主要控制時三指仍可翻聊天室。
+- [ ] 三指向下往舊、三指向上往新。
+- [ ] 最舊端再向下只提示最舊；最新端再向上更新／刷新。
+- [ ] 刷新有語音回饋且播放器不中斷。
+- [ ] 「回到底部」對 VoiceOver 可用。
+
+### 觀看紀錄直播
+
+- [ ] 已下播直播卡片聚焦時直接朗讀「主播目前未開播」。
+- [ ] 未開播項目不再提示「點兩下繼續觀看」。
+- [ ] 正在直播的紀錄仍可正常開啟。
+
+---
+
+## 15. 維護判斷原則
+
+同步 PiliPlus 時不要以「官方程式碼為主，所以把 fork 的 widget 整份刪掉」處理無障礙差異。
+
+正確方式：
+
+1. 先理解上游新功能與 bug fix。
+2. 找出 Accessibilibili 已實機驗證的使用者體驗。
+3. 在上游新結構中重新套回同等語義、焦點與操作能力。
+4. 不盲目覆蓋上游，也不因重構而放棄成熟無障礙行為。
+5. 編譯成功後仍要做 VoiceOver 實機驗收；**能編譯不等於無障礙通過。**
+
+這份稽核的目的不是追求「跟官方不同越多越好」，而是把已經真正改善 VoiceOver 日常操作的差異留下可驗收規格。未來 Hermes／其他維護工具在同步上游時，應以這些穩定行為為保護目標。
