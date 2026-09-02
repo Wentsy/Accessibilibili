@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
@@ -378,7 +379,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
   Widget get childWhenDisabled {
     return Obx(() {
       final isFullScreen = this.isFullScreen || plPlayerController.isDesktopPip;
-      return Stack(
+      Widget child = Stack(
         clipBehavior: Clip.none,
         children: [
           const SizedBox.expand(child: ColoredBox(color: Colors.black)),
@@ -431,6 +432,18 @@ class _LiveRoomPageState extends State<LiveRoomPage>
           ),
         ],
       );
+      if (!isFullScreen) {
+        child = VoiceOverPagedScroll(
+          controller: _liveRoomController.scrollController,
+          onScrollBackwardAtStart: () {
+            _liveRoomController.refreshA11yChatHistory();
+          },
+          onScrollForwardAtEnd:
+              _liveRoomController.revealQueuedMessagesForA11y,
+          child: child,
+        );
+      }
+      return child;
     });
   }
 
@@ -669,7 +682,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                           "sourceID": _liveRoomController.roomId.toString(),
                           "title": roomInfo.roomInfo!.title!,
                           "url": liveUrl,
-                          "authorID": roomInfo.roomInfo!.uid.toString(),
+                          "authorID": _liveRoomController.roomId.toString(),
                           "source": "直播",
                           "desc": roomInfo.roomInfo!.title!,
                           "author": roomInfo.anchorInfo!.baseInfo!.uname,
