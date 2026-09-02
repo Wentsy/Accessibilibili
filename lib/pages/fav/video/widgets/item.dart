@@ -3,6 +3,7 @@ import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
 import 'package:PiliPlus/utils/bili_utils.dart';
+import 'package:flutter/semantics.dart';
 import 'package:material_ui/material_ui.dart';
 
 class FavVideoItem extends StatelessWidget {
@@ -21,41 +22,62 @@ class FavVideoItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: onTap,
-        onLongPress:
-            onLongPress ??
-            (onTap == null
-                ? null
-                : () => imageSaveDialog(
-                    title: item.title,
-                    cover: item.cover,
-                  )),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AspectRatio(
-                aspectRatio: Style.aspectRatio,
-                child: LayoutBuilder(
-                  builder: (context, boxConstraints) {
-                    return Hero(
-                      tag: heroTag,
-                      child: NetworkImgLayer(
-                        src: item.cover,
-                        width: boxConstraints.maxWidth,
-                        height: boxConstraints.maxHeight,
-                      ),
-                    );
-                  },
+    final defaultLongPress = onTap == null
+        ? null
+        : () => imageSaveDialog(
+            title: item.title,
+            cover: item.cover,
+          );
+    final longPressAction = onLongPress ?? defaultLongPress;
+    final intro = item.intro?.trim();
+    final a11yLabel = [
+      item.title,
+      if (intro?.isNotEmpty == true) intro!,
+      '${item.mediaCount}個內容',
+      BiliUtils.isPublicFavText(item.attr),
+    ].join('，');
+
+    return Semantics(
+      container: true,
+      explicitChildNodes: false,
+      excludeSemantics: true,
+      button: onTap != null,
+      label: a11yLabel,
+      hint: onTap == null ? null : '點兩下開啟收藏夾',
+      onTap: onTap,
+      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+        if (longPressAction != null)
+          const CustomSemanticsAction(label: '更多操作'): longPressAction,
+      },
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          onLongPress: longPressAction,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AspectRatio(
+                  aspectRatio: Style.aspectRatio,
+                  child: LayoutBuilder(
+                    builder: (context, boxConstraints) {
+                      return Hero(
+                        tag: heroTag,
+                        child: NetworkImgLayer(
+                          src: item.cover,
+                          width: boxConstraints.maxWidth,
+                          height: boxConstraints.maxHeight,
+                        ),
+                      );
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              content(context),
-            ],
+                const SizedBox(width: 10),
+                content(context),
+              ],
+            ),
           ),
         ),
       ),
