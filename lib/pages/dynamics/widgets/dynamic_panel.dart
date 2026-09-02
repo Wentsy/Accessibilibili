@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/widgets/avatars.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -6,9 +7,14 @@ import 'package:PiliPlus/pages/dynamics/widgets/action_panel.dart';
 import 'package:PiliPlus/pages/dynamics/widgets/author_panel.dart';
 import 'package:PiliPlus/pages/dynamics/widgets/dyn_content.dart';
 import 'package:PiliPlus/pages/dynamics/widgets/interaction.dart';
+import 'package:PiliPlus/pages/dynamics_repost/view.dart';
+import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:PiliPlus/utils/request_utils.dart';
+import 'package:flutter/semantics.dart';
+import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class DynamicPanel extends StatelessWidget {
@@ -40,6 +46,94 @@ class DynamicPanel extends StatelessWidget {
     this.onSetReplySubject,
   });
 
+  String? _clean(String? value) {
+    final text = value?.trim();
+    return text?.isNotEmpty == true ? text : null;
+  }
+
+  String? _majorText(DynamicItemModel target) {
+    final major = target.modules.moduleDynamic?.major;
+    if (major == null) return null;
+    final values = <String?>[
+      major.opus?.title,
+      major.archive?.title,
+      major.ugcSeason?.title,
+      major.pgc?.title,
+      major.courses?.title,
+      major.liveRcmd?.title,
+      major.live?.title,
+      major.medialist?.title,
+      major.music?.title,
+      major.common?.title,
+      major.upowerCommon?.title,
+      major.subscriptionNew?.liveRcmd?.content?.livePlayInfo?.title,
+      major.none?.tips,
+    ];
+    for (final value in values) {
+      if (_clean(value) case final text?) return text;
+    }
+    return null;
+  }
+
+  String? _bodyText(DynamicItemModel target) {
+    final moduleDynamic = target.modules.moduleDynamic;
+    final desc = _clean(moduleDynamic?.desc?.text);
+    final summary = _clean(moduleDynamic?.major?.opus?.summary?.text);
+    if (desc != null && summary != null && desc != summary) {
+      return '$desc，$summary';
+    }
+    return desc ?? summary;
+  }
+
+  String _a11yLabel(DynamicItemModel target) {
+    final author = target.modules.moduleAuthor;
+    final moduleDynamic = target.modules.moduleDynamic;
+    final stat = target.modules.moduleStat;
+    final parts = <String>[
+      _clean(author?.name) ?? '未知使用者',
+      if (_clean(moduleDynamic?.topic?.name) case final topic?) '話題 $topic',
+      if (_bodyText(target) case final body?) body,
+      if (_majorText(target) case final major?) major,
+    ];
+
+    if (target.orig case final orig?) {
+      final origParts = <String>[
+        if (_clean(orig.modules.moduleAuthor?.name) case final name?) name,
+        if (_bodyText(orig) case final body?) body,
+        if (_majorText(orig) case final major?) major,
+      ];
+      if (origParts.isNotEmpty) {
+        parts.add('轉發自 ${origParts.join('，')}');
+      }
+    }
+
+    final picCount = moduleDynamic?.major?.opus?.pics?.length ?? 0;
+    if (picCount > 0) {
+      parts.add('包含$picCount張圖片');
+    }
+    if (_clean(target.modules.moduleDispute?.title) case final dispute?) {
+      parts.add(dispute);
+    }
+    if (stat?.forward?.count case final count?) {
+      parts.add('轉發$count');
+    }
+    if (stat?.comment?.count case final count?) {
+      parts.add('評論$count');
+    }
+    if (stat?.like?.count case final count?) {
+      parts.add('讚$count');
+    }
+    if (author?.pubTs case final pubTs?) {
+      final pubTime = DateFormatUtils.a11yDateFormat(pubTs);
+      if (pubTime.isNotEmpty) {
+        parts.add('$pubTime發佈');
+      }
+    } else if (_clean(author?.pubTime) case final pubTime?) {
+      parts.add('$pubTime發佈');
+    }
+    return parts.join('，');
+  }
+
   @override
   Widget build(BuildContext context) {
     if (item.visible == false) {
@@ -60,6 +154,55 @@ class DynamicPanel extends StatelessWidget {
 
     void showMore() => _imageSaveDialog(context, authorWidget.morePanel);
 
+    void openDetail() => PageUtils.pushDynDetail(item);
+
+    void showRepost() {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => RepostPanel(
+          item: item,
+          onSuccess: () {
+            final forward = item.modules.moduleStat?.forward;
+            if (forward != null) {
+              forward.count = (forward.count ?? 0) + 1;
+            }
+            if (context.mounted) {
+              (context as Element?)?.markNeedsBuild();
+            }
+          },
+        ),
+      );
+    }
+
+    void openComments() => PageUtils.pushDynDetail(
+      item,
+      isPush: true,
+      viewComment: true,
+    );
+
+    void toggleLike() {
+      final like = item.modules.moduleStat?.like;
+      if (like == null) return;
+      RequestUtils.onLikeDynamic(
+        item,
+        like.status ?? false,
+        () {
+          if (context.mounted) {
+            (context as Element?)?.markNeedsBuild();
+          }
+        },
+      );
+    }
+
+    void visitAuthor() {
+      final mid = item.modules.moduleAuthor?.mid;
+      if (mid != null) {
+        Get.toNamed('/member?mid=$mid');
+      }
+    }
+
     final child = Material(
       type: MaterialType.transparency,
       child: InkWell(
@@ -76,7 +219,7 @@ class DynamicPanel extends StatelessWidget {
                   'DYNAMIC_TYPE_COURSES_SEASON',
                 }.contains(item.type)
             ? null
-            : () => PageUtils.pushDynDetail(item),
+            : openDetail,
         onLongPress: showMore,
         onSecondaryTap: PlatformUtils.isMobile ? null : showMore,
         child: Column(
@@ -121,8 +264,36 @@ class DynamicPanel extends StatelessWidget {
         ),
       ),
     );
+
+    final semanticsChild = isDetail
+        ? child
+        : Semantics(
+            container: true,
+            explicitChildNodes: false,
+            excludeSemantics: true,
+            button: true,
+            label: _a11yLabel(item),
+            hint: '點兩下開啟動態。上下滑可轉發、查看評論、點讚或開啟更多操作',
+            onTap: openDetail,
+            onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+            customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+              if (item.modules.moduleStat?.forward != null)
+                const CustomSemanticsAction(label: '轉發'): showRepost,
+              if (item.modules.moduleStat?.comment != null)
+                const CustomSemanticsAction(label: '查看評論'): openComments,
+              if (item.modules.moduleStat?.like case final like?)
+                CustomSemanticsAction(
+                  label: like.status == true ? '取消讚' : '點讚',
+                ): toggleLike,
+              if (item.modules.moduleAuthor?.mid != null)
+                const CustomSemanticsAction(label: '造訪使用者'): visitAuthor,
+              const CustomSemanticsAction(label: '更多操作'): showMore,
+            },
+            child: child,
+          );
+
     if (isSave || (isDetail && !isDetailPortraitW)) {
-      return child;
+      return semanticsChild;
     }
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -135,7 +306,7 @@ class DynamicPanel extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.only(bottom: 8),
-        child: child,
+        child: semanticsChild,
       ),
     );
   }
