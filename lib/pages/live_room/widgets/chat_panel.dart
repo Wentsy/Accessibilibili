@@ -76,7 +76,7 @@ class LiveRoomChatPanel extends StatelessWidget {
 
     final date = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
     final now = DateTime.now();
-    final time = '${date.hour}時${date.minute}分${date.second}秒';
+    final time = '${date.hour}點${date.minute}分${date.second}秒';
     final today = DateTime(now.year, now.month, now.day);
     final dateDay = DateTime(date.year, date.month, date.day);
 
