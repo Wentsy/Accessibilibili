@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
 import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
@@ -103,7 +104,8 @@ class HistoryItem extends StatelessWidget {
                   if (item.liveStatus == 1) {
                     PageUtils.toLiveRoom(item.history.oid);
                   } else {
-                    SmartDialog.showToast('直播未开播');
+                    a11yActionFeedback(message: '主播目前未開播');
+                    SmartDialog.showToast('主播目前未開播');
                   }
                 } else if (business == 'pgc') {
                   PageUtils.viewPgc(
