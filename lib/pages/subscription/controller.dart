@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
 import 'package:PiliPlus/http/fav.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/user.dart';
@@ -11,6 +12,10 @@ import 'package:material_ui/material_ui.dart';
 
 class SubController extends CommonListController<SubData, SubItemModel> {
   late final account = Accounts.main;
+  final newestFirst = true.obs;
+
+  bool _sortedModeActive = false;
+  bool _sorting = false;
 
   @override
   void onInit() {
@@ -25,6 +30,75 @@ class SubController extends CommonListController<SubData, SubItemModel> {
       return Future.syncValue(null);
     }
     return super.queryData(isRefresh);
+  }
+
+  int _sortTime(SubItemModel item) => item.mtime ?? item.ctime ?? 0;
+
+  void _sortItems(List<SubItemModel> items) {
+    items.sort((a, b) {
+      final aTime = _sortTime(a);
+      final bTime = _sortTime(b);
+      return newestFirst.value
+          ? bTime.compareTo(aTime)
+          : aTime.compareTo(bTime);
+    });
+  }
+
+  Future<bool> _loadAllSubscriptions() async {
+    if (_sorting) return false;
+    _sorting = true;
+
+    final items = <SubItemModel>[];
+    var currentPage = 1;
+
+    while (true) {
+      final res = await UserHttp.userSubFolder(
+        pn: currentPage,
+        ps: 70,
+        mid: account.mid,
+      );
+      if (res case Success(:final response)) {
+        items.addAll(response.list ?? const <SubItemModel>[]);
+        if (response.hasMore != true) {
+          break;
+        }
+        currentPage++;
+      } else {
+        res.toast();
+        _sorting = false;
+        return false;
+      }
+    }
+
+    _sortItems(items);
+    loadingState.value = Success(items);
+    page = currentPage + 1;
+    isEnd = true;
+    _sorting = false;
+    return true;
+  }
+
+  Future<void> toggleSort() async {
+    final previous = newestFirst.value;
+    newestFirst.value = !previous;
+    _sortedModeActive = true;
+
+    if (await _loadAllSubscriptions()) {
+      a11yActionFeedback(
+        message: newestFirst.value ? '已切換為最新優先' : '已切換為最舊優先',
+      );
+    } else {
+      newestFirst.value = previous;
+    }
+  }
+
+  @override
+  Future<void> onRefresh() async {
+    if (_sortedModeActive) {
+      await _loadAllSubscriptions();
+      return;
+    }
+    await super.onRefresh();
   }
 
   // 取消订阅
