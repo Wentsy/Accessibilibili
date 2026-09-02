@@ -20,7 +20,12 @@ class SubController extends CommonListController<SubData, SubItemModel> {
   @override
   void onInit() {
     super.onInit();
-    queryData();
+    if (!account.isLogin) {
+      loadingState.value = const Error('账号未登录');
+      return;
+    }
+    _sortedModeActive = true;
+    _loadAllSubscriptions();
   }
 
   @override
@@ -46,6 +51,10 @@ class SubController extends CommonListController<SubData, SubItemModel> {
 
   Future<bool> _loadAllSubscriptions() async {
     if (_sorting) return false;
+    if (!account.isLogin) {
+      loadingState.value = const Error('账号未登录');
+      return false;
+    }
     _sorting = true;
 
     final items = <SubItemModel>[];
