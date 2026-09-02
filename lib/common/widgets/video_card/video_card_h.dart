@@ -43,7 +43,7 @@ class VideoCardH extends StatelessWidget {
     // 🔴 無障礙：整卡語義節點（比照首頁）
     final bvid = videoItem.bvid;
     final pubdate = DateFormatUtils.dateFormat(videoItem.pubdate);
-    final pubdatePart = pubdate.isNotEmpty ? '，發布時間 $pubdate' : '';
+    final pubdatePart = pubdate.isNotEmpty ? '，$pubdate發佈' : '';
     return Semantics(
       container: true,
       explicitChildNodes: false,
