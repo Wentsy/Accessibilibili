@@ -89,7 +89,7 @@ class _VoiceOverGlobalScrollBridge extends StatelessWidget {
       scrollController
           .animateTo(
             target.toDouble(),
-            duration: const Duration(milliseconds: 280),
+            duration: const Duration(milliseconds: 160),
             curve: Curves.easeOutCubic,
           )
           .whenComplete(notifyIosVoiceOverPageScrolled);
@@ -107,7 +107,7 @@ class _VoiceOverGlobalScrollBridge extends StatelessWidget {
       context,
     );
     Future<void>.delayed(
-      const Duration(milliseconds: 300),
+      const Duration(milliseconds: 120),
       notifyIosVoiceOverPageScrolled,
     );
   }
