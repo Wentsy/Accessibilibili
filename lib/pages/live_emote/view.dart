@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/widgets/custom_tooltip.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
@@ -134,6 +135,8 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
                                     ? '點兩下插入這個貼圖'
                                     : '點兩下送出這個貼圖',
                                 onTap: choose,
+                                onDidGainAccessibilityFocus: () =>
+                                    a11yEnsureVisible(context),
                                 child: Material(
                                   type: MaterialType.transparency,
                                   child: InkWell(
