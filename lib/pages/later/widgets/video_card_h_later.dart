@@ -10,6 +10,7 @@ import 'package:PiliPlus/models/common/badge_type.dart';
 import 'package:PiliPlus/models/common/stat_type.dart';
 import 'package:PiliPlus/models_new/later/list.dart';
 import 'package:PiliPlus/pages/later/controller.dart';
+import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
@@ -177,10 +178,18 @@ class VideoCardHLater extends StatelessWidget {
 
   Widget content(BuildContext context, ThemeData theme) {
     final isPgc = videoItem.isPgc == true && videoItem.bangumi != null;
+    final watchLaterTime = DateFormatUtils.a11yDateFormat(videoItem.addAt);
     Widget stat = StatWidget(
       type: StatType.play,
       value: videoItem.stat?.view,
     );
+    if (watchLaterTime.isNotEmpty) {
+      stat = Semantics(
+        excludeSemantics: true,
+        label: '播放 ${videoItem.stat?.view ?? 0} 次，$watchLaterTime再看',
+        child: stat,
+      );
+    }
     return Expanded(
       child: Stack(
         clipBehavior: Clip.none,
@@ -237,16 +246,35 @@ class VideoCardHLater extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 3),
-                    Row(
-                      spacing: 8,
-                      children: [
-                        stat,
-                        StatWidget(
-                          type: StatType.danmaku,
-                          value: videoItem.stat?.danmaku,
-                        ),
-                      ],
-                    ),
+                    watchLaterTime.isEmpty
+                        ? Row(
+                            spacing: 8,
+                            children: [
+                              stat,
+                              StatWidget(
+                                type: StatType.danmaku,
+                                value: videoItem.stat?.danmaku,
+                              ),
+                            ],
+                          )
+                        : Semantics(
+                            excludeSemantics: true,
+                            label:
+                                '播放 ${videoItem.stat?.view ?? 0} 次，彈幕 ${videoItem.stat?.danmaku ?? 0}，$watchLaterTime再看',
+                            child: Row(
+                              spacing: 8,
+                              children: [
+                                StatWidget(
+                                  type: StatType.play,
+                                  value: videoItem.stat?.view,
+                                ),
+                                StatWidget(
+                                  type: StatType.danmaku,
+                                  value: videoItem.stat?.danmaku,
+                                ),
+                              ],
+                            ),
+                          ),
                   ],
           ),
           Positioned(
