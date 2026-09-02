@@ -809,6 +809,9 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                       width: 34,
                       height: 34,
                       child: IconButton(
+                        tooltip: enableShowLiveDanmaku
+                            ? '關閉彈幕顯示'
+                            : '開啟彈幕顯示',
                         style: IconButton.styleFrom(padding: .zero),
                         onPressed: () {
                           final newVal = !enableShowLiveDanmaku;
@@ -904,6 +907,7 @@ class _LiveRoomPageState extends State<LiveRoomPage>
                   width: 34,
                   height: 34,
                   child: IconButton(
+                    tooltip: '快速發送貼圖',
                     style: IconButton.styleFrom(padding: EdgeInsets.zero),
                     onPressed: () => _liveRoomController.onSendDanmaku(true),
                     icon: const Icon(
