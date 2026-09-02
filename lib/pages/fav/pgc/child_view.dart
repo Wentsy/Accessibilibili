@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/skeleton/fav_pgc_item.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/dialog/dialog.dart';
@@ -47,17 +48,20 @@ class _FavPgcChildPageState extends State<FavPgcChildPage>
     return PgcLayout(
       body: refreshIndicator(
         onRefresh: _favPgcController.onRefresh,
-        child: CustomScrollView(
+        child: VoiceOverPagedScroll(
           controller: _favPgcController.scrollController,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverPadding(
-              padding: EdgeInsets.only(bottom: padding.bottom + 100),
-              sliver: Obx(
-                () => _buildBody(_favPgcController.loadingState.value),
+          child: CustomScrollView(
+            controller: _favPgcController.scrollController,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPadding(
+                padding: EdgeInsets.only(bottom: padding.bottom + 100),
+                sliver: Obx(
+                  () => _buildBody(_favPgcController.loadingState.value),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       toolbar: Obx(
