@@ -63,12 +63,41 @@ class LiveRoomChatPanel extends StatelessWidget {
     return text.isEmpty ? '空白彈幕' : text;
   }
 
+  int? _danmakuTimestamp(DanmakuMsg item) {
+    final raw = item.extra.ts;
+    if (raw is int) return raw;
+    if (raw is num) return raw.toInt();
+    return int.tryParse(raw.toString());
+  }
+
+  String _a11yMessageTime(DanmakuMsg item) {
+    final ts = _danmakuTimestamp(item);
+    if (ts == null || ts <= 0) return '';
+
+    final date = DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+    final now = DateTime.now();
+    final time = '${date.hour}時${date.minute}分${date.second}秒';
+    final today = DateTime(now.year, now.month, now.day);
+    final dateDay = DateTime(date.year, date.month, date.day);
+
+    if (today == dateDay) return '今天$time';
+    if (today.subtract(const Duration(days: 1)) == dateDay) {
+      return '昨天$time';
+    }
+    if (now.year == date.year) {
+      return '${date.month}月${date.day}日$time';
+    }
+    return '${date.year}年${date.month}月${date.day}日$time';
+  }
+
   String _a11yMessageLabel(DanmakuMsg item) {
     final message = _a11yMessageText(item);
+    final time = _a11yMessageTime(item);
+    final timeSuffix = time.isEmpty ? '' : '，$time發送';
     if (item.reply case final reply?) {
-      return '${item.name} 回覆 ${reply.name}：$message';
+      return '${item.name} 回覆 ${reply.name}：$message$timeSuffix';
     }
-    return '${item.name} 說：$message';
+    return '${item.name} 說：$message$timeSuffix';
   }
 
   void _showA11yMsgMenu(BuildContext context, DanmakuMsg item) {
@@ -160,7 +189,6 @@ class LiveRoomChatPanel extends StatelessWidget {
     late final primary = colorScheme.isDark
         ? colorScheme.primary
         : colorScheme.inversePrimary;
-    final accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
     return Stack(
       children: [
         Obx(
@@ -229,7 +257,8 @@ class LiveRoomChatPanel extends StatelessWidget {
                           liveRoomController.pauseA11yChat();
                           if (index == liveRoomController.builtLength - 1 &&
                               liveRoomController.shouldRefresh) {
-                            liveRoomController.revealQueuedMessagesForA11y();
+                            liveRoomController
+                                .revealQueuedMessagesWithoutJumpForA11y();
                           }
                           a11yEnsureVisible(itemContext);
                         },
@@ -378,21 +407,20 @@ class LiveRoomChatPanel extends StatelessWidget {
               );
             }),
           ),
-        if (!accessibleNavigation)
-          Obx(
-            () => liveRoomController.disableAutoScroll.value
-                ? Positioned(
-                    right: 12,
-                    bottom: 0,
-                    child: ElevatedButton.icon(
-                      style: const ButtonStyle(visualDensity: .comfortable),
-                      icon: const Icon(Icons.arrow_downward_rounded, size: 20),
-                      label: const Text('回到底部'),
-                      onPressed: liveRoomController.handleJumpToBottom,
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
+        Obx(
+          () => liveRoomController.disableAutoScroll.value
+              ? Positioned(
+                  right: 12,
+                  bottom: 0,
+                  child: ElevatedButton.icon(
+                    style: const ButtonStyle(visualDensity: .comfortable),
+                    icon: const Icon(Icons.arrow_downward_rounded, size: 20),
+                    label: const Text('回到底部'),
+                    onPressed: liveRoomController.handleJumpToBottom,
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
       ],
     );
   }
