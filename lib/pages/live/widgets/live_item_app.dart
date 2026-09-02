@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -26,131 +27,174 @@ class LiveCardVApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
+    void openLive() => PageUtils.toLiveRoom(item.roomid);
+
     void onLongPress() => imageSaveDialog(
       title: item.title,
       cover: showFirstFrame ? item.systemCover : item.cover,
     );
-    return Stack(
-      children: [
-        Card(
-          child: InkWell(
-            onTap: () => PageUtils.toLiveRoom(item.roomid),
-            onLongPress: onLongPress,
-            onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
-            borderRadius: const .all(.circular(12)),
-            child: Column(
-              crossAxisAlignment: .start,
-              children: [
-                AspectRatio(
-                  aspectRatio: Style.aspectRatio,
-                  child: LayoutBuilder(
-                    builder: (context, boxConstraints) => Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        NetworkImgLayer(
-                          src: showFirstFrame ? item.systemCover : item.cover,
-                          width: boxConstraints.maxWidth,
-                          height: boxConstraints.maxHeight,
-                          borderRadius: const .vertical(top: .circular(12)),
+
+    void openFeedback() {
+      if (item.feedback.isNullOrEmpty) return;
+
+      Widget actionButton(Reason r) => SearchText(
+        text: r.name!,
+        onTap: (_) async {
+          Get.back();
+          SmartDialog.showLoading(msg: '正在提交');
+          final res = await LiveHttp.liveFeedback(
+            item.roomid!,
+            r.id!,
+            r.idType!,
+          );
+          SmartDialog.dismiss();
+          if (res.isSuccess) {
+            SmartDialog.showToast('提交成功');
+          } else {
+            res.toast();
+          }
+        },
+      );
+
+      final feedback = item.feedback!;
+      showDialog(
+        context: context,
+        builder: (context) {
+          return SimpleDialog(
+            contentPadding: const .fromLTRB(24, 16, 24, 19),
+            children: [
+              for (var i in feedback) ...[
+                const SizedBox(height: 5),
+                Text.rich(
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: i.title,
+                        style: theme.textTheme.titleMedium,
+                      ),
+                      TextSpan(
+                        text: '\n${i.subtitle}',
+                        style: TextStyle(
+                          color: theme.colorScheme.outline,
                         ),
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: videoStat(),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                liveContent(theme),
+                const SizedBox(height: 5),
+                Wrap(
+                  spacing: 8.0,
+                  runSpacing: 8.0,
+                  children: i.reasons!.map(actionButton).toList(),
+                ),
               ],
-            ),
-          ),
-        ),
-        if (!item.feedback.isNullOrEmpty)
-          Positioned(
-            right: -5,
-            bottom: -2,
-            width: 29,
-            height: 29,
-            child: IconButton(
-              padding: .zero,
-              onPressed: () {
-                Widget actionButton(Reason r) => SearchText(
-                  text: r.name!,
-                  onTap: (_) async {
-                    Get.back();
-                    SmartDialog.showLoading(msg: '正在提交');
-                    final res = await LiveHttp.liveFeedback(
-                      item.roomid!,
-                      r.id!,
-                      r.idType!,
-                    );
-                    SmartDialog.dismiss();
-                    if (res.isSuccess) {
-                      SmartDialog.showToast('提交成功');
-                    } else {
-                      res.toast();
-                    }
-                  },
-                );
+              const Divider(),
+              Center(
+                child: FilledButton.tonal(
+                  onPressed: Get.back,
+                  style: FilledButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: const Text('取消'),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
 
-                final feedback = item.feedback!;
-                showDialog(
-                  context: context,
-                  builder: (context) {
-                    return SimpleDialog(
-                      contentPadding: const .fromLTRB(24, 16, 24, 19),
-                      children: [
-                        for (var i in feedback) ...[
-                          const SizedBox(height: 5),
-                          Text.rich(
-                            TextSpan(
-                              children: [
-                                TextSpan(
-                                  text: i.title,
-                                  style: theme.textTheme.titleMedium,
-                                ),
-                                TextSpan(
-                                  text: '\n${i.subtitle}',
-                                  style: TextStyle(
-                                    color: theme.colorScheme.outline,
-                                  ),
-                                ),
-                              ],
+    final title = item.title?.trim();
+    final uname = item.uname?.trim();
+    final areaName = item.areaName?.trim();
+    final watched = item.watchedShow?.textLarge?.trim();
+    final labelParts = <String>[
+      if (title?.isNotEmpty == true) title!,
+      if (uname?.isNotEmpty == true) '主播 $uname',
+      if (areaName?.isNotEmpty == true) areaName!,
+      if (watched?.isNotEmpty == true) watched!,
+    ];
+    final a11yLabel = labelParts.isEmpty ? '直播' : labelParts.join('，');
+    final a11yActions = <CustomSemanticsAction, VoidCallback>{
+      if (!item.feedback.isNullOrEmpty)
+        const CustomSemanticsAction(label: '更多操作'): openFeedback,
+    };
+
+    return Semantics(
+      container: true,
+      explicitChildNodes: false,
+      excludeSemantics: true,
+      button: true,
+      label: a11yLabel,
+      hint: item.feedback.isNullOrEmpty
+          ? '點兩下進入直播間'
+          : '點兩下進入直播間。上滑有更多操作',
+      onTap: openLive,
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+      customSemanticsActions: a11yActions,
+      child: ExcludeSemantics(
+        child: Stack(
+          children: [
+            Card(
+              child: InkWell(
+                onTap: openLive,
+                onLongPress: onLongPress,
+                onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
+                borderRadius: const .all(.circular(12)),
+                child: Column(
+                  crossAxisAlignment: .start,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: Style.aspectRatio,
+                      child: LayoutBuilder(
+                        builder: (context, boxConstraints) => Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            NetworkImgLayer(
+                              src: showFirstFrame
+                                  ? item.systemCover
+                                  : item.cover,
+                              width: boxConstraints.maxWidth,
+                              height: boxConstraints.maxHeight,
+                              borderRadius: const .vertical(
+                                top: .circular(12),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 5),
-                          Wrap(
-                            spacing: 8.0,
-                            runSpacing: 8.0,
-                            children: i.reasons!.map(actionButton).toList(),
-                          ),
-                        ],
-                        const Divider(),
-                        Center(
-                          child: FilledButton.tonal(
-                            onPressed: Get.back,
-                            style: FilledButton.styleFrom(
-                              visualDensity: VisualDensity.compact,
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: videoStat(),
                             ),
-                            child: const Text('取消'),
-                          ),
+                          ],
                         ),
-                      ],
-                    );
-                  },
-                );
-              },
-              icon: Icon(
-                Icons.more_vert_outlined,
-                size: 17,
-                color: theme.colorScheme.outline,
+                      ),
+                    ),
+                    liveContent(theme),
+                  ],
+                ),
               ),
             ),
-          ),
-      ],
+            if (!item.feedback.isNullOrEmpty)
+              Positioned(
+                right: -5,
+                bottom: -2,
+                width: 29,
+                height: 29,
+                child: IconButton(
+                  padding: .zero,
+                  onPressed: openFeedback,
+                  icon: Icon(
+                    Icons.more_vert_outlined,
+                    size: 17,
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
