@@ -16,6 +16,7 @@ import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:flutter/semantics.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -54,105 +55,166 @@ class FavVideoCardH extends StatelessWidget {
             bvid: item.bvid,
           );
 
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: isSort
-            ? null
-            : enableMultiSelect
-            ? () => ctr!.onSelect(item)
-            : () {
-                if (!const [0, 16].contains(item.attr)) {
-                  Get.toNamed('/member?mid=${item.upper?.mid}');
-                  return;
-                }
+    void onActivate() {
+      if (enableMultiSelect) {
+        ctr!.onSelect(item);
+        return;
+      }
+      if (!const [0, 16].contains(item.attr)) {
+        Get.toNamed('/member?mid=${item.upper?.mid}');
+        return;
+      }
 
-                switch (item.type) {
-                  case 12:
-                    AudioPage.toAudioPage(
-                      oid: item.id!,
-                      itemType: 3,
-                      from: PlaylistSource.AUDIO_CARD,
-                    );
-                    break;
-                  case 24:
-                    PageUtils.viewPgc(
-                      seasonId: item.ogv!.seasonId,
-                      epId: item.id,
-                    );
-                    break;
-                  default:
-                    ctr!.onViewFav(item, index);
-                    break;
-                }
-              },
-        onLongPress: onLongPress,
-        onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: Style.safeSpace,
-            vertical: 5,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AspectRatio(
-                aspectRatio: Style.aspectRatio,
-                child: LayoutBuilder(
-                  builder: (context, boxConstraints) {
-                    double maxWidth = boxConstraints.maxWidth;
-                    double maxHeight = boxConstraints.maxHeight;
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        NetworkImgLayer(
-                          src: item.cover,
-                          width: maxWidth,
-                          height: maxHeight,
-                        ),
-                        PBadge(
-                          text: DurationUtils.formatDuration(item.duration),
-                          right: 6.0,
-                          bottom: 6.0,
-                          type: PBadgeType.gray,
-                        ),
-                        if (item.type == 12)
-                          const PBadge(
-                            text: '音频',
-                            top: 6.0,
-                            right: 6.0,
-                            type: PBadgeType.gray,
-                          )
-                        else
-                          PBadge(
-                            text: item.ogv?.typeName,
-                            top: 6.0,
-                            right: 6.0,
-                            bottom: null,
-                            left: null,
-                          ),
-                        if (!isSort)
-                          Positioned.fill(
-                            child: selectMask(
-                              colorScheme,
-                              item.checked,
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
+      switch (item.type) {
+        case 12:
+          AudioPage.toAudioPage(
+            oid: item.id!,
+            itemType: 3,
+            from: PlaylistSource.AUDIO_CARD,
+          );
+          break;
+        case 24:
+          PageUtils.viewPgc(
+            seasonId: item.ogv!.seasonId,
+            epId: item.id,
+          );
+          break;
+        default:
+          ctr!.onViewFav(item, index);
+          break;
+      }
+    }
+
+    void cancelFav() {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('提示'),
+          content: const Text('要取消收藏嗎?'),
+          actions: [
+            TextButton(
+              onPressed: Get.back,
+              child: Text(
+                '取消',
+                style: TextStyle(color: colorScheme.outline),
               ),
-              const SizedBox(width: 10),
-              content(context, colorScheme, isOwner),
-            ],
+            ),
+            TextButton(
+              onPressed: () {
+                Get.back();
+                ctr!.onCancelFav(index!, item.id!, item.type!);
+              },
+              child: const Text('確定取消'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final duration = DurationUtils.formatDuration(item.duration);
+    final favTime = DateFormatUtils.a11yDateFormat(item.favTime);
+    final a11yLabel = [
+      item.title ?? '未命名收藏內容',
+      if (item.upper?.name?.isNotEmpty == true) 'UP主 ${item.upper!.name}',
+      if (duration.isNotEmpty) '時長 $duration',
+      if (item.cntInfo?.play != null) '播放 ${item.cntInfo!.play}',
+      if (item.cntInfo?.danmaku != null) '彈幕 ${item.cntInfo!.danmaku}',
+      if (favTime.isNotEmpty) '$favTime收藏',
+    ].join('，');
+
+    return Semantics(
+      container: true,
+      explicitChildNodes: false,
+      excludeSemantics: true,
+      button: !isSort,
+      label: a11yLabel,
+      hint: isSort
+          ? null
+          : isOwner && !enableMultiSelect
+          ? '點兩下開啟。上滑有取消收藏'
+          : '點兩下開啟',
+      onTap: isSort ? null : onActivate,
+      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+        if (isOwner && !enableMultiSelect)
+          const CustomSemanticsAction(label: '取消收藏'): cancelFav,
+      },
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: isSort ? null : onActivate,
+          onLongPress: onLongPress,
+          onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: Style.safeSpace,
+              vertical: 5,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AspectRatio(
+                  aspectRatio: Style.aspectRatio,
+                  child: LayoutBuilder(
+                    builder: (context, boxConstraints) {
+                      double maxWidth = boxConstraints.maxWidth;
+                      double maxHeight = boxConstraints.maxHeight;
+                      return Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          NetworkImgLayer(
+                            src: item.cover,
+                            width: maxWidth,
+                            height: maxHeight,
+                          ),
+                          PBadge(
+                            text: DurationUtils.formatDuration(item.duration),
+                            right: 6.0,
+                            bottom: 6.0,
+                            type: PBadgeType.gray,
+                          ),
+                          if (item.type == 12)
+                            const PBadge(
+                              text: '音频',
+                              top: 6.0,
+                              right: 6.0,
+                              type: PBadgeType.gray,
+                            )
+                          else
+                            PBadge(
+                              text: item.ogv?.typeName,
+                              top: 6.0,
+                              right: 6.0,
+                              bottom: null,
+                              left: null,
+                            ),
+                          if (!isSort)
+                            Positioned.fill(
+                              child: selectMask(
+                                colorScheme,
+                                item.checked,
+                              ),
+                            ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                content(context, colorScheme, isOwner, cancelFav),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget content(BuildContext context, ColorScheme colorScheme, bool isOwner) {
+  Widget content(
+    BuildContext context,
+    ColorScheme colorScheme,
+    bool isOwner,
+    VoidCallback cancelFav,
+  ) {
     return Expanded(
       child: Stack(
         clipBehavior: Clip.none,
@@ -215,29 +277,7 @@ class FavVideoCardH extends StatelessWidget {
                 icon: const Icon(Icons.clear),
                 tooltip: '取消收藏',
                 iconColor: colorScheme.outline,
-                onPressed: () => showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('提示'),
-                    content: const Text('要取消收藏吗?'),
-                    actions: [
-                      TextButton(
-                        onPressed: Get.back,
-                        child: Text(
-                          '取消',
-                          style: TextStyle(color: colorScheme.outline),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Get.back();
-                          ctr!.onCancelFav(index!, item.id!, item.type!);
-                        },
-                        child: const Text('确定取消'),
-                      ),
-                    ],
-                  ),
-                ),
+                onPressed: cancelFav,
               ),
             ),
         ],
