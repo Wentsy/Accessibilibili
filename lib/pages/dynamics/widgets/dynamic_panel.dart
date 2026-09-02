@@ -153,7 +153,7 @@ class DynamicPanel extends StatelessWidget {
     );
 
     void showMore() => _imageSaveDialog(context, authorWidget.morePanel);
-
+    void openMoreMenu() => authorWidget.morePanel(context);
     void openDetail() => PageUtils.pushDynDetail(item);
 
     void showRepost() {
@@ -285,9 +285,11 @@ class DynamicPanel extends StatelessWidget {
                 CustomSemanticsAction(
                   label: like.status == true ? '取消讚' : '點讚',
                 ): toggleLike,
+              if (item.modules.moduleFold != null && onUnfold != null)
+                const CustomSemanticsAction(label: '展開更多動態'): onUnfold!,
               if (item.modules.moduleAuthor?.mid != null)
                 const CustomSemanticsAction(label: '造訪使用者'): visitAuthor,
-              const CustomSemanticsAction(label: '更多操作'): showMore,
+              const CustomSemanticsAction(label: '更多操作'): openMoreMenu,
             },
             child: child,
           );
