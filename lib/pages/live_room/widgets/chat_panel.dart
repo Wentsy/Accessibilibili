@@ -1,10 +1,13 @@
+import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
 import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/widgets/flutter/popup_menu.dart';
 import 'package:PiliPlus/common/widgets/gesture/tap_gesture_recognizer.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart'
     show platformClampingPhysics;
 import 'package:PiliPlus/http/live.dart';
+import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models_new/live/live_danmaku/danmaku_msg.dart';
 import 'package:PiliPlus/models_new/live/live_superchat/item.dart';
 import 'package:PiliPlus/pages/live_room/controller.dart';
@@ -68,6 +71,50 @@ class LiveRoomChatPanel extends StatelessWidget {
       return '${item.name} 回覆 ${reply.name}：$message';
     }
     return '${item.name} 說：$message';
+  }
+
+  void _revealQueuedMessages() {
+    if (liveRoomController.shouldRefresh) {
+      liveRoomController.refreshMsgIfNeeded();
+    } else {
+      liveRoomController.disableAutoScroll.value = false;
+    }
+  }
+
+  Future<void> _refreshChatHistory() async {
+    if (!liveRoomController.autoScroll) return;
+
+    final wasDisabled = liveRoomController.disableAutoScroll.value;
+    liveRoomController
+      ..autoScroll = false
+      ..closeLiveMsg();
+    a11yActionFeedback(message: '正在重新整理彈幕');
+
+    final res = await LiveHttp.liveRoomDmPrefetch(roomId: roomId);
+    if (res case Success(:final response)) {
+      liveRoomController.messages.assignAll(
+        response ?? const <DanmakuMsg>[],
+      );
+      liveRoomController
+        ..builtLength = liveRoomController.messages.length
+        ..disableAutoScroll.value = true;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final controller = liveRoomController.scrollController;
+        if (controller.hasClients) {
+          controller.jumpTo(controller.position.minScrollExtent);
+        }
+        a11yActionFeedback(message: '彈幕已重新整理');
+      });
+    } else {
+      liveRoomController.disableAutoScroll.value = wasDisabled;
+      res.toast();
+      a11yActionFeedback(message: '彈幕重新整理失敗');
+    }
+
+    liveRoomController
+      ..autoScroll = true
+      ..startLiveMsg();
   }
 
   void _showA11yMsgMenu(BuildContext context, DanmakuMsg item) {
@@ -159,136 +206,146 @@ class LiveRoomChatPanel extends StatelessWidget {
     late final primary = colorScheme.isDark
         ? colorScheme.primary
         : colorScheme.inversePrimary;
+    final accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
     return Stack(
       children: [
         Obx(
-          () => ListView.separated(
-            key: const PageStorageKey(LiveRoomChatPanel),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+          () => VoiceOverPagedScroll(
             controller: liveRoomController.scrollController,
-            separatorBuilder: (_, _) => const SizedBox(height: 8),
-            itemCount: liveRoomController.builtLength =
-                liveRoomController.messages.length,
-            physics: platformClampingPhysics,
-            itemBuilder: (_, index) {
-              final item = liveRoomController.messages[index];
-              if (item is DanmakuMsg) {
-                WidgetSpan? medal;
-                if (item.medalInfo case final medalInfo?) {
-                  try {
-                    medal = WidgetSpan(
-                      child: Padding(
-                        padding: const .only(right: 4),
-                        child: MedalWidget.fromMedalInfo(
-                          medal: medalInfo,
-                          padding: MedalWidget.mediumPadding,
+            onScrollBackwardAtStart: () {
+              _refreshChatHistory();
+            },
+            onScrollForwardAtEnd: _revealQueuedMessages,
+            child: ListView.separated(
+              key: const PageStorageKey(LiveRoomChatPanel),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              controller: liveRoomController.scrollController,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemCount: liveRoomController.builtLength =
+                  liveRoomController.messages.length,
+              physics: platformClampingPhysics,
+              itemBuilder: (_, index) {
+                final item = liveRoomController.messages[index];
+                if (item is DanmakuMsg) {
+                  WidgetSpan? medal;
+                  if (item.medalInfo case final medalInfo?) {
+                    try {
+                      medal = WidgetSpan(
+                        child: Padding(
+                          padding: const .only(right: 4),
+                          child: MedalWidget.fromMedalInfo(
+                            medal: medalInfo,
+                            padding: MedalWidget.mediumPadding,
+                          ),
                         ),
-                      ),
-                    );
-                  } catch (e, s) {
-                    if (kDebugMode) {
-                      Utils.reportError(e, s);
+                      );
+                    } catch (e, s) {
+                      if (kDebugMode) {
+                        Utils.reportError(e, s);
+                      }
                     }
                   }
-                }
-                return Builder(
-                  builder: (itemContext) {
-                    final canInteract = item.extra.mid != 0;
-                    final a11yActions = <CustomSemanticsAction, VoidCallback>{
-                      if (canInteract)
-                        const CustomSemanticsAction(label: '回覆這條彈幕'):
-                            () => onAtUser(item),
-                      if (canInteract)
-                        const CustomSemanticsAction(label: '造訪使用者'):
-                            () => Get.toNamed('/member?mid=${item.extra.mid}'),
-                      const CustomSemanticsAction(label: '更多操作'):
-                          () => _showA11yMsgMenu(context, item),
-                    };
-                    return Semantics(
-                      container: true,
-                      explicitChildNodes: false,
-                      label: _a11yMessageLabel(item),
-                      hint: canInteract
-                          ? '點兩下回覆這條彈幕。上滑有更多操作'
-                          : '上滑有更多操作',
-                      onTap: canInteract ? () => onAtUser(item) : null,
-                      onTapHint: canInteract ? '回覆這條彈幕' : null,
-                      onDidGainAccessibilityFocus: () {
-                        // Live chat is continuously changing. Once VoiceOver
-                        // moves away from the newest built message, freeze the
-                        // visible list so incoming messages cannot yank focus
-                        // back to the bottom. The existing "回到底部" action
-                        // resumes the live stream and flushes queued messages.
-                        if (index < liveRoomController.builtLength - 1) {
-                          liveRoomController.disableAutoScroll.value = true;
-                        }
-                        a11yEnsureVisible(itemContext);
-                      },
-                      customSemanticsActions: a11yActions,
-                      child: ExcludeSemantics(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const .symmetric(
-                              horizontal: 10,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: bg,
-                              borderRadius: const .all(.circular(14)),
-                            ),
-                            child: Text.rich(
-                              TextSpan(
-                                children: [
-                                  ?medal,
-                                  TextSpan(
-                                    text: '${item.name}: ',
-                                    style: TextStyle(
-                                      color: nameColor,
-                                      fontSize: 14,
-                                    ),
-                                    recognizer: item.extra.mid == 0
-                                        ? null
-                                        : (NoDeadlineTapGestureRecognizer()
-                                            ..onTapUp = (e) => _showMsgMenu(
-                                              context,
-                                              itemContext,
-                                              e,
-                                              item,
-                                            )),
-                                  ),
-                                  if (item.reply case final reply?)
+                  return Builder(
+                    builder: (itemContext) {
+                      final canInteract = item.extra.mid != 0;
+                      final a11yActions = <CustomSemanticsAction, VoidCallback>{
+                        if (canInteract)
+                          const CustomSemanticsAction(label: '回覆這條彈幕'):
+                              () => onAtUser(item),
+                        if (canInteract)
+                          const CustomSemanticsAction(label: '造訪使用者'):
+                              () => Get.toNamed('/member?mid=${item.extra.mid}'),
+                        const CustomSemanticsAction(label: '更多操作'):
+                            () => _showA11yMsgMenu(context, item),
+                      };
+                      return Semantics(
+                        container: true,
+                        explicitChildNodes: false,
+                        label: _a11yMessageLabel(item),
+                        hint: canInteract
+                            ? '點兩下回覆這條彈幕。上滑有更多操作'
+                            : '上滑有更多操作',
+                        onTap: canInteract ? () => onAtUser(item) : null,
+                        onTapHint: canInteract ? '回覆這條彈幕' : null,
+                        onDidGainAccessibilityFocus: () {
+                          // While VoiceOver reads older chat, keep incoming
+                          // messages queued so they cannot yank focus. Reaching
+                          // the newest visible message reveals any queued batch;
+                          // reaching the true newest message resumes live mode.
+                          if (index < liveRoomController.builtLength - 1) {
+                            liveRoomController.disableAutoScroll.value = true;
+                          } else if (liveRoomController.disableAutoScroll.value) {
+                            _revealQueuedMessages();
+                          }
+                          a11yEnsureVisible(itemContext);
+                        },
+                        customSemanticsActions: a11yActions,
+                        child: ExcludeSemantics(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              padding: const .symmetric(
+                                horizontal: 10,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: bg,
+                                borderRadius: const .all(.circular(14)),
+                              ),
+                              child: Text.rich(
+                                TextSpan(
+                                  children: [
+                                    ?medal,
                                     TextSpan(
-                                      text: '@${reply.name} ',
+                                      text: '${item.name}: ',
                                       style: TextStyle(
-                                        color: primary,
+                                        color: nameColor,
                                         fontSize: 14,
                                       ),
-                                      recognizer: NoDeadlineTapGestureRecognizer()
-                                        ..onTap = () => Get.toNamed(
-                                          '/member?mid=${reply.mid}',
-                                        ),
+                                      recognizer: item.extra.mid == 0
+                                          ? null
+                                          : (NoDeadlineTapGestureRecognizer()
+                                              ..onTapUp = (e) => _showMsgMenu(
+                                                context,
+                                                itemContext,
+                                                e,
+                                                item,
+                                              )),
                                     ),
-                                  _buildMsg(devicePixelRatio, item),
-                                ],
+                                    if (item.reply case final reply?)
+                                      TextSpan(
+                                        text: '@${reply.name} ',
+                                        style: TextStyle(
+                                          color: primary,
+                                          fontSize: 14,
+                                        ),
+                                        recognizer:
+                                            NoDeadlineTapGestureRecognizer()
+                                              ..onTap = () => Get.toNamed(
+                                                '/member?mid=${reply.mid}',
+                                              ),
+                                      ),
+                                    _buildMsg(devicePixelRatio, item),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                );
-              }
-              if (item is SuperChatItem) {
-                return SuperChatCard(
-                  item: item,
-                  persistentSC: true,
-                  onReport: () => liveRoomController.reportSC(item),
-                );
-              }
-              throw item.runtimeType;
-            },
+                      );
+                    },
+                  );
+                }
+                if (item is SuperChatItem) {
+                  return SuperChatCard(
+                    item: item,
+                    persistentSC: true,
+                    onReport: () => liveRoomController.reportSC(item),
+                  );
+                }
+                throw item.runtimeType;
+              },
+            ),
           ),
         ),
         if (kDebugMode && liveRoomController.showSuperChat) ...[
@@ -367,20 +424,21 @@ class LiveRoomChatPanel extends StatelessWidget {
               );
             }),
           ),
-        Obx(
-          () => liveRoomController.disableAutoScroll.value
-              ? Positioned(
-                  right: 12,
-                  bottom: 0,
-                  child: ElevatedButton.icon(
-                    style: const ButtonStyle(visualDensity: .comfortable),
-                    icon: const Icon(Icons.arrow_downward_rounded, size: 20),
-                    label: const Text('回到底部'),
-                    onPressed: liveRoomController.handleJumpToBottom,
-                  ),
-                )
-              : const SizedBox.shrink(),
-        ),
+        if (!accessibleNavigation)
+          Obx(
+            () => liveRoomController.disableAutoScroll.value
+                ? Positioned(
+                    right: 12,
+                    bottom: 0,
+                    child: ElevatedButton.icon(
+                      style: const ButtonStyle(visualDensity: .comfortable),
+                      icon: const Icon(Icons.arrow_downward_rounded, size: 20),
+                      label: const Text('回到底部'),
+                      onPressed: liveRoomController.handleJumpToBottom,
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
       ],
     );
   }
