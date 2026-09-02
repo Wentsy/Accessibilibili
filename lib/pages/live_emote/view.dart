@@ -50,6 +50,20 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
     return Obx(() => _buildBody(_emotePanelController.loadingState.value));
   }
 
+  String _emoteA11yLabel(Emoticon item) {
+    final raw = item.emoji?.trim();
+    if (raw != null && raw.isNotEmpty) {
+      final normalized = raw
+          .replaceFirst(RegExp(r'^\['), '')
+          .replaceFirst(RegExp(r'\]$'), '')
+          .trim();
+      if (normalized.isNotEmpty) {
+        return '$normalized 貼圖';
+      }
+    }
+    return '貼圖';
+  }
+
   Widget _buildBody(LoadingState<List<LiveEmoteDatum>?> loadingState) {
     late final theme = Theme.of(context);
     late final color = ElevationOverlay.colorWithOverlay(
@@ -98,19 +112,29 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
                             itemCount: emote.length,
                             itemBuilder: (context, index) {
                               final e = emote[index];
-                              return Material(
-                                type: MaterialType.transparency,
-                                child: InkWell(
+                              final label = _emoteA11yLabel(e);
+                              void choose() {
+                                if (item.pkgType == 3) {
+                                  widget.onChoose(e, width, height);
+                                } else {
+                                  widget.onSendEmoticonUnique(e);
+                                }
+                                a11yActionFeedback(message: '已插入$label');
+                              }
+                              return Semantics(
+                                container: true,
+                                button: true,
+                                excludeSemantics: true,
+                                label: label,
+                                hint: '點兩下插入這個貼圖',
+                                onTap: choose,
+                                child: Material(
+                                  type: MaterialType.transparency,
+                                  child: InkWell(
                                   borderRadius: const BorderRadius.all(
                                     Radius.circular(6),
                                   ),
-                                  onTap: () {
-                                    if (item.pkgType == 3) {
-                                      widget.onChoose(e, width, height);
-                                    } else {
-                                      widget.onSendEmoticonUnique(e);
-                                    }
-                                  },
+                                   onTap: choose,
                                   child: CustomTooltip(
                                     indicator: () => Triangle(
                                       color: color,
@@ -162,6 +186,8 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
                                         quality: item.pkgType == 3 ? 1 : 80,
                                       ),
                                     ),
+                                  ),
+                                ),
                                   ),
                                 ),
                               );
