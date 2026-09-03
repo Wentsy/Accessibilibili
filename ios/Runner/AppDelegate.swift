@@ -2,25 +2,28 @@ import Flutter
 import ObjectiveC.runtime
 import UIKit
 
-/// VoiceOver reads focused Flutter text fields through the engine's
-/// `TextInputSemanticsObject`, which implements `UITextInput` and delegates to
-/// Flutter's hidden text-input view. Keep Flutter's real editing buffer and
-/// selection offsets untouched, but substitute a spoken label when that
-/// accessibility-only object asks for the single code unit occupied by an
-/// inline emote.
+/// VoiceOver can reach a focused Flutter text field through either the
+/// semantics proxy or the engine's hidden FlutterTextInputView. Keep the real
+/// editing buffer and selection offsets untouched, and only substitute the
+/// spoken string returned for a one-code-unit inline-emote placeholder.
 private final class RichTextEmoteAccessibility {
   static let shared = RichTextEmoteAccessibility()
 
   private let placeholder = "☺"
   private var expectedText = ""
   private var labelsByOffset: [Int: String] = [:]
-  private var isInstalled = false
+  private var installedClasses = Set<String>()
 
   private init() {}
 
   func install() {
-    guard !isInstalled,
-          let textInputClass = NSClassFromString("TextInputSemanticsObject")
+    install(onClassNamed: "FlutterTextInputView")
+    install(onClassNamed: "TextInputSemanticsObject")
+  }
+
+  private func install(onClassNamed className: String) {
+    guard !installedClasses.contains(className),
+          let textInputClass = NSClassFromString(className)
     else {
       return
     }
@@ -50,13 +53,14 @@ private final class RichTextEmoteAccessibility {
       }
       return self.accessibleText(
         for: object,
+        className: className,
         range: range,
         originalText: originalText
       )
     }
 
     method_setImplementation(method, imp_implementationWithBlock(replacement))
-    isInstalled = true
+    installedClasses.insert(className)
   }
 
   func update(text: String, emotes: [[String: Any]]) {
@@ -77,15 +81,13 @@ private final class RichTextEmoteAccessibility {
 
   private func accessibleText(
     for object: AnyObject,
+    className: String,
     range: UITextRange,
     originalText: NSString?
   ) -> NSString? {
     guard UIAccessibility.isVoiceOverRunning,
           let originalText,
           originalText as String == placeholder,
-          let semanticsObject = object as? NSObject,
-          let currentValue = semanticsObject.value(forKey: "accessibilityValue") as? NSString,
-          currentValue as String == expectedText,
           let startPosition = range.start as? NSObject,
           let endPosition = range.end as? NSObject,
           let startNumber = startPosition.value(forKey: "index") as? NSNumber,
@@ -99,6 +101,24 @@ private final class RichTextEmoteAccessibility {
           let label = labelsByOffset[start]
     else {
       return originalText
+    }
+
+    // Avoid leaking a stale side table into some unrelated Flutter text field.
+    // The two engine classes expose the current field text through different
+    // properties, so validate using the appropriate one before substituting.
+    let object = object as NSObject
+    if className == "FlutterTextInputView" {
+      guard let currentText = object.value(forKey: "text") as? NSString,
+            currentText as String == expectedText
+      else {
+        return originalText
+      }
+    } else if className == "TextInputSemanticsObject" {
+      guard let currentValue = object.value(forKey: "accessibilityValue") as? NSString,
+            currentValue as String == expectedText
+      else {
+        return originalText
+      }
     }
 
     return label as NSString
@@ -138,9 +158,8 @@ private final class RichTextEmoteAccessibility {
         }
         result(nil)
       case "setRichTextEmotes":
-        // Retry here as well as at engine initialization. This makes the hook
-        // resilient to the Flutter engine registering its private semantics
-        // class later in startup on a particular build/runtime configuration.
+        // Retry whenever metadata arrives because Flutter's engine classes can
+        // be registered after AppDelegate initialization in some configurations.
         RichTextEmoteAccessibility.shared.install()
         if let arguments = call.arguments as? [String: Any],
            let text = arguments["text"] as? String,
