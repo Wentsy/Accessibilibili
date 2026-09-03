@@ -6,6 +6,7 @@ import 'package:PiliPlus/common/widgets/flutter/text_field/editable_base.dart'
     as base;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart' hide RenderEditable;
+import 'package:flutter/services.dart';
 
 export 'package:PiliPlus/common/widgets/flutter/text_field/editable_base.dart'
     hide RenderEditable;
