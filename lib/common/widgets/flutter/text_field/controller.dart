@@ -760,16 +760,24 @@ class RichTextEditingController extends TextEditingController {
           case RichTextType.emoji:
             final emote = e.emote;
             if (emote != null) {
+              // a11y: inline image must not expose its own semantics node,
+              // otherwise iOS VoiceOver announces it as attachment during
+              // rotor char/word navigation. The emote name is provided once
+              // via RenderEditable mapped attributedValue, so the whole
+              // field stays a single stop. Real text (single U+FFFC),
+              // cursor and selection logic untouched.
               return WidgetSpan(
                 alignment: PlaceholderAlignment.middle,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: NetworkImgLayer(
-                    src: emote.url,
-                    width: 22, // emote.width,
-                    height: 22, // emote.height,
-                    type: ImageType.emote,
-                    fit: BoxFit.contain,
+                child: ExcludeSemantics(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: NetworkImgLayer(
+                      src: emote.url,
+                      width: 22, // emote.width,
+                      height: 22, // emote.height,
+                      type: ImageType.emote,
+                      fit: BoxFit.contain,
+                    ),
                   ),
                 ),
               );
