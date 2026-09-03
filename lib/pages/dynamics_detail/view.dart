@@ -339,9 +339,17 @@ class _DynamicDetailPageState
   }
 
   Widget _buildTabBody([bool isPortrait = true]) {
+    final useOwnReplyViewport =
+        isPortrait && MediaQuery.accessibleNavigationOf(context);
+    final replyScrollController =
+        useOwnReplyViewport ? controller.scrollController : null;
     final reply = VoiceOverPagedScroll(
+      controller: replyScrollController,
       onScrollForwardAtEnd: () => controller.onLoadMore(),
       child: CustomScrollView(
+        controller: replyScrollController,
+        primary: useOwnReplyViewport ? false : null,
+        cacheExtent: useOwnReplyViewport ? 400 : null,
         key: const PageStorageKey(DynType.reply),
         physics: ReloadScrollPhysics(controller: controller),
         slivers: [
