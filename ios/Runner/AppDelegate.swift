@@ -2,65 +2,71 @@ import Flutter
 import ObjectiveC.runtime
 import UIKit
 
-/// VoiceOver can reach a focused Flutter text field through either the
-/// semantics proxy or the engine's hidden FlutterTextInputView. Keep the real
-/// editing buffer and selection offsets untouched, and only substitute the
-/// spoken string returned for a one-code-unit inline-emote placeholder.
+/// Adds accessibility metadata to the one-character placeholders used by rich
+/// text image emotes. The editing buffer, UITextInput text and selection ranges
+/// are never rewritten: VoiceOver receives the same UTF-16 string plus a named
+/// accessibility attachment on each U+FFFC emote position.
 private final class RichTextEmoteAccessibility {
   static let shared = RichTextEmoteAccessibility()
 
-  private let placeholder = "☺"
+  private let placeholder = "\u{FFFC}"
+  private let attachmentAttribute = NSAttributedString.Key(
+    "NSAccessibilityAttachmentTextAttribute"
+  )
   private var expectedText = ""
   private var labelsByOffset: [Int: String] = [:]
-  private var installedClasses = Set<String>()
+  private var isInstalled = false
 
   private init() {}
 
   func install() {
-    install(onClassNamed: "FlutterTextInputView")
-    install(onClassNamed: "TextInputSemanticsObject")
-  }
-
-  private func install(onClassNamed className: String) {
-    guard !installedClasses.contains(className),
-          let textInputClass = NSClassFromString(className)
+    guard !isInstalled,
+          let textInputClass = NSClassFromString("TextInputSemanticsObject")
     else {
       return
     }
 
-    let selector = NSSelectorFromString("textInRange:")
+    let selector = NSSelectorFromString("accessibilityAttributedValue")
     guard let method = class_getInstanceMethod(textInputClass, selector) else {
       return
     }
 
-    typealias OriginalTextInRange = @convention(c) (
+    typealias OriginalAttributedValue = @convention(c) (
       AnyObject,
-      Selector,
-      UITextRange
-    ) -> NSString?
+      Selector
+    ) -> NSAttributedString?
 
     let originalImplementation = method_getImplementation(method)
     let original = unsafeBitCast(
       originalImplementation,
-      to: OriginalTextInRange.self
+      to: OriginalAttributedValue.self
     )
 
-    let replacement: @convention(block) (AnyObject, UITextRange) -> NSString? = {
-      [weak self] object, range in
-      let originalText = original(object, selector, range)
+    let replacement: @convention(block) (AnyObject) -> NSAttributedString? = {
+      [weak self] object in
+      let originalValue = original(object, selector)
       guard let self else {
-        return originalText
+        return originalValue
       }
-      return self.accessibleText(
-        for: object,
-        className: className,
-        range: range,
-        originalText: originalText
-      )
+      return self.accessibleAttributedValue(originalValue)
     }
 
-    method_setImplementation(method, imp_implementationWithBlock(replacement))
-    installedClasses.insert(className)
+    let replacementImplementation = imp_implementationWithBlock(replacement)
+
+    // accessibilityAttributedValue is inherited from SemanticsObject in the
+    // Flutter engine version used by this project. Add an override only to
+    // TextInputSemanticsObject so unrelated semantics nodes are untouched.
+    guard class_addMethod(
+      textInputClass,
+      selector,
+      replacementImplementation,
+      method_getTypeEncoding(method)
+    ) else {
+      imp_removeBlock(replacementImplementation)
+      return
+    }
+
+    isInstalled = true
   }
 
   func update(text: String, emotes: [[String: Any]]) {
@@ -79,51 +85,44 @@ private final class RichTextEmoteAccessibility {
     labelsByOffset = nextLabels
   }
 
-  private func accessibleText(
-    for object: AnyObject,
-    className: String,
-    range: UITextRange,
-    originalText: NSString?
-  ) -> NSString? {
+  private func accessibleAttributedValue(
+    _ originalValue: NSAttributedString?
+  ) -> NSAttributedString? {
     guard UIAccessibility.isVoiceOverRunning,
-          let originalText,
-          originalText as String == placeholder,
-          let startPosition = range.start as? NSObject,
-          let endPosition = range.end as? NSObject,
-          let startNumber = startPosition.value(forKey: "index") as? NSNumber,
-          let endNumber = endPosition.value(forKey: "index") as? NSNumber
+          let originalValue,
+          !labelsByOffset.isEmpty,
+          originalValue.string == expectedText
     else {
-      return originalText
+      return originalValue
     }
 
-    let start = startNumber.intValue
-    guard endNumber.intValue == start + 1,
-          let label = labelsByOffset[start]
-    else {
-      return originalText
-    }
+    let mutableValue = NSMutableAttributedString(attributedString: originalValue)
+    let text = mutableValue.string as NSString
 
-    // Avoid leaking a stale side table into some unrelated Flutter text field.
-    // The two engine classes expose the current field text through different
-    // properties, so validate using the appropriate one before substituting.
-    guard let object = object as? NSObject else {
-      return originalText
-    }
-    if className == "FlutterTextInputView" {
-      guard let currentText = object.value(forKey: "text") as? NSString,
-            currentText as String == expectedText
-      else {
-        return originalText
+    for (start, label) in labelsByOffset {
+      guard start >= 0, start < text.length else {
+        continue
       }
-    } else if className == "TextInputSemanticsObject" {
-      guard let currentValue = object.value(forKey: "accessibilityValue") as? NSString,
-            currentValue as String == expectedText
-      else {
-        return originalText
+
+      let range = NSRange(location: start, length: 1)
+      guard text.substring(with: range) == placeholder else {
+        continue
       }
+
+      // Match the native attachment model used by rich text editors such as
+      // WeChat, but keep our own reliable Flutter selection model. The label is
+      // only the concise emote name (for example "doge"); VoiceOver supplies
+      // the attachment role itself, so we deliberately do not append "表情".
+      let attachment = NSTextAttachment()
+      attachment.accessibilityLabel = label
+      mutableValue.addAttribute(
+        attachmentAttribute,
+        value: attachment,
+        range: range
+      )
     }
 
-    return label as NSString
+    return mutableValue
   }
 }
 
@@ -160,8 +159,8 @@ private final class RichTextEmoteAccessibility {
         }
         result(nil)
       case "setRichTextEmotes":
-        // Retry whenever metadata arrives because Flutter's engine classes can
-        // be registered after AppDelegate initialization in some configurations.
+        // Retry whenever metadata arrives because Flutter's private semantics
+        // class can be registered after AppDelegate initialization.
         RichTextEmoteAccessibility.shared.install()
         if let arguments = call.arguments as? [String: Any],
            let text = arguments["text"] as? String,
