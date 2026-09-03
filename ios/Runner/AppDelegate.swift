@@ -172,7 +172,7 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
     channel.invokeMethod("tap", arguments: nil)
   }
 
-  private func toggleAccessibilityBoundary() -> Bool {
+  private func toggleAccessibilityBoundary(announce: Bool = false) -> Bool {
     guard !readOnly else { return false }
 
     let textLength = (textView.text as NSString?)?.length ?? 0
@@ -184,6 +184,13 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
     textView.selectedRange = NSRange(location: destination, length: 0)
     textView.scrollRangeToVisible(textView.selectedRange)
     textView.becomeFirstResponder()
+
+    if announce && UIAccessibility.isVoiceOverRunning {
+      let message = destination == 0 ? "插入點在開頭" : "插入點在結尾"
+      DispatchQueue.main.async {
+        UIAccessibility.post(notification: .announcement, argument: message)
+      }
+    }
     return true
   }
 
@@ -311,7 +318,7 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
           self.activateReadOnlyEditor()
           return true
         }
-        return self.toggleAccessibilityBoundary()
+        return self.toggleAccessibilityBoundary(announce: true)
       }
       attachment.bounds = CGRect(x: 0, y: -3, width: 22, height: 22)
       mutable.addAttribute(.attachment, value: attachment, range: range)
