@@ -1,34 +1,228 @@
 import Flutter
-import ObjectiveC.runtime
 import UIKit
 
-/// A native rich-text mirror used only as the UITextView that VoiceOver asks
-/// Flutter's text-input semantics object to expose. The real Flutter editing
-/// buffer stays untouched: every image emote is still exactly one U+FFFC code
-/// unit, so cursor and selection offsets remain one-to-one.
-private final class RichTextAccessibilityMirror: UITextView, UITextViewDelegate {
-  weak var realTextInputView: UIView?
-  private var isSyncingSelection = false
+private final class IOSRichTextEditorFactory: NSObject, FlutterPlatformViewFactory {
+  private let messenger: FlutterBinaryMessenger
 
-  init() {
-    super.init(frame: CGRect(x: 0, y: 0, width: 1, height: 1), textContainer: nil)
-    delegate = self
-    isEditable = true
-    isSelectable = true
-    isScrollEnabled = false
-    backgroundColor = .clear
-    isAccessibilityElement = false
+  init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
+    super.init()
   }
 
-  required init?(coder: NSCoder) {
-    fatalError("init(coder:) has not been implemented")
+  func create(
+    withFrame frame: CGRect,
+    viewIdentifier viewId: Int64,
+    arguments args: Any?
+  ) -> FlutterPlatformView {
+    IOSRichTextEditor(
+      frame: frame,
+      viewId: viewId,
+      arguments: args,
+      messenger: messenger
+    )
   }
 
-  func update(text: String, labelsByOffset: [Int: String]) {
-    let mutableText = NSMutableAttributedString(string: text)
+  func createArgsCodec() -> FlutterMessageCodec & NSObjectProtocol {
+    FlutterStandardMessageCodec.sharedInstance()
+  }
+}
+
+private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextViewDelegate {
+  private static let imageCache = NSCache<NSString, UIImage>()
+
+  private let textView: UITextView
+  private let placeholderLabel = UILabel()
+  private let channel: FlutterMethodChannel
+
+  private var applyingFlutterState = false
+  private var readOnly = false
+  private var lastContentSignature = ""
+  private var lastReportedHeight: CGFloat = 0
+  private var imageTasks: [URLSessionDataTask] = []
+
+  init(
+    frame: CGRect,
+    viewId: Int64,
+    arguments: Any?,
+    messenger: FlutterBinaryMessenger
+  ) {
+    textView = UITextView(frame: frame)
+    channel = FlutterMethodChannel(
+      name: "accessibilibili/rich_text_editor/\(viewId)",
+      binaryMessenger: messenger
+    )
+    super.init()
+
+    configureTextView()
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self else {
+        result(nil)
+        return
+      }
+      self.handle(call: call, result: result)
+    }
+
+    if let args = arguments as? [String: Any] {
+      applyState(args)
+    }
+  }
+
+  deinit {
+    channel.setMethodCallHandler(nil)
+    imageTasks.forEach { $0.cancel() }
+  }
+
+  func view() -> UIView {
+    textView
+  }
+
+  private func configureTextView() {
+    textView.delegate = self
+    textView.backgroundColor = .clear
+    textView.isOpaque = false
+    textView.isEditable = true
+    textView.isSelectable = true
+    textView.isScrollEnabled = true
+    textView.alwaysBounceVertical = false
+    textView.textContainerInset = .zero
+    textView.textContainer.lineFragmentPadding = 0
+    textView.font = UIFont.preferredFont(forTextStyle: .body)
+    textView.textColor = .label
+    textView.tintColor = .systemBlue
+    textView.adjustsFontForContentSizeCategory = true
+    textView.keyboardDismissMode = .interactive
+    textView.accessibilityTraits.insert(.allowsDirectInteraction)
+
+    placeholderLabel.textColor = .placeholderText
+    placeholderLabel.numberOfLines = 1
+    placeholderLabel.isAccessibilityElement = false
+    placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
+    textView.addSubview(placeholderLabel)
+    NSLayoutConstraint.activate([
+      placeholderLabel.leadingAnchor.constraint(equalTo: textView.leadingAnchor),
+      placeholderLabel.trailingAnchor.constraint(lessThanOrEqualTo: textView.trailingAnchor),
+      placeholderLabel.topAnchor.constraint(equalTo: textView.topAnchor),
+    ])
+
+    let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+    tap.cancelsTouchesInView = false
+    textView.addGestureRecognizer(tap)
+  }
+
+  private func handle(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "setState":
+      if let args = call.arguments as? [String: Any] {
+        applyState(args)
+      }
+      result(nil)
+    case "setFocus":
+      let shouldFocus = call.arguments as? Bool ?? false
+      if shouldFocus && !readOnly {
+        textView.becomeFirstResponder()
+      } else {
+        textView.resignFirstResponder()
+      }
+      result(nil)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  @objc private func handleTap() {
+    if readOnly {
+      channel.invokeMethod("tap", arguments: nil)
+    }
+  }
+
+  private func applyState(_ args: [String: Any]) {
+    let text = args["text"] as? String ?? ""
+    let emotes = args["emotes"] as? [[String: Any]] ?? []
+    let fontSize = (args["fontSize"] as? NSNumber)?.doubleValue ?? 16
+    let hintText = args["hintText"] as? String ?? ""
+    let nextReadOnly = args["readOnly"] as? Bool ?? false
+
+    let base = (args["selectionBase"] as? NSNumber)?.intValue ?? text.utf16.count
+    let extent = (args["selectionExtent"] as? NSNumber)?.intValue ?? base
+
+    let signature = contentSignature(text: text, emotes: emotes, fontSize: fontSize)
+    applyingFlutterState = true
+
+    placeholderLabel.text = hintText
+    placeholderLabel.font = UIFont.systemFont(ofSize: fontSize)
+    textView.font = UIFont.systemFont(ofSize: fontSize)
+    textView.typingAttributes = [
+      .font: UIFont.systemFont(ofSize: fontSize),
+      .foregroundColor: UIColor.label,
+    ]
+
+    if signature != lastContentSignature || textView.text != text {
+      rebuildAttributedText(text: text, emotes: emotes, fontSize: fontSize)
+      lastContentSignature = signature
+    }
+
+    readOnly = nextReadOnly
+    textView.isEditable = !nextReadOnly
+    textView.isSelectable = true
+    if nextReadOnly {
+      textView.resignFirstResponder()
+    }
+
+    let utf16Length = (text as NSString).length
+    let safeBase = min(max(base, 0), utf16Length)
+    let safeExtent = min(max(extent, 0), utf16Length)
+    let location = min(safeBase, safeExtent)
+    let length = abs(safeExtent - safeBase)
+    textView.selectedRange = NSRange(location: location, length: length)
+    textView.scrollRangeToVisible(textView.selectedRange)
+
+    applyingFlutterState = false
+    updatePlaceholder()
+    reportHeightSoon()
+  }
+
+  private func contentSignature(
+    text: String,
+    emotes: [[String: Any]],
+    fontSize: Double
+  ) -> String {
+    var parts = [text, "|\(fontSize)"]
+    for emote in emotes {
+      let start = (emote["start"] as? NSNumber)?.intValue ?? -1
+      let label = emote["label"] as? String ?? ""
+      let url = emote["url"] as? String ?? ""
+      parts.append("|\(start):\(label):\(url)")
+    }
+    return parts.joined()
+  }
+
+  private func rebuildAttributedText(
+    text: String,
+    emotes: [[String: Any]],
+    fontSize: Double
+  ) {
+    imageTasks.forEach { $0.cancel() }
+    imageTasks.removeAll()
+
+    let font = UIFont.systemFont(ofSize: fontSize)
+    let mutable = NSMutableAttributedString(
+      string: text,
+      attributes: [
+        .font: font,
+        .foregroundColor: UIColor.label,
+      ]
+    )
     let nsText = text as NSString
 
-    for (start, label) in labelsByOffset {
+    for emote in emotes {
+      guard let startNumber = emote["start"] as? NSNumber,
+            let label = emote["label"] as? String,
+            !label.isEmpty
+      else {
+        continue
+      }
+
+      let start = startNumber.intValue
       guard start >= 0, start < nsText.length else {
         continue
       }
@@ -38,179 +232,124 @@ private final class RichTextAccessibilityMirror: UITextView, UITextViewDelegate 
         continue
       }
 
-      // This is the important difference from FlutterTextInputView: a real
-      // UITextView has an NSTextStorage containing a real NSTextAttachment.
-      // VoiceOver's Character rotor can therefore read the attachment label in
-      // the same native shape used by editors such as WeChat.
       let attachment = NSTextAttachment()
       attachment.accessibilityLabel = label
-      mutableText.addAttribute(.attachment, value: attachment, range: range)
+      attachment.bounds = CGRect(x: 0, y: -3, width: 22, height: 22)
+      mutable.addAttribute(.attachment, value: attachment, range: range)
+
+      if let urlString = emote["url"] as? String, !urlString.isEmpty {
+        loadImage(urlString: urlString, attachment: attachment, range: range)
+      }
     }
 
-    let oldSelection = selectedRange
-    isSyncingSelection = true
-    attributedText = mutableText
-
-    let textLength = nsText.length
-    let location = min(max(oldSelection.location, 0), textLength)
-    let length = min(max(oldSelection.length, 0), textLength - location)
-    selectedRange = NSRange(location: location, length: length)
-    isSyncingSelection = false
+    textView.attributedText = mutable
+    textView.typingAttributes = [
+      .font: font,
+      .foregroundColor: UIColor.label,
+    ]
   }
 
-  func bind(to realView: UIView) {
-    realTextInputView = realView
-    syncSelectionFromRealTextInput()
-  }
-
-  private func syncSelectionFromRealTextInput() {
-    guard let realInput = realTextInputView as? UITextInput,
-          let realSelection = realInput.selectedTextRange
-    else {
+  private func loadImage(
+    urlString: String,
+    attachment: NSTextAttachment,
+    range: NSRange
+  ) {
+    let key = urlString as NSString
+    if let cached = Self.imageCache.object(forKey: key) {
+      attachment.image = cached
       return
     }
 
-    let start = realInput.offset(
-      from: realInput.beginningOfDocument,
-      to: realSelection.start
-    )
-    let end = realInput.offset(
-      from: realInput.beginningOfDocument,
-      to: realSelection.end
-    )
+    guard let url = URL(string: urlString) else {
+      return
+    }
+
+    let task = URLSession.shared.dataTask(with: url) { [weak self, weak attachment] data, _, _ in
+      guard let self,
+            let attachment,
+            let data,
+            let image = UIImage(data: data)
+      else {
+        return
+      }
+
+      Self.imageCache.setObject(image, forKey: key)
+      DispatchQueue.main.async { [weak self, weak attachment] in
+        guard let self, let attachment else { return }
+        attachment.image = image
+        self.textView.layoutManager.invalidateDisplay(forCharacterRange: range)
+        self.textView.setNeedsDisplay()
+      }
+    }
+    imageTasks.append(task)
+    task.resume()
+  }
+
+  private func updatePlaceholder() {
+    placeholderLabel.isHidden = !textView.text.isEmpty
+  }
+
+  private func composingRange() -> NSRange? {
+    guard let marked = textView.markedTextRange else {
+      return nil
+    }
+    let start = textView.offset(from: textView.beginningOfDocument, to: marked.start)
+    let end = textView.offset(from: textView.beginningOfDocument, to: marked.end)
     guard start >= 0, end >= start else {
-      return
+      return nil
     }
+    return NSRange(location: start, length: end - start)
+  }
 
-    let textLength = (text as NSString).length
-    let location = min(start, textLength)
-    let length = min(end - start, textLength - location)
-    let nextSelection = NSRange(location: location, length: length)
-    guard selectedRange != nextSelection else {
-      return
+  private func stateArguments(includeText: Bool) -> [String: Any] {
+    let selection = textView.selectedRange
+    let composing = composingRange()
+    var args: [String: Any] = [
+      "selectionBase": selection.location,
+      "selectionExtent": selection.location + selection.length,
+      "composingStart": composing?.location ?? -1,
+      "composingEnd": composing.map { $0.location + $0.length } ?? -1,
+    ]
+    if includeText {
+      args["text"] = textView.text ?? ""
     }
+    return args
+  }
 
-    isSyncingSelection = true
-    selectedRange = nextSelection
-    isSyncingSelection = false
+  private func reportHeightSoon() {
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.textView.layoutIfNeeded()
+      let height = max(self.textView.contentSize.height, 1)
+      guard abs(height - self.lastReportedHeight) > 0.5 else {
+        return
+      }
+      self.lastReportedHeight = height
+      self.channel.invokeMethod("heightChanged", arguments: Double(height))
+    }
+  }
+
+  func textViewDidBeginEditing(_ textView: UITextView) {
+    channel.invokeMethod("focusChanged", arguments: true)
+  }
+
+  func textViewDidEndEditing(_ textView: UITextView) {
+    channel.invokeMethod("focusChanged", arguments: false)
+  }
+
+  func textViewDidChange(_ textView: UITextView) {
+    guard !applyingFlutterState else { return }
+    updatePlaceholder()
+    channel.invokeMethod("stateChanged", arguments: stateArguments(includeText: true))
+    reportHeightSoon()
   }
 
   func textViewDidChangeSelection(_ textView: UITextView) {
-    guard !isSyncingSelection,
-          let realInput = realTextInputView as? UITextInput
-    else {
-      return
-    }
-
-    let selection = selectedRange
-    guard let start = realInput.position(
-            from: realInput.beginningOfDocument,
-            offset: selection.location
-          ),
-          let end = realInput.position(
-            from: start,
-            offset: selection.length
-          ),
-          let range = realInput.textRange(from: start, to: end)
-    else {
-      return
-    }
-
-    // FlutterTextInputView.setSelectedTextRange reports this change back to the
-    // framework. Since both strings use one UTF-16 unit per emote, no offset
-    // translation is needed.
-    realInput.selectedTextRange = range
-  }
-}
-
-private final class RichTextEmoteAccessibility {
-  static let shared = RichTextEmoteAccessibility()
-
-  private var expectedText = ""
-  private var labelsByOffset: [Int: String] = [:]
-  private var isInstalled = false
-  private let mirror = RichTextAccessibilityMirror()
-
-  private init() {}
-
-  func install() {
-    guard !isInstalled,
-          let semanticsClass = NSClassFromString("TextInputSemanticsObject")
-    else {
-      return
-    }
-
-    let selector = NSSelectorFromString("textInputView")
-    guard let method = class_getInstanceMethod(semanticsClass, selector) else {
-      return
-    }
-
-    typealias OriginalTextInputView = @convention(c) (
-      AnyObject,
-      Selector
-    ) -> UIView?
-
-    let original = unsafeBitCast(
-      method_getImplementation(method),
-      to: OriginalTextInputView.self
+    guard !applyingFlutterState else { return }
+    channel.invokeMethod(
+      "selectionChanged",
+      arguments: stateArguments(includeText: false)
     )
-
-    let replacement: @convention(block) (AnyObject) -> UIView? = {
-      [weak self] object in
-      let originalView = original(object, selector)
-      guard let self,
-            UIAccessibility.isVoiceOverRunning,
-            !self.labelsByOffset.isEmpty,
-            let originalView,
-            let flutterTextInputClass = NSClassFromString("FlutterTextInputView"),
-            originalView.isKind(of: flutterTextInputClass),
-            let realInput = originalView as? UITextInput,
-            self.fullText(of: realInput) == self.expectedText
-      else {
-        return originalView
-      }
-
-      self.mirror.update(
-        text: self.expectedText,
-        labelsByOffset: self.labelsByOffset
-      )
-      self.mirror.bind(to: originalView)
-      return self.mirror
-    }
-
-    method_setImplementation(
-      method,
-      imp_implementationWithBlock(replacement)
-    )
-    isInstalled = true
-  }
-
-  func update(text: String, emotes: [[String: Any]]) {
-    expectedText = text
-
-    var nextLabels: [Int: String] = [:]
-    for emote in emotes {
-      guard let start = emote["start"] as? Int,
-            let label = emote["label"] as? String,
-            !label.isEmpty
-      else {
-        continue
-      }
-      nextLabels[start] = label
-    }
-    labelsByOffset = nextLabels
-
-    mirror.update(text: text, labelsByOffset: nextLabels)
-  }
-
-  private func fullText(of input: UITextInput) -> String? {
-    guard let range = input.textRange(
-      from: input.beginningOfDocument,
-      to: input.endOfDocument
-    ) else {
-      return nil
-    }
-    return input.text(in: range)
   }
 }
 
@@ -228,7 +367,15 @@ private final class RichTextEmoteAccessibility {
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    RichTextEmoteAccessibility.shared.install()
+
+    if let registrar = engineBridge.pluginRegistry.registrar(
+      forPlugin: "AccessibilibiliRichTextEditor"
+    ) {
+      registrar.register(
+        IOSRichTextEditorFactory(messenger: registrar.messenger()),
+        withId: "accessibilibili/rich_text_editor"
+      )
+    }
 
     let channel = FlutterMethodChannel(
       name: "accessibilibili/accessibility",
@@ -247,14 +394,8 @@ private final class RichTextEmoteAccessibility {
         }
         result(nil)
       case "setRichTextEmotes":
-        // Retry whenever metadata arrives because Flutter's private engine
-        // classes can be registered after AppDelegate initialization.
-        RichTextEmoteAccessibility.shared.install()
-        if let arguments = call.arguments as? [String: Any],
-           let text = arguments["text"] as? String,
-           let emotes = arguments["emotes"] as? [[String: Any]] {
-          RichTextEmoteAccessibility.shared.update(text: text, emotes: emotes)
-        }
+        // Legacy Flutter rich-text fields may still send this while other
+        // screens migrate to the native iOS editor. No runtime swizzle is used.
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
