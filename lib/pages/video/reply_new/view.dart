@@ -6,6 +6,7 @@ import 'package:PiliPlus/common/widgets/button/toolbar_icon_button.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/controller.dart'
     show RichTextType;
+import 'package:PiliPlus/common/widgets/flutter/text_field/ios_native_rich_text_field.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/text_field.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart'
     show platformClampingPhysics;
@@ -150,23 +151,36 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
             }
           },
           child: Obx(
-            () => RichTextField(
-              key: key,
-              controller: editController,
-              minLines: 4,
-              maxLines: 8,
-              autofocus: false,
-              readOnly: readOnly.value,
-              onChanged: onChanged,
-              onSubmitted: onSubmitted,
-              focusNode: focusNode,
-              decoration: InputDecoration(
-                hintText: widget.hint ?? "输入回复内容",
-                border: InputBorder.none,
-                hintStyle: const TextStyle(fontSize: 14),
-              ),
-              style: themeData.textTheme.bodyLarge,
-            ),
+            () => Platform.isIOS
+                ? IOSNativeRichTextField(
+                    controller: editController,
+                    focusNode: focusNode,
+                    readOnly: readOnly.value,
+                    minLines: 4,
+                    maxLines: 8,
+                    hintText: widget.hint ?? "输入回复内容",
+                    style: themeData.textTheme.bodyLarge,
+                    onChanged: onChanged,
+                    onTapWhenReadOnly: () =>
+                        updatePanelType(PanelType.keyboard),
+                  )
+                : RichTextField(
+                    key: key,
+                    controller: editController,
+                    minLines: 4,
+                    maxLines: 8,
+                    autofocus: false,
+                    readOnly: readOnly.value,
+                    onChanged: onChanged,
+                    onSubmitted: onSubmitted,
+                    focusNode: focusNode,
+                    decoration: InputDecoration(
+                      hintText: widget.hint ?? "输入回复内容",
+                      border: InputBorder.none,
+                      hintStyle: const TextStyle(fontSize: 14),
+                    ),
+                    style: themeData.textTheme.bodyLarge,
+                  ),
           ),
         ),
       ),
