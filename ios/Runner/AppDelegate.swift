@@ -2,11 +2,12 @@ import Flutter
 import ObjectiveC.runtime
 import UIKit
 
-/// VoiceOver reads focused Flutter text fields through the engine's hidden
-/// `FlutterTextInputView` (a `UITextInput`) rather than through the Dart
-/// `SemanticsConfiguration` value. Keep Flutter's real editing buffer and
-/// selection offsets untouched, but substitute a spoken label when VoiceOver
-/// asks `textInRange:` for the single code unit occupied by an inline emote.
+/// VoiceOver reads focused Flutter text fields through the engine's
+/// `TextInputSemanticsObject`, which implements `UITextInput` and delegates to
+/// Flutter's hidden text-input view. Keep Flutter's real editing buffer and
+/// selection offsets untouched, but substitute a spoken label when that
+/// accessibility-only object asks for the single code unit occupied by an
+/// inline emote.
 private final class RichTextEmoteAccessibility {
   static let shared = RichTextEmoteAccessibility()
 
@@ -19,7 +20,7 @@ private final class RichTextEmoteAccessibility {
 
   func install() {
     guard !isInstalled,
-          let textInputClass = NSClassFromString("FlutterTextInputView")
+          let textInputClass = NSClassFromString("TextInputSemanticsObject")
     else {
       return
     }
@@ -82,9 +83,9 @@ private final class RichTextEmoteAccessibility {
     guard UIAccessibility.isVoiceOverRunning,
           let originalText,
           originalText as String == placeholder,
-          let textInput = object as? NSObject,
-          let currentText = textInput.value(forKey: "text") as? NSString,
-          currentText as String == expectedText,
+          let semanticsObject = object as? NSObject,
+          let currentValue = semanticsObject.value(forKey: "accessibilityValue") as? NSString,
+          currentValue as String == expectedText,
           let startPosition = range.start as? NSObject,
           let endPosition = range.end as? NSObject,
           let startNumber = startPosition.value(forKey: "index") as? NSNumber,
