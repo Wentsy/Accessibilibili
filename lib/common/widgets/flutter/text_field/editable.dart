@@ -181,12 +181,14 @@ class RenderEditable extends base.RenderEditable {
   void describeSemanticsConfiguration(SemanticsConfiguration config) {
     super.describeSemanticsConfiguration(config);
 
-    // While focused, register the exact UTF-16 offsets and spoken names with
-    // the iOS UITextInput hook. This is only metadata; it never changes the
-    // controller value or its selection coordinate space.
+    // Do not rely only on RenderEditable.hasFocus here. The semantics tree can
+    // be described before the focused state reaches this renderer, while the
+    // same configuration is then reused by VoiceOver. If this editor contains
+    // image emotes, send their one-code-unit offsets immediately; while focused
+    // we also sync an empty table after the last emote is removed.
     if (defaultTargetPlatform == TargetPlatform.iOS &&
-        hasFocus &&
-        !obscureText) {
+        !obscureText &&
+        (hasFocus || _usesA11yEmoteText)) {
       _syncNativeEmoteAccessibility();
     }
 
