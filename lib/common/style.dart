@@ -16,5 +16,12 @@ abstract final class Style {
     visualDensity: VisualDensity(horizontal: -2, vertical: -1.25),
     tapTargetSize: .shrinkWrap,
   );
-  static const placeHolder = '\uFFFC';
+
+  // Keep inline rich content as a single UTF-16 code unit so all existing
+  // cursor/range bookkeeping stays unchanged. U+FFFC is the Unicode Object
+  // Replacement Character, which iOS VoiceOver exposes as an "attachment"
+  // while editing. A normal BMP symbol avoids that native attachment meaning;
+  // the WidgetSpan still paints the real emote and rawText still stores the
+  // server-side emote text.
+  static const placeHolder = '\u263A';
 }
