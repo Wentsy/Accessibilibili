@@ -1,4 +1,4 @@
-import 'dart:ui' show Locale;
+import 'dart:ui' show Locale, PlatformDispatcher;
 import 'dart:ui' as ui show BoxHeightStyle, BoxWidthStyle;
 
 import 'package:PiliPlus/common/widgets/flutter/text_field/controller.dart';
@@ -6,6 +6,7 @@ import 'package:PiliPlus/common/widgets/flutter/text_field/editable_base.dart'
     as base;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart' hide RenderEditable;
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 export 'package:PiliPlus/common/widgets/flutter/text_field/editable_base.dart'
@@ -122,6 +123,53 @@ class RenderEditable extends base.RenderEditable {
         (item) => item.type == RichTextType.emoji && item.emote != null,
       );
 
+  RichTextItem? _imageEmoteStartingAt(int offset) {
+    if (offset < 0) return null;
+    for (final item in controller.items) {
+      if (item.type == RichTextType.emoji &&
+          item.emote != null &&
+          item.start == offset) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  RichTextItem? _imageEmoteEndingAt(int offset) {
+    if (offset < 0) return null;
+    for (final item in controller.items) {
+      if (item.type == RichTextType.emoji &&
+          item.emote != null &&
+          item.end == offset) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  String? _spokenEmoteName(RichTextItem item) {
+    var name = item.rawText?.trim();
+    if (name == null || name.isEmpty) return null;
+
+    // Bilibili image emotes are commonly stored as tokens such as "[doge]".
+    // Match the picker wording: the readable name first, then "表情".
+    if (name.length >= 2 && name.startsWith('[') && name.endsWith(']')) {
+      name = name.substring(1, name.length - 1).trim();
+    }
+    if (name.isEmpty) return null;
+    return name.endsWith('表情') ? name : '$name表情';
+  }
+
+  void _announceEmote(RichTextItem? item) {
+    if (item == null) return;
+    final label = _spokenEmoteName(item);
+    if (label == null) return;
+
+    final view = PlatformDispatcher.instance.implicitView;
+    if (view == null) return;
+    SemanticsService.sendAnnouncement(view, label, textDirection).ignore();
+  }
+
   @override
   void describeSemanticsConfiguration(SemanticsConfiguration config) {
     super.describeSemanticsConfiguration(config);
@@ -133,5 +181,27 @@ class RenderEditable extends base.RenderEditable {
     // as the actual editing model. Selection callbacks stay entirely native to
     // the base RenderEditable; there is deliberately no offset translation.
     config.attributedValue = AttributedString(controller.text);
+
+    // Let the base renderer move the real selection first, then override only
+    // what VoiceOver speaks when that one-character step crosses an image
+    // emote. The editor and accessibility selection therefore keep identical
+    // offsets: one emote remains exactly one UTF-16 code unit.
+    final moveForward = config.onMoveCursorForwardByCharacter;
+    if (moveForward != null) {
+      config.onMoveCursorForwardByCharacter = (bool extendSelection) {
+        final offset = controller.selection.extentOffset;
+        moveForward(extendSelection);
+        _announceEmote(_imageEmoteStartingAt(offset));
+      };
+    }
+
+    final moveBackward = config.onMoveCursorBackwardByCharacter;
+    if (moveBackward != null) {
+      config.onMoveCursorBackwardByCharacter = (bool extendSelection) {
+        final offset = controller.selection.extentOffset;
+        moveBackward(extendSelection);
+        _announceEmote(_imageEmoteEndingAt(offset));
+      };
+    }
   }
 }
