@@ -160,9 +160,11 @@ class _IOSNativeRichTextFieldState extends State<IOSNativeRichTextField> {
       case 'stateChanged':
         final args = Map<Object?, Object?>.from(call.arguments as Map);
         _applyNativeState(args, textMayHaveChanged: true);
+        return null;
       case 'selectionChanged':
         final args = Map<Object?, Object?>.from(call.arguments as Map);
         _applyNativeState(args, textMayHaveChanged: false);
+        return null;
       case 'focusChanged':
         final focused = call.arguments == true;
         if (focused) {
@@ -170,6 +172,7 @@ class _IOSNativeRichTextFieldState extends State<IOSNativeRichTextField> {
         } else if (widget.focusNode.hasFocus) {
           widget.focusNode.unfocus();
         }
+        return null;
       case 'heightChanged':
         final height = (call.arguments as num?)?.toDouble();
         if (height != null && mounted) {
@@ -178,8 +181,10 @@ class _IOSNativeRichTextFieldState extends State<IOSNativeRichTextField> {
             setState(() => _height = next);
           }
         }
+        return null;
       case 'tap':
         if (widget.readOnly) widget.onTapWhenReadOnly?.call();
+        return null;
     }
     return null;
   }
@@ -187,7 +192,9 @@ class _IOSNativeRichTextFieldState extends State<IOSNativeRichTextField> {
   TextSelection _selectionFrom(Map<Object?, Object?> args, int textLength) {
     int read(String key, int fallback) {
       final value = args[key];
-      return value is num ? value.toInt().clamp(0, textLength) : fallback;
+      return value is num
+          ? value.toInt().clamp(0, textLength).toInt()
+          : fallback;
     }
 
     final current = widget.controller.selection;
@@ -307,6 +314,7 @@ class _IOSNativeRichTextFieldState extends State<IOSNativeRichTextField> {
         height: _height,
         child: UiKitView(
           viewType: 'accessibilibili/rich_text_editor',
+          layoutDirection: Directionality.of(context),
           creationParams: _statePayload(),
           creationParamsCodec: const StandardMessageCodec(),
           onPlatformViewCreated: _onPlatformViewCreated,
