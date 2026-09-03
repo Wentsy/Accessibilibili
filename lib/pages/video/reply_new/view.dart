@@ -199,15 +199,32 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
             moreBtn,
             const SizedBox(width: 8),
             Obx(
-              () => ToolbarIconButton(
-                tooltip: '转到动态',
-                onPressed: _syncToDynamic.toggle,
-                icon: const Icon(
-                  CustomIcons.repeat_rounded_rotate_90,
-                  size: 22,
-                ),
-                selected: _syncToDynamic.value,
-              ),
+              () {
+                final isSelected = _syncToDynamic.value;
+                return Semantics(
+                  container: true,
+                  button: true,
+                  selected: isSelected,
+                  label: isSelected
+                      ? '同步到动态，已选取'
+                      : '同步到动态，未选取',
+                  hint: isSelected
+                      ? '点两下取消。送出后只发表这则评论或回复'
+                      : '点两下选取。送出后会同时同步到动态',
+                  onTap: _syncToDynamic.toggle,
+                  child: ExcludeSemantics(
+                    child: ToolbarIconButton(
+                      tooltip: '同步到动态',
+                      onPressed: _syncToDynamic.toggle,
+                      icon: const Icon(
+                        CustomIcons.repeat_rounded_rotate_90,
+                        size: 22,
+                      ),
+                      selected: isSelected,
+                    ),
+                  ),
+                );
+              },
             ),
             const Spacer(),
             Obx(
