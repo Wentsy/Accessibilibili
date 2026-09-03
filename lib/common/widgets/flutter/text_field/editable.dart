@@ -14,15 +14,10 @@ export 'package:PiliPlus/common/widgets/flutter/text_field/editable_base.dart'
 
 /// The original editable renderer remains in [base.RenderEditable].
 ///
-/// Inline image emotes are painted as WidgetSpans, whose render-tree plain
-/// text contains U+FFFC (Object Replacement Character). iOS VoiceOver exposes
-/// that character as an "attachment" while editing. The editing controller,
-/// however, keeps a normal one-code-unit placeholder for image emotes.
-///
-/// Keep accessibility text on exactly the same one-code-unit-per-position
-/// model as the real editing value. The native iOS accessibility bridge gets a
-/// side table of spoken emote labels, but the text and selection offsets here
-/// are never expanded or translated.
+/// Image emotes remain exactly one U+FFFC object-replacement character in the
+/// editing and semantics strings. iOS receives only a side table mapping those
+/// one-unit offsets to concise emote names. Native accessibility can then name
+/// the attachment without creating a second selection coordinate space.
 class RenderEditable extends base.RenderEditable {
   RenderEditable({
     InlineSpan? text,
@@ -134,12 +129,12 @@ class RenderEditable extends base.RenderEditable {
     if (name.isEmpty) return null;
 
     // Bilibili image emotes are commonly stored as tokens such as "[doge]".
-    // Match the picker wording: the readable name first, then "表情".
+    // The native attachment role already tells VoiceOver what kind of object
+    // this is, so expose only the concise symbol name and never append "表情".
     if (name.length >= 2 && name.startsWith('[') && name.endsWith(']')) {
       name = name.substring(1, name.length - 1).trim();
     }
-    if (name.isEmpty) return null;
-    return name.endsWith('表情') ? name : '$name表情';
+    return name.isEmpty ? null : name;
   }
 
   void _syncNativeEmoteAccessibility() {
@@ -181,11 +176,9 @@ class RenderEditable extends base.RenderEditable {
   void describeSemanticsConfiguration(SemanticsConfiguration config) {
     super.describeSemanticsConfiguration(config);
 
-    // Do not rely only on RenderEditable.hasFocus here. The semantics tree can
-    // be described before the focused state reaches this renderer, while the
-    // same configuration is then reused by VoiceOver. If this editor contains
-    // image emotes, send their one-code-unit offsets immediately; while focused
-    // we also sync an empty table after the last emote is removed.
+    // Send attachment names whenever the renderer contains image emotes. Do not
+    // rely solely on focus timing: the semantics configuration can be built
+    // just before the focused state arrives on the renderer.
     if (defaultTargetPlatform == TargetPlatform.iOS &&
         !obscureText &&
         (hasFocus || _usesA11yEmoteText)) {
@@ -194,10 +187,9 @@ class RenderEditable extends base.RenderEditable {
 
     if (!_usesA11yEmoteText) return;
 
-    // WidgetSpan.toPlainText() contributes U+FFFC even though the controller's
-    // logical text uses a normal one-code-unit emote placeholder. Expose the
-    // controller text instead so the semantics value has the exact same length
-    // and offsets as the real editing model.
+    // Keep semantics on the exact same one-code-unit text as the controller.
+    // Never expand an emote name into this value: textSelection offsets must
+    // stay valid for native start/end and character navigation.
     config.attributedValue = AttributedString(controller.text);
   }
 }
