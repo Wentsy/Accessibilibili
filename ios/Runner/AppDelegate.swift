@@ -91,7 +91,6 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
     textView.tintColor = .systemBlue
     textView.adjustsFontForContentSizeCategory = true
     textView.keyboardDismissMode = .interactive
-    textView.accessibilityTraits.insert(.allowsDirectInteraction)
 
     placeholderLabel.textColor = .placeholderText
     placeholderLabel.numberOfLines = 1
