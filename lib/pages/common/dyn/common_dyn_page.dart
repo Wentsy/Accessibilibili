@@ -173,6 +173,12 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
                 }
               }
               if (index == response.length) {
+                // Match the working nested-reply path: pagination starts only
+                // when the semantic footer is actually laid out. The focused
+                // comment's ensureVisible call can bring this footer into the
+                // cache before VoiceOver reaches the boundary without starting
+                // a background refresh while an unrelated long comment is
+                // still being spoken.
                 controller.onLoadMore();
                 return Container(
                   alignment: Alignment.center,
@@ -188,13 +194,6 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
                 );
               } else {
                 final item = response[index];
-
-                // Fetch ahead of the semantic boundary. Doing this several
-                // rows early gives the append/rebuild time to settle before
-                // VoiceOver reaches the final currently-built comment.
-                if (!controller.isEnd && index >= response.length - 5) {
-                  controller.onLoadMore();
-                }
 
                 // Match the proven video-comment accessibility structure:
                 // one stable outer semantic node owns focus while the visual
