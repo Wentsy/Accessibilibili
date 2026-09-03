@@ -19,6 +19,47 @@ private final class IOSAccessibleRichTextView: UITextView {
     }
     return super.accessibilityActivate()
   }
+
+  override func deleteBackward() {
+    var deletedAttachmentLabel: String?
+    let selection = selectedRange
+
+    if selection.length == 0 && selection.location > 0 {
+      let attachmentIndex = selection.location - 1
+      if attachmentIndex < textStorage.length,
+         let attachment = textStorage.attribute(
+           .attachment,
+           at: attachmentIndex,
+           effectiveRange: nil
+         ) as? NSTextAttachment,
+         let label = attachment.accessibilityLabel,
+         !label.isEmpty {
+        deletedAttachmentLabel = label
+      }
+    }
+
+    // Keep the real edit path completely native. This still produces the same
+    // one-character deletion delta that Dart uses to remove the RichTextItem.
+    super.deleteBackward()
+
+    // VoiceOver has no stable character-deletion feedback for NSTextAttachment:
+    // it may read unrelated editor text or keyboard predictions. Only normalize
+    // this one case; ordinary character deletion keeps the user's own feedback
+    // settings untouched.
+    guard UIAccessibility.isVoiceOverRunning,
+          let deletedAttachmentLabel
+    else {
+      return
+    }
+
+    let announcement = NSAttributedString(
+      string: "刪除 \(deletedAttachmentLabel)",
+      attributes: [.accessibilitySpeechQueueAnnouncement: false]
+    )
+    DispatchQueue.main.async {
+      UIAccessibility.post(notification: .announcement, argument: announcement)
+    }
+  }
 }
 
 /// VoiceOver may focus an NSTextAttachment as the active accessibility element
