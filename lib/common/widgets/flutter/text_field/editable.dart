@@ -6,17 +6,21 @@ import 'package:PiliPlus/common/widgets/flutter/text_field/editable_base.dart'
     as base;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart' hide RenderEditable;
-import 'package:flutter/services.dart';
 
 export 'package:PiliPlus/common/widgets/flutter/text_field/editable_base.dart'
     hide RenderEditable;
 
 /// The original editable renderer remains in [base.RenderEditable].
 ///
-/// This thin wrapper only changes the iOS accessibility representation of
-/// inline image emotes. The real editing value still contains a single U+FFFC
-/// placeholder, so cursor movement, insertion and deletion keep the original
-/// c974 behavior.
+/// Inline image emotes are painted as WidgetSpans, whose render-tree plain
+/// text contains U+FFFC (Object Replacement Character). iOS VoiceOver exposes
+/// that character as an "attachment" while editing. The editing controller,
+/// however, now keeps a normal one-code-unit placeholder for image emotes.
+///
+/// Keep accessibility text on exactly the same one-code-unit-per-position
+/// model as the real editing value. In particular, do not expand an emote into
+/// a multi-character spoken label here: doing that gives VoiceOver and the
+/// editor different offset spaces and breaks caret/end-of-field navigation.
 class RenderEditable extends base.RenderEditable {
   RenderEditable({
     InlineSpan? text,
@@ -117,199 +121,16 @@ class RenderEditable extends base.RenderEditable {
         (item) => item.type == RichTextType.emoji && item.emote != null,
       );
 
-  _A11yTextMap _buildA11yTextMap() => _A11yTextMap(controller, plainText);
-
   @override
   void describeSemanticsConfiguration(SemanticsConfiguration config) {
     super.describeSemanticsConfiguration(config);
     if (!_usesA11yEmoteText) return;
 
-    final map = _buildA11yTextMap();
-    config.attributedValue = AttributedString(map.spokenText);
-
-    final currentSelection = selection;
-    if (selectionEnabled && currentSelection != null && currentSelection.isValid) {
-      config.textSelection = map.toA11ySelection(currentSelection);
-    }
-
-    if (hasFocus && selectionEnabled) {
-      config.onSetSelection = (a11ySelection) {
-        final realSelection = map.toRealSelection(
-          a11ySelection,
-          previousRealSelection: selection,
-        );
-        textSelectionDelegate.userUpdateTextEditingValue(
-          textSelectionDelegate.textEditingValue.copyWith(
-            selection: realSelection,
-          ),
-          SelectionChangedCause.keyboard,
-        );
-      };
-    }
+    // WidgetSpan.toPlainText() contributes U+FFFC even though the controller's
+    // logical text now uses a normal one-code-unit emote placeholder. Expose
+    // the controller text instead so VoiceOver sees the same character count
+    // as the actual editing model. Selection callbacks stay entirely native to
+    // the base RenderEditable; there is deliberately no offset translation.
+    config.attributedValue = AttributedString(controller.text);
   }
-}
-
-class _A11yTextMap {
-  _A11yTextMap(RichTextEditingController controller, String plainText) {
-    final buffer = StringBuffer();
-    var realCursor = 0;
-    var a11yCursor = 0;
-
-    void addPlain(int start, int end) {
-      if (end <= start) return;
-      final safeStart = _clampInt(start, 0, plainText.length);
-      final safeEnd = _clampInt(end, safeStart, plainText.length);
-      final chunk = plainText.substring(safeStart, safeEnd);
-      _segments.add(
-        _A11ySegment(
-          realStart: safeStart,
-          realEnd: safeEnd,
-          a11yStart: a11yCursor,
-          a11yEnd: a11yCursor + chunk.length,
-          isEmote: false,
-        ),
-      );
-      buffer.write(chunk);
-      a11yCursor += chunk.length;
-    }
-
-    for (final item in controller.items) {
-      final start = _clampInt(item.range.start, 0, plainText.length);
-      final end = _clampInt(item.range.end, start, plainText.length);
-      if (start > realCursor) {
-        addPlain(realCursor, start);
-      }
-
-      final isImageEmote =
-          item.type == RichTextType.emoji && item.emote != null;
-      if (isImageEmote) {
-        final label = _spokenEmoteLabel(item.rawText);
-        _segments.add(
-          _A11ySegment(
-            realStart: start,
-            realEnd: end,
-            a11yStart: a11yCursor,
-            a11yEnd: a11yCursor + label.length,
-            isEmote: true,
-          ),
-        );
-        buffer.write(label);
-        a11yCursor += label.length;
-      } else {
-        addPlain(start, end);
-      }
-      realCursor = end;
-    }
-
-    if (realCursor < plainText.length) {
-      addPlain(realCursor, plainText.length);
-    }
-
-    spokenText = buffer.toString();
-    realLength = plainText.length;
-  }
-
-  final List<_A11ySegment> _segments = [];
-  late final String spokenText;
-  late final int realLength;
-
-  static int _clampInt(int value, int lower, int upper) {
-    if (value < lower) return lower;
-    if (value > upper) return upper;
-    return value;
-  }
-
-  static String _spokenEmoteLabel(String rawText) {
-    var label = rawText.trim();
-    if (label.length > 1 && label.startsWith('[') && label.endsWith(']')) {
-      label = label.substring(1, label.length - 1).trim();
-    }
-    return label.isEmpty ? '表情' : '表情，$label';
-  }
-
-  int toA11yOffset(int realOffset) {
-    final offset = _clampInt(realOffset, 0, realLength);
-    for (final segment in _segments) {
-      if (offset < segment.realStart) break;
-      if (offset <= segment.realEnd) {
-        if (segment.isEmote) {
-          return offset <= segment.realStart
-              ? segment.a11yStart
-              : segment.a11yEnd;
-        }
-        return segment.a11yStart + (offset - segment.realStart);
-      }
-    }
-    return spokenText.length;
-  }
-
-  int toRealOffset(int a11yOffset, {int? previousRealOffset}) {
-    final offset = _clampInt(a11yOffset, 0, spokenText.length);
-    for (final segment in _segments) {
-      if (offset < segment.a11yStart) break;
-      if (offset <= segment.a11yEnd) {
-        if (segment.isEmote) {
-          if (offset <= segment.a11yStart) return segment.realStart;
-          if (offset >= segment.a11yEnd) return segment.realEnd;
-          final previousA11y = previousRealOffset == null
-              ? null
-              : toA11yOffset(previousRealOffset);
-          if (previousA11y != null) {
-            return offset >= previousA11y
-                ? segment.realEnd
-                : segment.realStart;
-          }
-          final midpoint = (segment.a11yStart + segment.a11yEnd) / 2;
-          return offset < midpoint ? segment.realStart : segment.realEnd;
-        }
-        return segment.realStart + (offset - segment.a11yStart);
-      }
-    }
-    return realLength;
-  }
-
-  TextSelection toA11ySelection(TextSelection selection) {
-    return TextSelection(
-      baseOffset: toA11yOffset(selection.baseOffset),
-      extentOffset: toA11yOffset(selection.extentOffset),
-      affinity: selection.affinity,
-      isDirectional: selection.isDirectional,
-    );
-  }
-
-  TextSelection toRealSelection(
-    TextSelection selection, {
-    TextSelection? previousRealSelection,
-  }) {
-    final previousBase = previousRealSelection?.baseOffset;
-    final previousExtent = previousRealSelection?.extentOffset;
-    return TextSelection(
-      baseOffset: toRealOffset(
-        selection.baseOffset,
-        previousRealOffset: previousBase,
-      ),
-      extentOffset: toRealOffset(
-        selection.extentOffset,
-        previousRealOffset: previousExtent,
-      ),
-      affinity: selection.affinity,
-      isDirectional: selection.isDirectional,
-    );
-  }
-}
-
-class _A11ySegment {
-  const _A11ySegment({
-    required this.realStart,
-    required this.realEnd,
-    required this.a11yStart,
-    required this.a11yEnd,
-    required this.isEmote,
-  });
-
-  final int realStart;
-  final int realEnd;
-  final int a11yStart;
-  final int a11yEnd;
-  final bool isEmote;
 }
