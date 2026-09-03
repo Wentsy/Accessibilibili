@@ -135,6 +135,7 @@ class _IOSNativeRichTextFieldState extends State<IOSNativeRichTextField> {
       'selectionBase': selection.baseOffset,
       'selectionExtent': selection.extentOffset,
       'readOnly': widget.readOnly,
+      'hasFocus': widget.focusNode.hasFocus,
       'hintText': widget.hintText ?? '',
       'fontSize': _fontSize,
       'emotes': _emotes(),
@@ -183,7 +184,16 @@ class _IOSNativeRichTextFieldState extends State<IOSNativeRichTextField> {
         }
         return null;
       case 'tap':
-        if (widget.readOnly) widget.onTapWhenReadOnly?.call();
+        if (widget.readOnly) {
+          widget.onTapWhenReadOnly?.call();
+          if (!widget.focusNode.hasFocus) {
+            widget.focusNode.requestFocus();
+          }
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            _sendState();
+          });
+        }
         return null;
     }
     return null;
