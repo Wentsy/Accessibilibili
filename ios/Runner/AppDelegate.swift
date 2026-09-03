@@ -21,6 +21,17 @@ private final class IOSAccessibleRichTextView: UITextView {
   }
 }
 
+/// VoiceOver may focus an NSTextAttachment as the active accessibility element
+/// instead of the surrounding UITextView. Forward the double-tap from that
+/// attachment back to the editor so named emotes do not block boundary jumps.
+private final class IOSAccessibleTextAttachment: NSTextAttachment {
+  var onAccessibilityActivate: (() -> Bool)?
+
+  override func accessibilityActivate() -> Bool {
+    onAccessibilityActivate?() ?? false
+  }
+}
+
 private final class IOSRichTextEditorFactory: NSObject, FlutterPlatformViewFactory {
   private let messenger: FlutterBinaryMessenger
 
@@ -292,8 +303,16 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
         continue
       }
 
-      let attachment = NSTextAttachment()
+      let attachment = IOSAccessibleTextAttachment()
       attachment.accessibilityLabel = label
+      attachment.onAccessibilityActivate = { [weak self] in
+        guard let self else { return false }
+        if self.readOnly {
+          self.activateReadOnlyEditor()
+          return true
+        }
+        return self.toggleAccessibilityBoundary()
+      }
       attachment.bounds = CGRect(x: 0, y: -3, width: 22, height: 22)
       mutable.addAttribute(.attachment, value: attachment, range: range)
 
