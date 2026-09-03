@@ -106,7 +106,9 @@ private final class RichTextEmoteAccessibility {
     // Avoid leaking a stale side table into some unrelated Flutter text field.
     // The two engine classes expose the current field text through different
     // properties, so validate using the appropriate one before substituting.
-    let object = object as NSObject
+    guard let object = object as? NSObject else {
+      return originalText
+    }
     if className == "FlutterTextInputView" {
       guard let currentText = object.value(forKey: "text") as? NSString,
             currentText as String == expectedText
