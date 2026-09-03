@@ -130,9 +130,13 @@ class RenderEditable extends base.RenderEditable {
 
     // Bilibili image emotes are commonly stored as tokens such as "[doge]".
     // The native attachment role already tells VoiceOver what kind of object
-    // this is, so expose only the concise symbol name and never append "表情".
+    // this is, so expose only the concise symbol name. Do not append "表情",
+    // and strip it when a source token already contains that suffix.
     if (name.length >= 2 && name.startsWith('[') && name.endsWith(']')) {
       name = name.substring(1, name.length - 1).trim();
+    }
+    if (name.endsWith('表情')) {
+      name = name.substring(0, name.length - 2).trim();
     }
     return name.isEmpty ? null : name;
   }
