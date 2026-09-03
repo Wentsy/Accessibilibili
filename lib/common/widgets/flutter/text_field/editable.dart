@@ -157,8 +157,8 @@ class _A11yTextMap {
 
     void addPlain(int start, int end) {
       if (end <= start) return;
-      final safeStart = start.clamp(0, plainText.length);
-      final safeEnd = end.clamp(safeStart, plainText.length);
+      final safeStart = _clampInt(start, 0, plainText.length);
+      final safeEnd = _clampInt(end, safeStart, plainText.length);
       final chunk = plainText.substring(safeStart, safeEnd);
       _segments.add(
         _A11ySegment(
@@ -174,8 +174,8 @@ class _A11yTextMap {
     }
 
     for (final item in controller.items) {
-      final start = item.range.start.clamp(0, plainText.length);
-      final end = item.range.end.clamp(start, plainText.length);
+      final start = _clampInt(item.range.start, 0, plainText.length);
+      final end = _clampInt(item.range.end, start, plainText.length);
       if (start > realCursor) {
         addPlain(realCursor, start);
       }
@@ -213,6 +213,12 @@ class _A11yTextMap {
   late final String spokenText;
   late final int realLength;
 
+  static int _clampInt(int value, int lower, int upper) {
+    if (value < lower) return lower;
+    if (value > upper) return upper;
+    return value;
+  }
+
   static String _spokenEmoteLabel(String rawText) {
     var label = rawText.trim();
     if (label.length > 1 && label.startsWith('[') && label.endsWith(']')) {
@@ -222,7 +228,7 @@ class _A11yTextMap {
   }
 
   int toA11yOffset(int realOffset) {
-    final offset = realOffset.clamp(0, realLength);
+    final offset = _clampInt(realOffset, 0, realLength);
     for (final segment in _segments) {
       if (offset < segment.realStart) break;
       if (offset <= segment.realEnd) {
@@ -238,7 +244,7 @@ class _A11yTextMap {
   }
 
   int toRealOffset(int a11yOffset, {int? previousRealOffset}) {
-    final offset = a11yOffset.clamp(0, spokenText.length);
+    final offset = _clampInt(a11yOffset, 0, spokenText.length);
     for (final segment in _segments) {
       if (offset < segment.a11yStart) break;
       if (offset <= segment.a11yEnd) {
