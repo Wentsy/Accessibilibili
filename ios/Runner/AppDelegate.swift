@@ -7,10 +7,14 @@ import UIKit
 /// back to Flutter to switch to the keyboard before normal editing resumes.
 private final class IOSAccessibleRichTextView: UITextView {
   var onReadOnlyAccessibilityActivate: (() -> Void)?
+  var onEditableAccessibilityActivate: (() -> Bool)?
 
   override func accessibilityActivate() -> Bool {
     if !isEditable {
       onReadOnlyAccessibilityActivate?()
+      return true
+    }
+    if onEditableAccessibilityActivate?() == true {
       return true
     }
     return super.accessibilityActivate()
@@ -111,6 +115,9 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
     textView.onReadOnlyAccessibilityActivate = { [weak self] in
       self?.activateReadOnlyEditor()
     }
+    textView.onEditableAccessibilityActivate = { [weak self] in
+      self?.toggleAccessibilityBoundary() ?? false
+    }
 
     placeholderLabel.textColor = .placeholderText
     placeholderLabel.numberOfLines = 1
@@ -152,6 +159,21 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
     guard readOnly else { return }
     wantsFocusAfterReadOnlyActivation = true
     channel.invokeMethod("tap", arguments: nil)
+  }
+
+  private func toggleAccessibilityBoundary() -> Bool {
+    guard !readOnly else { return false }
+
+    let textLength = (textView.text as NSString?)?.length ?? 0
+    let selection = textView.selectedRange
+    let destination = selection.length == 0 && selection.location == 0
+      ? textLength
+      : 0
+
+    textView.selectedRange = NSRange(location: destination, length: 0)
+    textView.scrollRangeToVisible(textView.selectedRange)
+    textView.becomeFirstResponder()
+    return true
   }
 
   @objc private func handleTap() {
