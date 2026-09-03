@@ -8,17 +8,9 @@ export 'package:PiliPlus/common/widgets/flutter/text_field/controller_base.dart'
     hide RichTextEditingController;
 
 /// Keeps the original rich-text editing and selection behavior intact while
-/// giving inline image emotes a meaningful accessibility label.
+/// preventing the inline image widget from becoming a separate VoiceOver node.
 class RichTextEditingController extends base.RichTextEditingController {
   RichTextEditingController({super.items, super.onMention});
-
-  String _emoteA11yLabel(base.RichTextItem item) {
-    var label = item.rawText.trim();
-    if (label.length > 1 && label.startsWith('[') && label.endsWith(']')) {
-      label = label.substring(1, label.length - 1).trim();
-    }
-    return label.isEmpty ? '表情' : '表情，$label';
-  }
 
   @override
   TextSpan buildTextSpan({
@@ -62,18 +54,15 @@ class RichTextEditingController extends base.RichTextEditingController {
             if (emote != null) {
               return WidgetSpan(
                 alignment: PlaceholderAlignment.middle,
-                child: Semantics(
-                  label: _emoteA11yLabel(e),
-                  child: ExcludeSemantics(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: NetworkImgLayer(
-                        src: emote.url,
-                        width: 22,
-                        height: 22,
-                        type: ImageType.emote,
-                        fit: BoxFit.contain,
-                      ),
+                child: ExcludeSemantics(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: NetworkImgLayer(
+                      src: emote.url,
+                      width: 22,
+                      height: 22,
+                      type: ImageType.emote,
+                      fit: BoxFit.contain,
                     ),
                   ),
                 ),
