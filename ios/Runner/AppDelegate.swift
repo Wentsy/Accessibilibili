@@ -2,138 +2,187 @@ import Flutter
 import ObjectiveC.runtime
 import UIKit
 
-/// Gives inline rich-text emotes the same native attachment shape that iOS
-/// text editors expose to VoiceOver, without changing Flutter's editing buffer
-/// or selection offsets. Each emote remains one U+FFFC code unit.
+/// A native rich-text mirror used only as the UITextView that VoiceOver asks
+/// Flutter's text-input semantics object to expose. The real Flutter editing
+/// buffer stays untouched: every image emote is still exactly one U+FFFC code
+/// unit, so cursor and selection offsets remain one-to-one.
+private final class RichTextAccessibilityMirror: UITextView, UITextViewDelegate {
+  weak var realTextInputView: UIView?
+  private var isSyncingSelection = false
+
+  init() {
+    super.init(frame: CGRect(x: 0, y: 0, width: 1, height: 1), textContainer: nil)
+    delegate = self
+    isEditable = true
+    isSelectable = true
+    isScrollEnabled = false
+    backgroundColor = .clear
+    isAccessibilityElement = false
+  }
+
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
+
+  func update(text: String, labelsByOffset: [Int: String]) {
+    let mutableText = NSMutableAttributedString(string: text)
+    let nsText = text as NSString
+
+    for (start, label) in labelsByOffset {
+      guard start >= 0, start < nsText.length else {
+        continue
+      }
+
+      let range = NSRange(location: start, length: 1)
+      guard nsText.substring(with: range) == "\u{FFFC}" else {
+        continue
+      }
+
+      // This is the important difference from FlutterTextInputView: a real
+      // UITextView has an NSTextStorage containing a real NSTextAttachment.
+      // VoiceOver's Character rotor can therefore read the attachment label in
+      // the same native shape used by editors such as WeChat.
+      let attachment = NSTextAttachment()
+      attachment.accessibilityLabel = label
+      mutableText.addAttribute(.attachment, value: attachment, range: range)
+    }
+
+    let oldSelection = selectedRange
+    isSyncingSelection = true
+    attributedText = mutableText
+
+    let textLength = nsText.length
+    let location = min(max(oldSelection.location, 0), textLength)
+    let length = min(max(oldSelection.length, 0), textLength - location)
+    selectedRange = NSRange(location: location, length: length)
+    isSyncingSelection = false
+  }
+
+  func bind(to realView: UIView) {
+    realTextInputView = realView
+    syncSelectionFromRealTextInput()
+  }
+
+  private func syncSelectionFromRealTextInput() {
+    guard let realInput = realTextInputView as? UITextInput,
+          let realSelection = realInput.selectedTextRange
+    else {
+      return
+    }
+
+    let start = realInput.offset(
+      from: realInput.beginningOfDocument,
+      to: realSelection.start
+    )
+    let end = realInput.offset(
+      from: realInput.beginningOfDocument,
+      to: realSelection.end
+    )
+    guard start >= 0, end >= start else {
+      return
+    }
+
+    let textLength = (text as NSString).length
+    let location = min(start, textLength)
+    let length = min(end - start, textLength - location)
+    let nextSelection = NSRange(location: location, length: length)
+    guard selectedRange != nextSelection else {
+      return
+    }
+
+    isSyncingSelection = true
+    selectedRange = nextSelection
+    isSyncingSelection = false
+  }
+
+  func textViewDidChangeSelection(_ textView: UITextView) {
+    guard !isSyncingSelection,
+          let realInput = realTextInputView as? UITextInput
+    else {
+      return
+    }
+
+    let selection = selectedRange
+    guard let start = realInput.position(
+            from: realInput.beginningOfDocument,
+            offset: selection.location
+          ),
+          let end = realInput.position(
+            from: start,
+            offset: selection.length
+          ),
+          let range = realInput.textRange(from: start, to: end)
+    else {
+      return
+    }
+
+    // FlutterTextInputView.setSelectedTextRange reports this change back to the
+    // framework. Since both strings use one UTF-16 unit per emote, no offset
+    // translation is needed.
+    realInput.selectedTextRange = range
+  }
+}
+
 private final class RichTextEmoteAccessibility {
   static let shared = RichTextEmoteAccessibility()
 
-  private let placeholder = "\u{FFFC}"
-  private let legacyAccessibilityAttachmentAttribute = NSAttributedString.Key(
-    "NSAccessibilityAttachmentTextAttribute"
-  )
   private var expectedText = ""
   private var labelsByOffset: [Int: String] = [:]
-  private var semanticsAttributedValueInstalled = false
-  private var textInputAttributedTextInstalled = false
+  private var isInstalled = false
+  private let mirror = RichTextAccessibilityMirror()
 
   private init() {}
 
   func install() {
-    installSemanticsAttributedValue()
-    installTextInputAttributedText()
-  }
-
-  /// Keep whole-field and insertion-point speech on the native attachment
-  /// model. This intentionally lets attachments behave like pauses in normal
-  /// editing speech, matching UIKit rich-text editors.
-  private func installSemanticsAttributedValue() {
-    guard !semanticsAttributedValueInstalled,
+    guard !isInstalled,
           let semanticsClass = NSClassFromString("TextInputSemanticsObject")
     else {
       return
     }
 
-    let selector = NSSelectorFromString("accessibilityAttributedValue")
+    let selector = NSSelectorFromString("textInputView")
     guard let method = class_getInstanceMethod(semanticsClass, selector) else {
       return
     }
 
-    typealias OriginalAttributedValue = @convention(c) (
+    typealias OriginalTextInputView = @convention(c) (
       AnyObject,
       Selector
-    ) -> NSAttributedString?
+    ) -> UIView?
 
     let original = unsafeBitCast(
       method_getImplementation(method),
-      to: OriginalAttributedValue.self
+      to: OriginalTextInputView.self
     )
 
-    let replacement: @convention(block) (AnyObject) -> NSAttributedString? = {
+    let replacement: @convention(block) (AnyObject) -> UIView? = {
       [weak self] object in
-      let originalValue = original(object, selector)
-      guard let self else {
-        return originalValue
-      }
-      return self.namedAttributedString(from: originalValue)
-    }
-
-    let replacementImplementation = imp_implementationWithBlock(replacement)
-
-    // Flutter 3.47 inherits this method from SemanticsObject. Add an override
-    // only to text-input semantics so unrelated controls are untouched.
-    guard class_addMethod(
-      semanticsClass,
-      selector,
-      replacementImplementation,
-      method_getTypeEncoding(method)
-    ) else {
-      imp_removeBlock(replacementImplementation)
-      return
-    }
-
-    semanticsAttributedValueInstalled = true
-  }
-
-  /// Native UITextView stores real NSTextAttachment objects in attributedText.
-  /// WeChat's editor follows that model, which lets VoiceOver's Character rotor
-  /// read an attachment's accessibilityLabel. FlutterTextInputView normally has
-  /// only a plain NSMutableString, so expose a read-only attributedText getter
-  /// with named attachments while leaving its real `text` and UITextInput
-  /// selection model unchanged.
-  private func installTextInputAttributedText() {
-    guard !textInputAttributedTextInstalled,
-          let textInputClass = NSClassFromString("FlutterTextInputView")
-    else {
-      return
-    }
-
-    let selector = NSSelectorFromString("attributedText")
-    guard let prototypeMethod = class_getInstanceMethod(UITextView.self, selector) else {
-      return
-    }
-
-    let replacement: @convention(block) (AnyObject) -> NSAttributedString? = {
-      [weak self] object in
+      let originalView = original(object, selector)
       guard let self,
-            let object = object as? NSObject,
-            let currentText = object.value(forKey: "text") as? NSString
+            UIAccessibility.isVoiceOverRunning,
+            !self.labelsByOffset.isEmpty,
+            let originalView,
+            let flutterTextInputClass = NSClassFromString("FlutterTextInputView"),
+            originalView.isKind(of: flutterTextInputClass),
+            let realInput = originalView as? UITextInput,
+            self.fullText(of: realInput) == self.expectedText
       else {
-        return nil
+        return originalView
       }
 
-      let plainText = currentText as String
-      guard UIAccessibility.isVoiceOverRunning,
-            plainText == self.expectedText,
-            !self.labelsByOffset.isEmpty
-      else {
-        return NSAttributedString(string: plainText)
-      }
-
-      return self.namedAttributedString(from: NSAttributedString(string: plainText))
+      self.mirror.update(
+        text: self.expectedText,
+        labelsByOffset: self.labelsByOffset
+      )
+      self.mirror.bind(to: originalView)
+      return self.mirror
     }
 
-    let replacementImplementation = imp_implementationWithBlock(replacement)
-    let typeEncoding = method_getTypeEncoding(prototypeMethod)
-
-    if class_addMethod(
-      textInputClass,
-      selector,
-      replacementImplementation,
-      typeEncoding
-    ) {
-      textInputAttributedTextInstalled = true
-      return
-    }
-
-    // Be defensive in case a future Flutter engine adds attributedText itself.
-    // In that case replace only FlutterTextInputView's implementation.
-    guard let existingMethod = class_getInstanceMethod(textInputClass, selector) else {
-      imp_removeBlock(replacementImplementation)
-      return
-    }
-    method_setImplementation(existingMethod, replacementImplementation)
-    textInputAttributedTextInstalled = true
+    method_setImplementation(
+      method,
+      imp_implementationWithBlock(replacement)
+    )
+    isInstalled = true
   }
 
   func update(text: String, emotes: [[String: Any]]) {
@@ -150,47 +199,18 @@ private final class RichTextEmoteAccessibility {
       nextLabels[start] = label
     }
     labelsByOffset = nextLabels
+
+    mirror.update(text: text, labelsByOffset: nextLabels)
   }
 
-  private func namedAttributedString(
-    from originalValue: NSAttributedString?
-  ) -> NSAttributedString? {
-    guard UIAccessibility.isVoiceOverRunning,
-          let originalValue,
-          !labelsByOffset.isEmpty,
-          originalValue.string == expectedText
-    else {
-      return originalValue
+  private func fullText(of input: UITextInput) -> String? {
+    guard let range = input.textRange(
+      from: input.beginningOfDocument,
+      to: input.endOfDocument
+    ) else {
+      return nil
     }
-
-    let mutableValue = NSMutableAttributedString(attributedString: originalValue)
-    let text = mutableValue.string as NSString
-
-    for (start, label) in labelsByOffset {
-      guard start >= 0, start < text.length else {
-        continue
-      }
-
-      let range = NSRange(location: start, length: 1)
-      guard text.substring(with: range) == placeholder else {
-        continue
-      }
-
-      let attachment = NSTextAttachment()
-      attachment.accessibilityLabel = label
-
-      // Standard UIKit attachment metadata is what native rich-text editors
-      // expose. Keep the legacy accessibility attachment key as a compatibility
-      // hint for VoiceOver versions that still consult it.
-      mutableValue.addAttribute(.attachment, value: attachment, range: range)
-      mutableValue.addAttribute(
-        legacyAccessibilityAttachmentAttribute,
-        value: attachment,
-        range: range
-      )
-    }
-
-    return mutableValue
+    return input.text(in: range)
   }
 }
 
