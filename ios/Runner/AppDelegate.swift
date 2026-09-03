@@ -138,6 +138,10 @@ private final class RichTextEmoteAccessibility {
         }
         result(nil)
       case "setRichTextEmotes":
+        // Retry here as well as at engine initialization. This makes the hook
+        // resilient to the Flutter engine registering its private semantics
+        // class later in startup on a particular build/runtime configuration.
+        RichTextEmoteAccessibility.shared.install()
         if let arguments = call.arguments as? [String: Any],
            let text = arguments["text"] as? String,
            let emotes = arguments["emotes"] as? [[String: Any]] {
