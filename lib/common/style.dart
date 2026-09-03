@@ -17,11 +17,10 @@ abstract final class Style {
     tapTargetSize: .shrinkWrap,
   );
 
-  // Keep inline rich content as a single UTF-16 code unit so all existing
-  // cursor/range bookkeeping stays unchanged. U+FFFC is the Unicode Object
-  // Replacement Character, which iOS VoiceOver exposes as an "attachment"
-  // while editing. A normal BMP symbol avoids that native attachment meaning;
-  // the WidgetSpan still paints the real emote and rawText still stores the
-  // server-side emote text.
-  static const placeHolder = '\u263A';
+  // Inline rich content must stay exactly one UTF-16 code unit so cursor,
+  // selection, insertion and deletion all share one coordinate space.
+  // U+FFFC is the native object-replacement character used for text
+  // attachments. On iOS we keep that native role and attach the emote's
+  // accessible name separately, instead of expanding the editing string.
+  static const placeHolder = '\uFFFC';
 }
