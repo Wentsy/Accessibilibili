@@ -52,6 +52,7 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
 
   private var applyingFlutterState = false
   private var readOnly = false
+  private var wantsFocusAfterReadOnlyActivation = false
   private var lastContentSignature = ""
   private var lastReportedHeight: CGFloat = 0
   private var imageTasks: [URLSessionDataTask] = []
@@ -108,7 +109,7 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
     textView.adjustsFontForContentSizeCategory = true
     textView.keyboardDismissMode = .interactive
     textView.onReadOnlyAccessibilityActivate = { [weak self] in
-      self?.channel.invokeMethod("tap", arguments: nil)
+      self?.activateReadOnlyEditor()
     }
 
     placeholderLabel.textColor = .placeholderText
@@ -147,9 +148,15 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
     }
   }
 
+  private func activateReadOnlyEditor() {
+    guard readOnly else { return }
+    wantsFocusAfterReadOnlyActivation = true
+    channel.invokeMethod("tap", arguments: nil)
+  }
+
   @objc private func handleTap() {
     if readOnly {
-      channel.invokeMethod("tap", arguments: nil)
+      activateReadOnlyEditor()
     }
   }
 
@@ -159,6 +166,8 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
     let fontSize = (args["fontSize"] as? NSNumber)?.doubleValue ?? 16
     let hintText = args["hintText"] as? String ?? ""
     let nextReadOnly = args["readOnly"] as? Bool ?? false
+    let flutterHasFocus = args["hasFocus"] as? Bool ?? false
+    let wasReadOnly = readOnly
 
     let base = (args["selectionBase"] as? NSNumber)?.intValue ?? text.utf16.count
     let extent = (args["selectionExtent"] as? NSNumber)?.intValue ?? base
@@ -197,6 +206,17 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
     applyingFlutterState = false
     updatePlaceholder()
     reportHeightSoon()
+
+    let shouldRestoreFocus = !nextReadOnly && (
+      flutterHasFocus || (wasReadOnly && wantsFocusAfterReadOnlyActivation)
+    )
+    if shouldRestoreFocus {
+      wantsFocusAfterReadOnlyActivation = false
+      DispatchQueue.main.async { [weak self] in
+        guard let self, !self.readOnly else { return }
+        self.textView.becomeFirstResponder()
+      }
+    }
   }
 
   private func contentSignature(
