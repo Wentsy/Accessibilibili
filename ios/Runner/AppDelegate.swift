@@ -10,7 +10,7 @@ private final class RichTextEmoteAccessibility {
   static let shared = RichTextEmoteAccessibility()
 
   private let placeholder = "\u{FFFC}"
-  private let attachmentAttribute = NSAttributedString.Key(
+  private let legacyAccessibilityAttachmentAttribute = NSAttributedString.Key(
     "NSAccessibilityAttachmentTextAttribute"
   )
   private var expectedText = ""
@@ -115,8 +115,13 @@ private final class RichTextEmoteAccessibility {
       // the attachment role itself, so we deliberately do not append "表情".
       let attachment = NSTextAttachment()
       attachment.accessibilityLabel = label
+
+      // UIKit's standard attachment attribute is the primary signal. Keep the
+      // legacy accessibility-specific key too for VoiceOver versions that still
+      // consult it when reading an attributed accessibility value.
+      mutableValue.addAttribute(.attachment, value: attachment, range: range)
       mutableValue.addAttribute(
-        attachmentAttribute,
+        legacyAccessibilityAttachmentAttribute,
         value: attachment,
         range: range
       )
