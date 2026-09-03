@@ -1,6 +1,22 @@
 import Flutter
 import UIKit
 
+/// UITextView receives VoiceOver double-tap through accessibilityActivate(),
+/// not through the ordinary tap gesture recognizer. While the emoji/more panel
+/// is open the editor is intentionally read-only, so forward that activation
+/// back to Flutter to switch to the keyboard before normal editing resumes.
+private final class IOSAccessibleRichTextView: UITextView {
+  var onReadOnlyAccessibilityActivate: (() -> Void)?
+
+  override func accessibilityActivate() -> Bool {
+    if !isEditable {
+      onReadOnlyAccessibilityActivate?()
+      return true
+    }
+    return super.accessibilityActivate()
+  }
+}
+
 private final class IOSRichTextEditorFactory: NSObject, FlutterPlatformViewFactory {
   private let messenger: FlutterBinaryMessenger
 
@@ -30,7 +46,7 @@ private final class IOSRichTextEditorFactory: NSObject, FlutterPlatformViewFacto
 private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextViewDelegate {
   private static let imageCache = NSCache<NSString, UIImage>()
 
-  private let textView: UITextView
+  private let textView: IOSAccessibleRichTextView
   private let placeholderLabel = UILabel()
   private let channel: FlutterMethodChannel
 
@@ -46,7 +62,7 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
     arguments: Any?,
     messenger: FlutterBinaryMessenger
   ) {
-    textView = UITextView(frame: frame)
+    textView = IOSAccessibleRichTextView(frame: frame)
     channel = FlutterMethodChannel(
       name: "accessibilibili/rich_text_editor/\(viewId)",
       binaryMessenger: messenger
@@ -91,6 +107,9 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
     textView.tintColor = .systemBlue
     textView.adjustsFontForContentSizeCategory = true
     textView.keyboardDismissMode = .interactive
+    textView.onReadOnlyAccessibilityActivate = { [weak self] in
+      self?.channel.invokeMethod("tap", arguments: nil)
+    }
 
     placeholderLabel.textColor = .placeholderText
     placeholderLabel.numberOfLines = 1
