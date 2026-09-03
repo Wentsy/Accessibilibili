@@ -1,4 +1,4 @@
-import 'dart:ui' show Locale, PlatformDispatcher;
+import 'dart:ui' show Locale;
 import 'dart:ui' as ui show BoxHeightStyle, BoxWidthStyle;
 
 import 'package:PiliPlus/common/widgets/flutter/text_field/controller.dart';
@@ -17,12 +17,12 @@ export 'package:PiliPlus/common/widgets/flutter/text_field/editable_base.dart'
 /// Inline image emotes are painted as WidgetSpans, whose render-tree plain
 /// text contains U+FFFC (Object Replacement Character). iOS VoiceOver exposes
 /// that character as an "attachment" while editing. The editing controller,
-/// however, now keeps a normal one-code-unit placeholder for image emotes.
+/// however, keeps a normal one-code-unit placeholder for image emotes.
 ///
 /// Keep accessibility text on exactly the same one-code-unit-per-position
-/// model as the real editing value. In particular, do not expand an emote into
-/// a multi-character spoken label here: doing that gives VoiceOver and the
-/// editor different offset spaces and breaks caret/end-of-field navigation.
+/// model as the real editing value. The native iOS accessibility bridge gets a
+/// side table of spoken emote labels, but the text and selection offsets here
+/// are never expanded or translated.
 class RenderEditable extends base.RenderEditable {
   RenderEditable({
     InlineSpan? text,
@@ -116,36 +116,18 @@ class RenderEditable extends base.RenderEditable {
          controller: controller,
        );
 
+  static const MethodChannel _accessibilityChannel = MethodChannel(
+    'accessibilibili/accessibility',
+  );
+
+  String? _lastNativeEmoteSync;
+
   bool get _usesA11yEmoteText =>
       defaultTargetPlatform == TargetPlatform.iOS &&
       !obscureText &&
       controller.items.any(
         (item) => item.type == RichTextType.emoji && item.emote != null,
       );
-
-  RichTextItem? _imageEmoteStartingAt(int offset) {
-    if (offset < 0) return null;
-    for (final item in controller.items) {
-      if (item.type == RichTextType.emoji &&
-          item.emote != null &&
-          item.range.start == offset) {
-        return item;
-      }
-    }
-    return null;
-  }
-
-  RichTextItem? _imageEmoteEndingAt(int offset) {
-    if (offset < 0) return null;
-    for (final item in controller.items) {
-      if (item.type == RichTextType.emoji &&
-          item.emote != null &&
-          item.range.end == offset) {
-        return item;
-      }
-    }
-    return null;
-  }
 
   String? _spokenEmoteName(RichTextItem item) {
     var name = item.rawText.trim();
@@ -160,48 +142,60 @@ class RenderEditable extends base.RenderEditable {
     return name.endsWith('表情') ? name : '$name表情';
   }
 
-  void _announceEmote(RichTextItem? item) {
-    if (item == null) return;
-    final label = _spokenEmoteName(item);
-    if (label == null) return;
+  void _syncNativeEmoteAccessibility() {
+    final emotes = <Map<String, Object>>[];
+    final signature = StringBuffer(controller.text);
 
-    final view = PlatformDispatcher.instance.implicitView;
-    if (view == null) return;
-    SemanticsService.sendAnnouncement(view, label, textDirection).ignore();
+    for (final item in controller.items) {
+      if (item.type != RichTextType.emoji ||
+          item.emote == null ||
+          item.range.end != item.range.start + 1) {
+        continue;
+      }
+
+      final label = _spokenEmoteName(item);
+      if (label == null) continue;
+
+      emotes.add(<String, Object>{
+        'start': item.range.start,
+        'label': label,
+      });
+      signature
+        ..write('\u0000')
+        ..write(item.range.start)
+        ..write(':')
+        ..write(label);
+    }
+
+    final nextSignature = signature.toString();
+    if (_lastNativeEmoteSync == nextSignature) return;
+    _lastNativeEmoteSync = nextSignature;
+
+    _accessibilityChannel.invokeMethod<void>('setRichTextEmotes', <String, Object>{
+      'text': controller.text,
+      'emotes': emotes,
+    }).ignore();
   }
 
   @override
   void describeSemanticsConfiguration(SemanticsConfiguration config) {
     super.describeSemanticsConfiguration(config);
+
+    // While focused, register the exact UTF-16 offsets and spoken names with
+    // the iOS UITextInput hook. This is only metadata; it never changes the
+    // controller value or its selection coordinate space.
+    if (defaultTargetPlatform == TargetPlatform.iOS &&
+        hasFocus &&
+        !obscureText) {
+      _syncNativeEmoteAccessibility();
+    }
+
     if (!_usesA11yEmoteText) return;
 
     // WidgetSpan.toPlainText() contributes U+FFFC even though the controller's
-    // logical text now uses a normal one-code-unit emote placeholder. Expose
-    // the controller text instead so VoiceOver sees the same character count
-    // as the actual editing model. Selection callbacks stay entirely native to
-    // the base RenderEditable; there is deliberately no offset translation.
+    // logical text uses a normal one-code-unit emote placeholder. Expose the
+    // controller text instead so the semantics value has the exact same length
+    // and offsets as the real editing model.
     config.attributedValue = AttributedString(controller.text);
-
-    // Let the base renderer move the real selection first, then override only
-    // what VoiceOver speaks when that one-character step crosses an image
-    // emote. The editor and accessibility selection therefore keep identical
-    // offsets: one emote remains exactly one UTF-16 code unit.
-    final moveForward = config.onMoveCursorForwardByCharacter;
-    if (moveForward != null) {
-      config.onMoveCursorForwardByCharacter = (bool extendSelection) {
-        final offset = controller.selection.extentOffset;
-        moveForward(extendSelection);
-        _announceEmote(_imageEmoteStartingAt(offset));
-      };
-    }
-
-    final moveBackward = config.onMoveCursorBackwardByCharacter;
-    if (moveBackward != null) {
-      config.onMoveCursorBackwardByCharacter = (bool extendSelection) {
-        final offset = controller.selection.extentOffset;
-        moveBackward(extendSelection);
-        _announceEmote(_imageEmoteEndingAt(offset));
-      };
-    }
   }
 }
