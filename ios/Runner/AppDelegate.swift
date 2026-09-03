@@ -4,14 +4,14 @@ import UIKit
 
 /// Adds accessibility metadata to the one-character placeholders used by rich
 /// text image emotes. The editing buffer, UITextInput text and selection ranges
-/// are never rewritten: VoiceOver receives the same UTF-16 string plus a named
-/// accessibility attachment on each U+FFFC emote position.
+/// are never rewritten: VoiceOver receives the same UTF-16 string with a
+/// concise custom spoken name on each U+FFFC emote position.
 private final class RichTextEmoteAccessibility {
   static let shared = RichTextEmoteAccessibility()
 
   private let placeholder = "\u{FFFC}"
-  private let legacyAccessibilityAttachmentAttribute = NSAttributedString.Key(
-    "NSAccessibilityAttachmentTextAttribute"
+  private let customTextAttribute = NSAttributedString.Key(
+    "NSAccessibilityCustomTextAttribute"
   )
   private var expectedText = ""
   private var labelsByOffset: [Int: String] = [:]
@@ -109,20 +109,14 @@ private final class RichTextEmoteAccessibility {
         continue
       }
 
-      // Match the native attachment model used by rich text editors such as
-      // WeChat, but keep our own reliable Flutter selection model. The label is
-      // only the concise emote name (for example "doge"); VoiceOver supplies
-      // the attachment role itself, so we deliberately do not append "表情".
-      let attachment = NSTextAttachment()
-      attachment.accessibilityLabel = label
-
-      // UIKit's standard attachment attribute is the primary signal. Keep the
-      // legacy accessibility-specific key too for VoiceOver versions that still
-      // consult it when reading an attributed accessibility value.
-      mutableValue.addAttribute(.attachment, value: attachment, range: range)
+      // Do not turn the placeholder into an attributed-string attachment here.
+      // On a Flutter text input VoiceOver keeps the one-character position but
+      // can then treat that position as silent. Instead keep the original U+FFFC
+      // untouched and attach only its concise accessibility text (for example
+      // "doge"). This preserves the exact one-code-unit selection model.
       mutableValue.addAttribute(
-        legacyAccessibilityAttachmentAttribute,
-        value: attachment,
+        customTextAttribute,
+        value: label,
         range: range
       )
     }
