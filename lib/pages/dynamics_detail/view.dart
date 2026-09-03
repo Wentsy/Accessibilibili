@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -338,13 +339,16 @@ class _DynamicDetailPageState
   }
 
   Widget _buildTabBody([bool isPortrait = true]) {
-    final reply = CustomScrollView(
-      key: const PageStorageKey(DynType.reply),
-      physics: ReloadScrollPhysics(controller: controller),
-      slivers: [
-        buildReplyHeader(isPortrait),
-        Obx(() => replyList(controller.loadingState.value)),
-      ],
+    final reply = VoiceOverPagedScroll(
+      onScrollForwardAtEnd: () => controller.onLoadMore(),
+      child: CustomScrollView(
+        key: const PageStorageKey(DynType.reply),
+        physics: ReloadScrollPhysics(controller: controller),
+        slivers: [
+          buildReplyHeader(isPortrait),
+          Obx(() => replyList(controller.loadingState.value)),
+        ],
+      ),
     );
     final child = TabBarView(
       controller: tabController,
