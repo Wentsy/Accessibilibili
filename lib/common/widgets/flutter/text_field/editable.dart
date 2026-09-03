@@ -128,7 +128,7 @@ class RenderEditable extends base.RenderEditable {
     for (final item in controller.items) {
       if (item.type == RichTextType.emoji &&
           item.emote != null &&
-          item.start == offset) {
+          item.range.start == offset) {
         return item;
       }
     }
@@ -140,7 +140,7 @@ class RenderEditable extends base.RenderEditable {
     for (final item in controller.items) {
       if (item.type == RichTextType.emoji &&
           item.emote != null &&
-          item.end == offset) {
+          item.range.end == offset) {
         return item;
       }
     }
@@ -148,8 +148,8 @@ class RenderEditable extends base.RenderEditable {
   }
 
   String? _spokenEmoteName(RichTextItem item) {
-    var name = item.rawText?.trim();
-    if (name == null || name.isEmpty) return null;
+    var name = item.rawText.trim();
+    if (name.isEmpty) return null;
 
     // Bilibili image emotes are commonly stored as tokens such as "[doge]".
     // Match the picker wording: the readable name first, then "表情".
