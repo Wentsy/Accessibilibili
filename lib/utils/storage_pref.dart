@@ -824,6 +824,9 @@ abstract final class Pref {
   static bool get enableLongShowControl =>
       _setting.get(SettingBoxKey.enableLongShowControl, defaultValue: false);
 
+  static bool get autoBuffer =>
+      _setting.get(SettingBoxKey.autoBuffer, defaultValue: true);
+
   static double get bufferSize =>
       _setting.get(SettingBoxKey.bufferSize, defaultValue: 4.0);
 
@@ -831,6 +834,25 @@ abstract final class Pref {
       _setting.get(SettingBoxKey.bufferSec, defaultValue: 16.0);
 
   static Map<String, String> initBuffer([double playbackSpeed = 1.0]) {
+    if (autoBuffer) {
+      // Keep a useful reserve at higher playback rates without increasing the
+      // byte budget. Limits apply per demuxer (DASH may have audio and video).
+      final speed = playbackSpeed.isFinite && playbackSpeed > 0
+          ? playbackSpeed.clamp(0.5, 4.0)
+          : 1.0;
+      return {
+        'cache': 'yes',
+        'cache-secs': (60 * speed).toStringAsFixed(3),
+        // Refill continuously rather than deliberately letting the cache drain.
+        'demuxer-hysteresis-secs': '0',
+        'demuxer-max-bytes': (32 * 0x100000).toString(),
+        'demuxer-max-back-bytes': (4 * 0x100000).toString(),
+        'cache-pause': 'yes',
+        'cache-pause-wait': (3 * speed).toStringAsFixed(3),
+        // Do not add a mandatory wait to every start or VoiceOver seek.
+        'cache-pause-initial': 'no',
+      };
+    }
     final bufSec = Pref.bufferSec * playbackSpeed;
     final bufSiz = (Pref.bufferSize * 0x100000).toStringAsFixed(0);
     return {
@@ -839,6 +861,9 @@ abstract final class Pref {
       'demuxer-hysteresis-secs': (bufSec / 1.5).toStringAsFixed(3),
       'demuxer-max-bytes': bufSiz,
       'demuxer-max-back-bytes': bufSiz,
+      'cache-pause': 'yes',
+      'cache-pause-wait': '1',
+      'cache-pause-initial': 'no',
     };
   }
 

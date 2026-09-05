@@ -773,9 +773,6 @@ class PlPlayerController with BlockConfigMixin {
     return player;
   }
 
-  late final buffer = Pref.initBuffer(_playbackSpeed.value);
-  late final liveBuffer = Pref.initLiveBuffer();
-
   // 配置播放器
   Future<void> _createVideoController(
     DataSource dataSource,
@@ -807,9 +804,9 @@ class PlPlayerController with BlockConfigMixin {
       if (dataSource is FileSource)
         'cache': 'no'
       else if (isLive)
-        ...liveBuffer
+        ...Pref.initLiveBuffer()
       else
-        ...buffer,
+        ...Pref.initBuffer(_playbackSpeed.value),
     };
 
     String video = dataSource.videoSource;
@@ -1133,6 +1130,7 @@ class PlPlayerController with BlockConfigMixin {
 
     await _videoPlayerController?.setRate(speed);
     _playbackSpeed.value = speed;
+    _updateBufferForPlaybackSpeed(speed);
     if (danmakuController != null) {
       try {
         DanmakuOption currentOption = danmakuController!.option;
@@ -1153,6 +1151,17 @@ class PlPlayerController with BlockConfigMixin {
   Future<void> setDefaultSpeed() async {
     await _videoPlayerController?.setRate(playSpeedDefault);
     _playbackSpeed.value = playSpeedDefault;
+    _updateBufferForPlaybackSpeed(playSpeedDefault);
+  }
+
+  void _updateBufferForPlaybackSpeed(double speed) {
+    final player = _videoPlayerController;
+    if (player == null || isLive || isFileSource) return;
+    for (final entry in Pref.initBuffer(speed).entries) {
+      // File-local options are reset by mpv when opening the next media item,
+      // so VOD buffering cannot leak into a reused live/local player.
+      player.setProperty('file-local-options/${entry.key}', entry.value);
+    }
   }
 
   /// 播放视频

@@ -145,18 +145,25 @@ List<SettingsModel> get videoSettings => [
       getSubtitle: () => '当前：${Pref.audioOutput}',
       onTap: _showAudioOutputDialog,
     ),
+  const SwitchModel(
+    title: '自动缓冲',
+    subtitle: '自动预读后续视频，随倍速调整；卡顿后多缓冲一点再继续。可能增加预读流量，下次打开视频生效。关闭后使用手动缓冲设置，不影响直播。',
+    leading: Icon(Icons.av_timer),
+    setKey: SettingBoxKey.autoBuffer,
+    defaultVal: true,
+  ),
   NormalModel(
-    title: '缓冲大小',
+    title: '手动缓冲大小与直播缓冲',
     leading: const Icon(Icons.storage_outlined),
     getSubtitle: () =>
-        '当前：${Pref.bufferSize}MB。同时为前向和后向缓冲区大小。对于直播流，无后向缓冲大小，全部转给前向（此选项即mpv的--demuxer-max-bytes，--demuxer-max-back-bytes）',
+        '当前：${Pref.bufferSize}MB。关闭自动缓冲后用于视频的前向和后向缓冲；直播始终使用此设置的两倍作为前向缓冲。下次打开生效。',
     onTap: _showBufferSizeDialog,
   ),
   NormalModel(
-    title: '缓冲时长',
+    title: '手动缓冲时长',
     leading: const Icon(Icons.av_timer),
     getSubtitle: () =>
-        '当前：${Pref.bufferSec}s。实际缓冲为二者最小值。对于直播流，该选项无效（此选项即mpv的--cache-secs）',
+        '当前：${Pref.bufferSec}s。关闭自动缓冲后生效，实际预读也受缓冲大小限制。下次打开视频生效，不影响直播。',
     onTap: _showBufferSecDialog,
   ),
   NormalModel(
