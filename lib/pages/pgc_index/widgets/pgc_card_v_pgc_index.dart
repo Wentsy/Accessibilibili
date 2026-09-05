@@ -23,52 +23,74 @@ class PgcCardVPgcIndex extends StatelessWidget {
       title: item.title,
       cover: item.cover,
     );
-    return Card(
-      shape: const RoundedRectangleBorder(borderRadius: Style.mdRadius),
-      child: InkWell(
-        borderRadius: Style.mdRadius,
-        onTap: () => PageUtils.viewPgc(seasonId: item.seasonId),
-        onLongPress: onLongPress,
-        onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AspectRatio(
-              aspectRatio: 0.75,
-              child: LayoutBuilder(
-                builder: (context, boxConstraints) {
-                  final double maxWidth = boxConstraints.maxWidth;
-                  final double maxHeight = boxConstraints.maxHeight;
-                  return Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      NetworkImgLayer(
-                        src: item.cover,
-                        width: maxWidth,
-                        height: maxHeight,
-                      ),
-                      PBadge(
-                        text: item.badge,
-                        top: 6,
-                        right: 6,
-                        bottom: null,
-                        left: null,
-                      ),
-                      PBadge(
-                        text: item.order,
-                        top: null,
-                        right: null,
-                        bottom: 6,
-                        left: 6,
-                        type: PBadgeType.gray,
-                      ),
-                    ],
-                  );
-                },
+    void onTap() => PageUtils.viewPgc(seasonId: item.seasonId);
+
+    // The visual badges live on top of the cover, which otherwise makes
+    // VoiceOver announce them before the actual programme title. Expose the
+    // card as one semantic item and put secondary badges last.
+    final semanticLabel = [
+      item.title,
+      item.indexShow,
+      item.order,
+      item.badge,
+    ]
+        .where((value) => value?.trim().isNotEmpty == true)
+        .map((value) => value!.trim())
+        .join('，');
+
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      excludeSemantics: true,
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Card(
+        shape: const RoundedRectangleBorder(borderRadius: Style.mdRadius),
+        child: InkWell(
+          borderRadius: Style.mdRadius,
+          onTap: onTap,
+          onLongPress: onLongPress,
+          onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AspectRatio(
+                aspectRatio: 0.75,
+                child: LayoutBuilder(
+                  builder: (context, boxConstraints) {
+                    final double maxWidth = boxConstraints.maxWidth;
+                    final double maxHeight = boxConstraints.maxHeight;
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        NetworkImgLayer(
+                          src: item.cover,
+                          width: maxWidth,
+                          height: maxHeight,
+                        ),
+                        PBadge(
+                          text: item.badge,
+                          top: 6,
+                          right: 6,
+                          bottom: null,
+                          left: null,
+                        ),
+                        PBadge(
+                          text: item.order,
+                          top: null,
+                          right: null,
+                          bottom: 6,
+                          left: 6,
+                          type: PBadgeType.gray,
+                        ),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-            content(context),
-          ],
+              content(context),
+            ],
+          ),
         ),
       ),
     );
