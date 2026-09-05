@@ -43,6 +43,7 @@ class _HomePageState extends CommonPageState<HomePage>
     super.build(context);
     Widget tabBar;
     if (_homeController.tabs.length > 1) {
+      final accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
       tabBar = Padding(
         padding: const EdgeInsets.only(top: 4),
         child: SizedBox(
@@ -51,11 +52,20 @@ class _HomePageState extends CommonPageState<HomePage>
           child: TabBar(
             controller: _homeController.tabController,
             tabs: _homeController.tabs.map((e) => Tab(text: e.label)).toList(),
-            isScrollable: true,
+            // VoiceOver can intermittently consume activation on an edge tab
+            // while the scrollable tab strip is bringing that semantics node
+            // into view. All home labels are short, so keep the six tabs in a
+            // stable, non-scrolling row while accessible navigation is active.
+            isScrollable: !accessibleNavigation,
+            labelPadding: accessibleNavigation
+                ? const EdgeInsets.symmetric(horizontal: 4)
+                : null,
             dividerColor: Colors.transparent,
             dividerHeight: 0,
             splashBorderRadius: Style.mdRadius,
-            tabAlignment: TabAlignment.center,
+            tabAlignment: accessibleNavigation
+                ? TabAlignment.fill
+                : TabAlignment.center,
             onTap: (_) {
               feedBack();
               if (!_homeController.tabController.indexIsChanging) {
