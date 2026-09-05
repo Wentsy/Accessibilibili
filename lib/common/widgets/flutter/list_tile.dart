@@ -20,6 +20,7 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:material_ui/material_ui.dart' hide ListTile;
 import 'package:flutter/rendering.dart';
 
@@ -1013,6 +1014,7 @@ class ListTile extends StatelessWidget {
       enableFeedback: enableFeedback ?? tileTheme.enableFeedback ?? true,
       statesController: statesController,
       child: Semantics(
+        onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
         button:
             internalAddSemanticForOnTap &&
             (onTap != null || onLongPress != null),

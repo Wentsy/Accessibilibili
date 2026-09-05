@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/widgets/pendant_avatar.dart';
 import 'package:PiliPlus/models/search/result.dart';
 import 'package:PiliPlus/utils/bili_utils.dart';
@@ -21,7 +22,7 @@ class SearchUserItem extends StatelessWidget {
       fontSize: theme.textTheme.labelSmall!.fontSize,
       color: theme.colorScheme.outline,
     );
-    return Material(
+    final card = Material(
       type: MaterialType.transparency,
       child: InkWell(
         onTap: () => Get.toNamed('/member?mid=${item.mid}'),
@@ -72,6 +73,10 @@ class SearchUserItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+    return Semantics(
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+      child: card,
     );
   }
 }

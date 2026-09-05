@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -23,7 +24,7 @@ class SearchArticleItem extends StatelessWidget {
       title: item.title.map((item) => item.text).join(),
       cover: item.imageUrls?.firstOrNull,
     );
-    return Material(
+    final card = Material(
       type: MaterialType.transparency,
       child: InkWell(
         onTap: () => Get.toNamed(
@@ -100,6 +101,10 @@ class SearchArticleItem extends StatelessWidget {
           ),
         ),
       ),
+    );
+    return Semantics(
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+      child: card,
     );
   }
 }

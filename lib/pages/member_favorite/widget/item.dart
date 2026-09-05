@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
@@ -24,7 +25,7 @@ class MemberFavItem extends StatelessWidget {
       title: item.title,
       cover: item.cover,
     );
-    return Material(
+    final card = Material(
       type: MaterialType.transparency,
       child: InkWell(
         onTap: () async {
@@ -118,6 +119,10 @@ class MemberFavItem extends StatelessWidget {
           ),
         ),
       ),
+    );
+    return Semantics(
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+      child: card,
     );
   }
 }

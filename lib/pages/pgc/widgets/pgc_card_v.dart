@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
@@ -23,7 +24,7 @@ class PgcCardV extends StatelessWidget {
       title: item.title,
       cover: item.cover,
     );
-    return Card(
+    final card = Card(
       shape: const RoundedRectangleBorder(borderRadius: Style.mdRadius),
       child: InkWell(
         borderRadius: Style.mdRadius,
@@ -71,6 +72,10 @@ class PgcCardV extends StatelessWidget {
           ],
         ),
       ),
+    );
+    return Semantics(
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+      child: card,
     );
   }
 

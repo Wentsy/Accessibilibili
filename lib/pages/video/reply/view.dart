@@ -89,6 +89,9 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
             controller: _videoReplyController.scrollController,
             child: CustomScrollView(
               controller: _videoReplyController.scrollController,
+              cacheExtent: MediaQuery.accessibleNavigationOf(context)
+                  ? MediaQuery.sizeOf(context).height
+                  : null,
               physics: const AlwaysScrollableScrollPhysics(),
               key: const PageStorageKey(_VideoReplyPanelState),
               slivers: [
@@ -188,6 +191,12 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
             count++;
           }
           return SliverList.builder(
+            findChildIndexCallback: (key) {
+              final index = response.indexWhere(
+                (item) => ValueKey('reply-${item.id}') == key,
+              );
+              return index < 0 ? null : index + (hasVote ? 1 : 0);
+            },
             itemBuilder: (context, index) {
               if (hasVote) {
                 if (index == 0) {
@@ -231,7 +240,13 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 a11ySortKey: OrdinalSortKey((index + 1).toDouble()),
               );
               return ReplyA11ySemantics(
+                key: ValueKey('reply-${item.id}'),
                 replyItem: item,
+                onAccessibilityFocus: () {
+                  if (index >= response.length - 5) {
+                    _videoReplyController.onLoadMore();
+                  }
+                },
                 label: _a11yLabel(item),
                 onTap: item.count.toInt() > 0
                     ? () => replyReply(item, null)

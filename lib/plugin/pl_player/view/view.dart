@@ -72,6 +72,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart'
     show RenderProxyBox, SemanticsConfiguration;
+import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:flutter_volume_controller/flutter_volume_controller.dart';
@@ -1354,17 +1355,21 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
       key: _playerKey,
       children: <Widget>[
         Obx(() {
-          final player = plPlayerController.videoPlayerController;
-          final isPlaying = player?.state.playing ?? false;
-          final buffering = plPlayerController.isBuffering.value;
+          final isPlaying = plPlayerController.playerStatus.isPlaying;
           return Semantics(
             container: true,
             label: '影片播放控制',
-            value: buffering
-                ? (isPlaying ? '正在播放，緩衝中' : '已暫停，緩衝中')
-                : (isPlaying ? '正在播放' : '已暫停'),
+            // Transient buffering must not change the focused control's value
+            // while video audio starts. Keep explicit playback controls usable.
+            value: isPlaying ? '正在播放' : '已暫停',
             hint: '點兩下播放或暫停影片',
             onTap: plPlayerController.togglePlaybackAccessible,
+            customSemanticsActions: {
+              if (!plPlayerController.isFileSource)
+                const CustomSemanticsAction(label: '重新載入影片'): () {
+                  plPlayerController.refreshPlayer();
+                },
+            },
             child: _videoWidget,
           );
         }),
@@ -1894,48 +1899,52 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
           if (plPlayerController.dataStatus.loading ||
               (plPlayerController.isBuffering.value &&
                   plPlayerController.playerStatus.isPlaying)) {
-            return Center(
-              child: GestureDetector(
-                onTap: plPlayerController.refreshPlayer,
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: const BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(
-                      colors: [Colors.black26, Colors.transparent],
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset(
-                        Assets.buffering,
-                        height: 25,
-                        cacheHeight: 25.cacheSize(context),
-                        semanticLabel: "加载中",
-                        color: Colors.white,
+            return ExcludeSemantics(
+              // The spinner, label and changing seconds are visual feedback.
+              // Retry remains available on the stable video control above.
+              child: Center(
+                child: GestureDetector(
+                  onTap: plPlayerController.refreshPlayer,
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [Colors.black26, Colors.transparent],
                       ),
-                      if (plPlayerController.isBuffering.value)
-                        Obx(() {
-                          final buffered = plPlayerController.buffered.value;
-                          if (buffered == 0) {
-                            return const Text(
-                              '加载中...',
-                              style: TextStyle(
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Image.asset(
+                          Assets.buffering,
+                          height: 25,
+                          cacheHeight: 25.cacheSize(context),
+                          semanticLabel: "加载中",
+                          color: Colors.white,
+                        ),
+                        if (plPlayerController.isBuffering.value)
+                          Obx(() {
+                            final buffered = plPlayerController.buffered.value;
+                            if (buffered == 0) {
+                              return const Text(
+                                '加载中...',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                ),
+                              );
+                            }
+                            return Text(
+                              DurationUtils.formatDuration(buffered),
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
                               ),
                             );
-                          }
-                          return Text(
-                            DurationUtils.formatDuration(buffered),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          );
-                        }),
-                    ],
+                          }),
+                      ],
+                    ),
                   ),
                 ),
               ),

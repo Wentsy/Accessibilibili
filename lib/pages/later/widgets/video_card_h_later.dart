@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
@@ -42,7 +43,7 @@ class VideoCardHLater extends StatelessWidget {
             ..enableMultiSelect.value = true
             ..onSelect(videoItem);
 
-    return Material(
+    final card = Material(
       type: MaterialType.transparency,
       child: InkWell(
         onLongPress: onLongPress,
@@ -173,6 +174,10 @@ class VideoCardHLater extends StatelessWidget {
           ),
         ),
       ),
+    );
+    return Semantics(
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+      child: card,
     );
   }
 

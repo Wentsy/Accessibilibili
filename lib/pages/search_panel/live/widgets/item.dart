@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -19,7 +20,7 @@ class LiveItem extends StatelessWidget {
       title: liveItem.title.map((item) => item.text).join(),
       cover: liveItem.cover,
     );
-    return Card(
+    final card = Card(
       child: InkWell(
         onTap: () => PageUtils.toLiveRoom(liveItem.roomid),
         onLongPress: onLongPress,
@@ -61,6 +62,10 @@ class LiveItem extends StatelessWidget {
           ],
         ),
       ),
+    );
+    return Semantics(
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+      child: card,
     );
   }
 

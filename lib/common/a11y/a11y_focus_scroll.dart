@@ -21,7 +21,7 @@ void suppressA11yFocusScroll([
 /// automatically scrolling that node into the visible viewport. When that
 /// happens, swipe navigation and touch exploration describe different content.
 /// Call this from Semantics.onDidGainAccessibilityFocus for list items.
-void a11yEnsureVisible(BuildContext context) {
+void a11yEnsureVisible(BuildContext context, {bool immediate = true}) {
   if (!MediaQuery.accessibleNavigationOf(context)) return;
   if (DateTime.now().millisecondsSinceEpoch < _a11yFocusScrollSuppressedUntilMs) {
     return;
@@ -75,7 +75,7 @@ void a11yEnsureVisible(BuildContext context) {
       Scrollable.ensureVisible(
         context,
         alignment: 0.5,
-        duration: const Duration(milliseconds: 220),
+        duration: immediate ? Duration.zero : const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
       );
       return;
@@ -100,8 +100,12 @@ void a11yEnsureVisible(BuildContext context) {
     Scrollable.ensureVisible(
       context,
       alignment: nearBottom ? 0.68 : 0.32,
-      duration: const Duration(milliseconds: 180),
+      duration: immediate ? Duration.zero : const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
     );
   });
+  // Accessibility actions can arrive while Flutter is idle. Registering a
+  // post-frame callback alone does not request a frame, so continuous reading
+  // could reach the last laid-out item before this callback ever runs.
+  WidgetsBinding.instance.ensureVisualUpdate();
 }

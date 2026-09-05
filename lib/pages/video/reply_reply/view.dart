@@ -246,7 +246,9 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
         controller: scrollController,
         child: CustomScrollView(
           key: PageStorageKey('reply-thread-${widget.rpid}-${widget.dialog ?? 0}'),
-          cacheExtent: MediaQuery.accessibleNavigationOf(context) ? 400 : 3000,
+          cacheExtent: MediaQuery.accessibleNavigationOf(context)
+              ? MediaQuery.sizeOf(context).height
+              : 3000,
           controller: scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
@@ -363,6 +365,11 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                   final reply = _replyItem(context, item, index);
                   final child = ReplyA11ySemantics(
                     replyItem: item,
+                    onAccessibilityFocus: () {
+                      if (index >= response.length - 5) {
+                        _controller.onLoadMore();
+                      }
+                    },
                     label: _a11yLabel(item),
                     onTap: () => _controller.onReply(item, index: index),
                     onTapHint: '點兩下回覆這條評論',

@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
@@ -38,6 +39,7 @@ class FavVideoItem extends StatelessWidget {
     ].join('，');
 
     return Semantics(
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
       container: true,
       explicitChildNodes: false,
       excludeSemantics: true,

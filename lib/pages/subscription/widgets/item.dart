@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
@@ -68,6 +69,7 @@ class SubItem extends StatelessWidget {
     );
 
     return Semantics(
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
       container: true,
       explicitChildNodes: false,
       excludeSemantics: true,

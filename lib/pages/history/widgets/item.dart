@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
@@ -63,6 +64,7 @@ class HistoryItem extends StatelessWidget {
         '${item.title}$authorPart$progressPart$viewedAtPart$liveStatusPart';
 
     return Semantics(
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
       container: true,
       explicitChildNodes: false,
       excludeSemantics: true,

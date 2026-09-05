@@ -17,6 +17,7 @@ class ReplyA11ySemantics extends StatelessWidget {
     required this.label,
     this.onTap,
     this.onTapHint,
+    this.onAccessibilityFocus,
   });
 
   final ReplyInfo replyItem;
@@ -24,6 +25,7 @@ class ReplyA11ySemantics extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
   final String? onTapHint;
+  final VoidCallback? onAccessibilityFocus;
 
   Future<void> _toggleLike(BuildContext context) async {
     final isLiked = replyItem.replyControl.action == Int64.ONE;
@@ -96,7 +98,12 @@ class ReplyA11ySemantics extends StatelessWidget {
       textDirection: TextDirection.ltr,
       onTap: onTap,
       onTapHint: onTapHint,
-      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+      onDidGainAccessibilityFocus: () {
+        onAccessibilityFocus?.call();
+        // Make the next lazy-list nodes available without a scroll animation
+        // racing VoiceOver's read-from-current-item traversal.
+        a11yEnsureVisible(context, immediate: true);
+      },
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(
           label: action == Int64.ONE ? '取消赞' : '点赞这条评论',
