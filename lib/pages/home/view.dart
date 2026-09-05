@@ -41,12 +41,15 @@ class _HomePageState extends CommonPageState<HomePage>
 
   void _activateAccessibleTab(int index) {
     final controller = _homeController.tabController;
-    final isCurrent = controller.index == index && !controller.indexIsChanging;
+    final isCurrent = controller.index == index;
     feedBack();
     if (isCurrent) {
       _homeController.animateToTop();
     } else {
-      controller.animateTo(index);
+      // Do not animate accessibility-driven tab changes. TabBarView implements
+      // non-adjacent changes with an asynchronous page warp, which can race
+      // repeated VoiceOver activations and leave the visible page one tab off.
+      controller.index = index;
     }
   }
 
@@ -103,12 +106,23 @@ class _HomePageState extends CommonPageState<HomePage>
     );
   }
 
+  Widget _buildAccessibleTabPages() {
+    final controller = _homeController.tabController;
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) => IndexedStack(
+        index: controller.index,
+        children: _homeController.tabs.map((e) => e.page).toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
     Widget tabBar;
     if (_homeController.tabs.length > 1) {
-      final accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
       tabBar = Padding(
         padding: const EdgeInsets.only(top: 4),
         child: SizedBox(
@@ -153,10 +167,12 @@ class _HomePageState extends CommonPageState<HomePage>
         tabBar,
         Expanded(
           child: onBuild(
-            tabBarView(
-              controller: _homeController.tabController,
-              children: _homeController.tabs.map((e) => e.page).toList(),
-            ),
+            accessibleNavigation
+                ? _buildAccessibleTabPages()
+                : tabBarView(
+                    controller: _homeController.tabController,
+                    children: _homeController.tabs.map((e) => e.page).toList(),
+                  ),
           ),
         ),
       ],
