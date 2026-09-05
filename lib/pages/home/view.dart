@@ -38,6 +38,70 @@ class _HomePageState extends CommonPageState<HomePage>
     _colorScheme = ColorScheme.of(context);
   }
 
+  void _activateAccessibleTab(int index) {
+    final controller = _homeController.tabController;
+    final isCurrent = controller.index == index && !controller.indexIsChanging;
+    feedBack();
+    if (isCurrent) {
+      _homeController.animateToTop();
+    } else {
+      controller.animateTo(index);
+    }
+  }
+
+  Widget _buildAccessibleTabBar() {
+    final controller = _homeController.tabController;
+    final theme = Theme.of(context);
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        return Semantics(
+          role: SemanticsRole.tabBar,
+          container: true,
+          explicitChildNodes: true,
+          child: Row(
+            children: [
+              for (var index = 0; index < _homeController.tabs.length; index++)
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      final tab = _homeController.tabs[index];
+                      final selected = controller.index == index;
+                      final activate = () => _activateAccessibleTab(index);
+                      return Semantics(
+                        role: SemanticsRole.tab,
+                        selected: selected,
+                        label: tab.label,
+                        excludeSemantics: true,
+                        onTap: activate,
+                        child: InkWell(
+                          borderRadius: Style.mdRadius,
+                          onTap: activate,
+                          child: Center(
+                            child: Text(
+                              tab.label,
+                              maxLines: 1,
+                              style: TextStyle(
+                                color: selected
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.onSurfaceVariant,
+                                fontWeight:
+                                    selected ? FontWeight.w600 : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -49,30 +113,25 @@ class _HomePageState extends CommonPageState<HomePage>
         child: SizedBox(
           height: 42,
           width: double.infinity,
-          child: TabBar(
-            controller: _homeController.tabController,
-            tabs: _homeController.tabs.map((e) => Tab(text: e.label)).toList(),
-            // VoiceOver can intermittently consume activation on an edge tab
-            // while the scrollable tab strip is bringing that semantics node
-            // into view. All home labels are short, so keep the six tabs in a
-            // stable, non-scrolling row while accessible navigation is active.
-            isScrollable: !accessibleNavigation,
-            labelPadding: accessibleNavigation
-                ? const EdgeInsets.symmetric(horizontal: 4)
-                : null,
-            dividerColor: Colors.transparent,
-            dividerHeight: 0,
-            splashBorderRadius: Style.mdRadius,
-            tabAlignment: accessibleNavigation
-                ? TabAlignment.fill
-                : TabAlignment.center,
-            onTap: (_) {
-              feedBack();
-              if (!_homeController.tabController.indexIsChanging) {
-                _homeController.animateToTop();
-              }
-            },
-          ),
+          child: accessibleNavigation
+              ? _buildAccessibleTabBar()
+              : TabBar(
+                  controller: _homeController.tabController,
+                  tabs: _homeController.tabs
+                      .map((e) => Tab(text: e.label))
+                      .toList(),
+                  isScrollable: true,
+                  dividerColor: Colors.transparent,
+                  dividerHeight: 0,
+                  splashBorderRadius: Style.mdRadius,
+                  tabAlignment: TabAlignment.center,
+                  onTap: (_) {
+                    feedBack();
+                    if (!_homeController.tabController.indexIsChanging) {
+                      _homeController.animateToTop();
+                    }
+                  },
+                ),
         ),
       );
       if (_homeController.hideTopBar &&
