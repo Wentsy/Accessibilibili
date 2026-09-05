@@ -483,14 +483,13 @@ class _MainAppState extends PopScopeState<MainApp>
       bottomNav = _bottomNav;
       if (bottomNav != null) {
         // 🔴 無障礙：列表無限載入會讓 VoiceOver 永遠出不了內容區，
-        // 給底部導航 sortKey 讓它在語義樹中優先於內容
+        // 保留獨立語義容器，但不要額外建立一個只會朗讀「導覽列」的節點。
         bottomNav = MediaQuery.removePadding(
           context: context,
           removeTop: true,
           child: Semantics(
             container: true,
             explicitChildNodes: false,
-            label: '導覽列',
             child: bottomNav,
           ),
         );
