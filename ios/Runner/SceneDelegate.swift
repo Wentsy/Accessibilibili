@@ -2,21 +2,24 @@ import Flutter
 import ObjectiveC.runtime
 import UIKit
 
-/// Bridges VoiceOver Read All across Flutter lazy vertical lists while leaving
-/// ordinary accessibility traversal untouched.
+/// Supplies the native reading contracts that Flutter 3.47.1 does not expose
+/// for its individual semantic text elements.
 ///
-/// Flutter 3.47.1 already knows how to reveal an off-screen semantic node when
-/// VoiceOver swipe-navigation focuses it, but Read All can consume the cached
-/// semantic nodes without taking that swipe-to-focus path. Apple documents a
-/// separate continuous-reading contract for paged readable content:
-/// UIAccessibilityReadingContent + causesPageTurn + accessibilityScroll.
+/// The normal Flutter accessibility traversal stays authoritative. This bridge
+/// does not enumerate ahead, move VoiceOver focus, poll focus, or call
+/// `showOnScreen`. It only:
 ///
-/// This patch supplies that reading-content contract to ordinary Flutter
-/// semantic elements, marks only the final *readable* semantic descendant of a
-/// vertical Flutter scrollable as a page-turn boundary, and translates the
-/// resulting forward page-turn request into Flutter's existing vertical
-/// accessibility scroll action. It does not enumerate ahead, move focus, poll
-/// VoiceOver, or call showOnScreen on behalf of normal left/right navigation.
+/// 1. Lets plain Flutter static-text semantics participate in
+///    UIAccessibilityReadingContent.
+/// 2. On iOS 18+, links adjacent static-text semantics in the same vertical
+///    Flutter scrollable using Apple's text-navigation element APIs.
+/// 3. Marks only the last readable static-text semantic currently exposed by a
+///    vertical Flutter scrollable as `causesPageTurn`, and translates the
+///    resulting `.next` page request into Flutter's vertical forward scroll.
+///
+/// This deliberately avoids controls such as buttons, links, sliders, FABs,
+/// and bottom navigation items so ordinary left/right VoiceOver navigation is
+/// not repurposed as reading navigation.
 private enum VoiceOverReadAllBridge {
   private typealias TraitsGetter = @convention(c) (
     AnyObject,
@@ -28,6 +31,16 @@ private enum VoiceOverReadAllBridge {
     Selector,
     Int
   ) -> Bool
+
+  private typealias ObjectGetter = @convention(c) (
+    AnyObject,
+    Selector
+  ) -> AnyObject?
+
+  private static let traitsSelector = NSSelectorFromString(
+    "accessibilityTraits"
+  )
+  private static var originalTraitsGetter: TraitsGetter?
 
   static func install() {
     _ = installOnce
@@ -44,11 +57,20 @@ private enum VoiceOverReadAllBridge {
       return
     }
 
+    // Capture Flutter's unmodified traits getter first. Reading-candidate
+    // checks use it so the page-turn trait we add below can never recursively
+    // influence eligibility.
+    installPageTurnTrait(on: semanticClass)
+
     installReadingContent(
       on: semanticClass,
       protocolObject: readingContentProtocol
     )
-    installPageTurnTrait(on: semanticClass)
+
+    if #available(iOS 18.0, *) {
+      installTextNavigationLinks(on: semanticClass)
+    }
+
     installForwardPageTurn(on: semanticsBaseClass)
   }()
 
@@ -67,7 +89,7 @@ private enum VoiceOverReadAllBridge {
       AnyObject,
       CGPoint
     ) -> Int = { object, _ in
-      return readableText(of: object) == nil ? NSNotFound : 0
+      return readingText(of: object) == nil ? NSNotFound : 0
     }
     addRequiredProtocolMethod(
       to: targetClass,
@@ -84,7 +106,7 @@ private enum VoiceOverReadAllBridge {
       Int
     ) -> NSString? = { object, lineNumber in
       guard lineNumber == 0 else { return nil }
-      return readableText(of: object)
+      return readingText(of: object)
     }
     addRequiredProtocolMethod(
       to: targetClass,
@@ -100,7 +122,13 @@ private enum VoiceOverReadAllBridge {
       AnyObject,
       Int
     ) -> CGRect = { object, lineNumber in
-      guard lineNumber == 0 else { return .zero }
+      guard
+        lineNumber == 0,
+        readingText(of: object) != nil
+      else {
+        return .zero
+      }
+
       if let element = object as? UIAccessibilityElement {
         return element.accessibilityFrame
       }
@@ -122,7 +150,7 @@ private enum VoiceOverReadAllBridge {
     )
     let pageContentBlock: @convention(block) (AnyObject) -> NSString? = {
       object in
-      return readableText(of: object)
+      return readingText(of: object)
     }
     addRequiredProtocolMethod(
       to: targetClass,
@@ -138,6 +166,8 @@ private enum VoiceOverReadAllBridge {
     selector: Selector,
     implementation: IMP
   ) {
+    // These methods are not implemented by Flutter 3.47.1. If a future engine
+    // supplies one itself, leave Flutter's implementation alone.
     guard class_getInstanceMethod(targetClass, selector) == nil else {
       return
     }
@@ -160,44 +190,108 @@ private enum VoiceOverReadAllBridge {
     )
   }
 
-  private static func readableText(of object: AnyObject) -> NSString? {
-    var parts: [String] = []
+  // MARK: - iOS 18 text-navigation links
 
-    if let element = object as? UIAccessibilityElement {
-      if let label = element.accessibilityLabel?.trimmingCharacters(
-        in: .whitespacesAndNewlines
-      ), !label.isEmpty {
-        parts.append(label)
-      }
-      if let value = element.accessibilityValue?.trimmingCharacters(
-        in: .whitespacesAndNewlines
-      ), !value.isEmpty, !parts.contains(value) {
-        parts.append(value)
-      }
-    } else if let view = object as? UIView {
-      if let label = view.accessibilityLabel?.trimmingCharacters(
-        in: .whitespacesAndNewlines
-      ), !label.isEmpty {
-        parts.append(label)
-      }
-      if let value = view.accessibilityValue?.trimmingCharacters(
-        in: .whitespacesAndNewlines
-      ), !value.isEmpty, !parts.contains(value) {
-        parts.append(value)
-      }
+  @available(iOS 18.0, *)
+  private static func installTextNavigationLinks(on targetClass: AnyClass) {
+    installTextNavigationGetter(
+      on: targetClass,
+      selectorName: "accessibilityNextTextNavigationElement",
+      delta: 1
+    )
+    installTextNavigationGetter(
+      on: targetClass,
+      selectorName: "accessibilityPreviousTextNavigationElement",
+      delta: -1
+    )
+  }
+
+  @available(iOS 18.0, *)
+  private static func installTextNavigationGetter(
+    on targetClass: AnyClass,
+    selectorName: String,
+    delta: Int
+  ) {
+    let selector = NSSelectorFromString(selectorName)
+    guard
+      let inheritedMethod = class_getInstanceMethod(targetClass, selector),
+      let typeEncoding = method_getTypeEncoding(inheritedMethod)
+    else {
+      return
     }
 
-    guard !parts.isEmpty else {
+    let original = unsafeBitCast(
+      method_getImplementation(inheritedMethod),
+      to: ObjectGetter.self
+    )
+
+    let block: @convention(block) (AnyObject) -> AnyObject? = { object in
+      if let adjacent = adjacentReadingElement(from: object, delta: delta) {
+        return adjacent
+      }
+      return original(object, selector)
+    }
+
+    // The getter normally comes from NSObject/UIAccessibility. Add an override
+    // only on FlutterSemanticsObject, never mutate UIKit's implementation.
+    _ = class_addMethod(
+      targetClass,
+      selector,
+      imp_implementationWithBlock(block),
+      typeEncoding
+    )
+  }
+
+  private static func adjacentReadingElement(
+    from object: AnyObject,
+    delta: Int
+  ) -> AnyObject? {
+    guard
+      delta != 0,
+      isReadingCandidate(object),
+      let semanticObject = object as? NSObject,
+      let scrollView = verticalFlutterScrollAncestor(of: semanticObject),
+      let owner = semanticsObject(of: scrollView)
+    else {
       return nil
     }
-    return parts.joined(separator: "，") as NSString
+
+    var ordered: [NSObject] = []
+    for child in semanticChildren(of: owner) {
+      collectReadingCandidates(child, into: &ordered)
+    }
+
+    guard let index = ordered.firstIndex(where: { $0 === semanticObject }) else {
+      return nil
+    }
+
+    let targetIndex = index + delta
+    guard ordered.indices.contains(targetIndex) else {
+      return nil
+    }
+
+    return nativeAccessibility(of: ordered[targetIndex])
+  }
+
+  private static func collectReadingCandidates(
+    _ object: NSObject,
+    into result: inout [NSObject]
+  ) {
+    if isReadingCandidate(object) {
+      result.append(object)
+    }
+    for child in semanticChildren(of: object) {
+      collectReadingCandidates(child, into: &result)
+    }
   }
 
   // MARK: - Automatic Read All page turn
 
   private static func installPageTurnTrait(on semanticClass: AnyClass) {
-    let selector = NSSelectorFromString("accessibilityTraits")
-    guard let method = class_getInstanceMethod(semanticClass, selector) else {
+    guard let method = class_getInstanceMethod(
+      semanticClass,
+      traitsSelector
+    ) else {
       return
     }
 
@@ -205,9 +299,10 @@ private enum VoiceOverReadAllBridge {
       method_getImplementation(method),
       to: TraitsGetter.self
     )
+    originalTraitsGetter = original
 
     let block: @convention(block) (AnyObject) -> UInt64 = { object in
-      let rawTraits = original(object, selector)
+      let rawTraits = original(object, traitsSelector)
       guard pageTurnScrollView(for: object) != nil else {
         return rawTraits
       }
@@ -242,14 +337,14 @@ private enum VoiceOverReadAllBridge {
         let direction = UIAccessibilityScrollDirection(
           rawValue: rawDirection
         ),
-        direction == .next || direction == .right,
+        direction == .next,
         let scrollView = pageTurnScrollView(for: object)
       else {
         return original(object, selector, rawDirection)
       }
 
-      // Flutter's iOS bridge maps `.up` to SemanticsAction.scrollDown, i.e.
-      // move forward through a vertical list.
+      // Flutter 3.47.1 maps `.up` to SemanticsAction.scrollDown, which moves
+      // forward through a vertical list.
       let handled = scrollView.accessibilityScroll(.up)
       if handled {
         weak var weakScrollView = scrollView
@@ -276,20 +371,20 @@ private enum VoiceOverReadAllBridge {
   }
 
   /// Returns the owning vertical Flutter semantics scroll view only when
-  /// `object` is the final readable semantic descendant in its currently
-  /// exposed semantic subtree and there is still content below the viewport.
+  /// `object` is the last currently exposed static-text reading element and
+  /// Flutter still reports forward scroll range.
   private static func pageTurnScrollView(
     for object: AnyObject
   ) -> UIScrollView? {
     guard
       UIAccessibility.isVoiceOverRunning,
       Thread.isMainThread,
-      readableText(of: object) != nil,
+      isReadingCandidate(object),
       let semanticObject = object as? NSObject,
       let scrollView = verticalFlutterScrollAncestor(of: semanticObject),
       hasRemainingForwardRange(scrollView),
       let owner = semanticsObject(of: scrollView),
-      let tail = lastReadableDescendant(ofScrollOwner: owner),
+      let tail = lastReadingDescendant(ofScrollOwner: owner),
       tail === semanticObject
     else {
       return nil
@@ -298,34 +393,90 @@ private enum VoiceOverReadAllBridge {
     return scrollView
   }
 
-  private static func lastReadableDescendant(
+  private static func lastReadingDescendant(
     ofScrollOwner owner: NSObject
   ) -> NSObject? {
     for child in semanticChildren(of: owner).reversed() {
-      if let result = lastReadableDescendant(child) {
+      if let result = lastReadingDescendant(child) {
         return result
       }
     }
     return nil
   }
 
-  private static func lastReadableDescendant(
+  private static func lastReadingDescendant(
     _ object: NSObject
   ) -> NSObject? {
     for child in semanticChildren(of: object).reversed() {
-      if let result = lastReadableDescendant(child) {
+      if let result = lastReadingDescendant(child) {
         return result
       }
     }
+    return isReadingCandidate(object) ? object : nil
+  }
 
+  // MARK: - Reading eligibility
+
+  /// Keep reading APIs away from controls. Flutter 3.47.1 reports plain leaf
+  /// labels as static text; comments use that shape even though they also have
+  /// tap/custom actions. Buttons, links, sliders, FABs and tabs keep their
+  /// normal accessibility behavior.
+  private static func isReadingCandidate(_ object: AnyObject) -> Bool {
     guard
-      isAccessibilityElement(object),
-      readableText(of: object) != nil
+      let semanticObject = object as? NSObject,
+      isAccessibilityElement(semanticObject),
+      rawReadableText(of: object) != nil,
+      let originalTraitsGetter
     else {
+      return false
+    }
+
+    let rawTraits = originalTraitsGetter(object, traitsSelector)
+    let traits = UIAccessibilityTraits(rawValue: rawTraits)
+    return traits.contains(.staticText)
+  }
+
+  private static func readingText(of object: AnyObject) -> NSString? {
+    guard isReadingCandidate(object) else {
       return nil
     }
-    return object
+    return rawReadableText(of: object)
   }
+
+  private static func rawReadableText(of object: AnyObject) -> NSString? {
+    var parts: [String] = []
+
+    if let element = object as? UIAccessibilityElement {
+      if let label = element.accessibilityLabel?.trimmingCharacters(
+        in: .whitespacesAndNewlines
+      ), !label.isEmpty {
+        parts.append(label)
+      }
+      if let value = element.accessibilityValue?.trimmingCharacters(
+        in: .whitespacesAndNewlines
+      ), !value.isEmpty, !parts.contains(value) {
+        parts.append(value)
+      }
+    } else if let view = object as? UIView {
+      if let label = view.accessibilityLabel?.trimmingCharacters(
+        in: .whitespacesAndNewlines
+      ), !label.isEmpty {
+        parts.append(label)
+      }
+      if let value = view.accessibilityValue?.trimmingCharacters(
+        in: .whitespacesAndNewlines
+      ), !value.isEmpty, !parts.contains(value) {
+        parts.append(value)
+      }
+    }
+
+    guard !parts.isEmpty else {
+      return nil
+    }
+    return parts.joined(separator: "，") as NSString
+  }
+
+  // MARK: - Flutter 3.47.1 semantic runtime helpers
 
   private static func verticalFlutterScrollAncestor(
     of semanticObject: NSObject
