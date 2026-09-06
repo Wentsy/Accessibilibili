@@ -313,43 +313,53 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
   }
 
   Widget _sortWidget(ColorScheme colorScheme) {
-    return SliverPinnedHeader(
-      backgroundColor: colorScheme.surface,
-      child: Semantics(
-        container: true,
-        explicitChildNodes: true,
-        sortKey: const OrdinalSortKey(1),
-        child: Padding(
-          padding: const .fromLTRB(12, 2.5, 6, 2.5),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Obx(
-                () {
-                  final count = _controller.count.value;
-                  return count != -1
-                      ? Text(
-                          '相关回复共${NumUtils.numFormat(count)}条',
-                          style: const TextStyle(fontSize: 13),
-                        )
-                      : const SizedBox.shrink();
-                },
-              ),
-              TextButton.icon(
-                style: Style.buttonStyle,
-                onPressed: _controller.queryBySort,
-                icon: Icon(Icons.sort, size: 16, color: colorScheme.secondary),
-                label: Obx(
-                  () => Text(
-                    _controller.sortType.value.label,
-                    style: TextStyle(fontSize: 13, color: colorScheme.secondary),
-                  ),
+    final header = Semantics(
+      container: true,
+      explicitChildNodes: true,
+      sortKey: const OrdinalSortKey(1),
+      child: Padding(
+        padding: const .fromLTRB(12, 2.5, 6, 2.5),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Obx(
+              () {
+                final count = _controller.count.value;
+                return count != -1
+                    ? Text(
+                        '相关回复共${NumUtils.numFormat(count)}条',
+                        style: const TextStyle(fontSize: 13),
+                      )
+                    : const SizedBox.shrink();
+              },
+            ),
+            TextButton.icon(
+              style: Style.buttonStyle,
+              onPressed: _controller.queryBySort,
+              icon: Icon(Icons.sort, size: 16, color: colorScheme.secondary),
+              label: Obx(
+                () => Text(
+                  _controller.sortType.value.label,
+                  style: TextStyle(fontSize: 13, color: colorScheme.secondary),
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
+    );
+
+    // A pinned row remains a visible VoiceOver candidate on every page.
+    // Keep its natural position in the thread when navigating with VoiceOver,
+    // so reverse swipes reach preceding replies instead of the pinned controls.
+    if (!kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.iOS &&
+        MediaQuery.accessibleNavigationOf(context)) {
+      return SliverToBoxAdapter(child: header);
+    }
+    return SliverPinnedHeader(
+      backgroundColor: colorScheme.surface,
+      child: header,
     );
   }
 

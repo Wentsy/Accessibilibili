@@ -307,7 +307,6 @@ private enum VoiceOverComposerTouchBridge {
 /// navigation remains owned by Flutter.
 private enum VoiceOverReplyReadingBridge {
   private static let replyIdentifierPrefix = "a11y-read-reply|"
-  private static var backwardRequest = 0
 
   private typealias TraitsGetter = @convention(c) (
     AnyObject,
@@ -444,9 +443,6 @@ private enum VoiceOverReplyReadingBridge {
         return original(object, selector, rawDirection)
       }
 
-      // A later reading-chain scroll supersedes any pending backward handoff.
-      backwardRequest &+= 1
-
       if
         direction == .next,
         shouldCauseForwardPageTurn(object),
@@ -471,28 +467,13 @@ private enum VoiceOverReplyReadingBridge {
         let ancestor = verticalScrollAncestor(of: object),
         ancestor.scrollView.contentOffset.y > 1
       {
-        NSLog("[ReplyBackward] page request")
-        let anchorIdentifier = (object as? UIAccessibilityElement)?.accessibilityIdentifier
-        let group = readingGroup(of: object)
-        let oldOffset = ancestor.scrollView.contentOffset.y
-        let request = backwardRequest
         let didScroll = original(
           ancestor.semanticObject,
           selector,
           UIAccessibilityScrollDirection.down.rawValue
         )
         if didScroll {
-          if let anchorIdentifier = anchorIdentifier, let group = group {
-            resumeBackwardReading(
-              in: ancestor.scrollView,
-              anchorIdentifier: anchorIdentifier,
-              group: group,
-              oldOffset: oldOffset,
-              request: request
-            )
-          } else {
-            postPageScrolledAfterSemanticsRefresh()
-          }
+          postPageScrolledAfterSemanticsRefresh()
         }
         return didScroll
       }
@@ -507,79 +488,6 @@ private enum VoiceOverReplyReadingBridge {
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
       guard UIAccessibility.isVoiceOverRunning else { return }
       UIAccessibility.post(notification: .pageScrolled, argument: nil)
-    }
-  }
-
-  /// Only called by the reading chain's `.previous` page request. Ordinary
-  /// swipe-to-focus/showOnScreen and forward page completion remain untouched.
-  private static func resumeBackwardReading(
-    in scrollView: UIScrollView,
-    anchorIdentifier: String,
-    group: String,
-    oldOffset: CGFloat,
-    request: Int,
-    attemptsLeft: Int = 5
-  ) {
-    let delay = attemptsLeft == 5 ? 0.12 : 0.04
-    DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak scrollView] in
-      guard
-        request == backwardRequest,
-        UIAccessibility.isVoiceOverRunning,
-        let scrollView = scrollView,
-        scrollView.window != nil,
-        let focused = UIAccessibility.focusedElement(using: .notificationVoiceOver)
-          as? UIAccessibilityElement,
-        focused.accessibilityIdentifier == anchorIdentifier,
-        let focusedAncestor = verticalScrollAncestor(of: focused),
-        focusedAncestor.scrollView === scrollView
-      else {
-        // Do not steal focus back after a new gesture, editor or route change.
-        NSLog("[ReplyBackward] cancelled: focus or viewport changed")
-        return
-      }
-
-      // Resolve the current semantic owner and anchor by identifier: Flutter
-      // may have replaced the old semantic objects while laying out the page.
-      if
-        scrollView.contentOffset.y < oldOffset - 1,
-        let owner = objectValue(of: scrollView, selectorName: "semanticsObject") as? NSObject
-      {
-        let replies = readingReplies(under: owner, group: group)
-        if
-          let index = replies.firstIndex(where: {
-            (nativeAccessibility(of: $0) as? UIAccessibilityElement)?
-              .accessibilityIdentifier == anchorIdentifier
-          }),
-          index > 0,
-          let previous = nativeAccessibility(of: replies[index - 1]) as? UIAccessibilityElement,
-          previous.isAccessibilityElement,
-          !previous.accessibilityFrame.isEmpty,
-          previous.accessibilityFrame.intersects(scrollView.accessibilityFrame)
-        {
-          // pageScrolled accepts announcement text, not a focus target. Use
-          // one targeted layout notification instead of pageScrolled(nil),
-          // which leaves VoiceOver free to choose the pinned header again.
-          NSLog("[ReplyBackward] resumed at preceding reply")
-          UIAccessibility.post(notification: .layoutChanged, argument: previous)
-          return
-        }
-      }
-
-      if attemptsLeft > 1 {
-        resumeBackwardReading(
-          in: scrollView,
-          anchorIdentifier: anchorIdentifier,
-          group: group,
-          oldOffset: oldOffset,
-          request: request,
-          attemptsLeft: attemptsLeft - 1
-        )
-      } else {
-        // No verified predecessor: retain the old completion behavior. Never
-        // guess the first/last reply or search outside this scroll container.
-        NSLog("[ReplyBackward] fallback: no visible predecessor after refresh")
-        UIAccessibility.post(notification: .pageScrolled, argument: nil)
-      }
     }
   }
 
