@@ -80,6 +80,16 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+
+    void publishComment() {
+      feedBack();
+      _videoReplyController.onReply(
+        null,
+        oid: _videoReplyController.aid,
+        replyType: _videoReplyController.videoType.replyType,
+      );
+    }
+
     return fabAnimWrapper(
       child: refreshIndicator(
         onRefresh: _videoReplyController.onRefresh,
@@ -155,19 +165,14 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 children: [
                   Semantics(
                     excludeSemantics: true,
+                    identifier: 'a11y-touch-only|publish-comment',
                     sortKey: const OrdinalSortKey(0.5),
                     button: true,
                     label: '發表評論',
+                    onTap: publishComment,
                     child: FloatingActionButton(
                       heroTag: null,
-                      onPressed: () {
-                        feedBack();
-                        _videoReplyController.onReply(
-                          null,
-                          oid: _videoReplyController.aid,
-                          replyType: _videoReplyController.videoType.replyType,
-                        );
-                      },
+                      onPressed: publishComment,
                       tooltip: '发表评论',
                       child: const Icon(Icons.reply),
                     ),
