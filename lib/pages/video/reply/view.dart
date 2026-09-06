@@ -77,19 +77,9 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
         '${item.count > 0 ? '，共 ${item.count} 條回覆' : ''}';
   }
 
-  void _replyToVideo() {
-    feedBack();
-    _videoReplyController.onReply(
-      null,
-      oid: _videoReplyController.aid,
-      replyType: _videoReplyController.videoType.replyType,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    final accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
     return fabAnimWrapper(
       child: refreshIndicator(
         onRefresh: _videoReplyController.onRefresh,
@@ -99,100 +89,87 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
             controller: _videoReplyController.scrollController,
             child: CustomScrollView(
               controller: _videoReplyController.scrollController,
-              cacheExtent: accessibleNavigation
+              cacheExtent: MediaQuery.accessibleNavigationOf(context)
                   ? MediaQuery.sizeOf(context).height
                   : null,
               physics: const AlwaysScrollableScrollPhysics(),
               key: const PageStorageKey(_VideoReplyPanelState),
               slivers: [
-                SliverFloatingHeaderWidget(
-                  backgroundColor: colorScheme.surface,
-                  child: Padding(
-                    padding: const .fromLTRB(12, 2.5, 6, 2.5),
-                    child: Obx(() {
-                      final sortType = _videoReplyController.sortType.value;
-                      return Row(
-                        mainAxisAlignment: .spaceBetween,
-                        children: [
-                          Text(
-                            sortType.desc,
-                            style: const TextStyle(fontSize: 13),
+              SliverFloatingHeaderWidget(
+                backgroundColor: colorScheme.surface,
+                child: Padding(
+                  padding: const .fromLTRB(12, 2.5, 6, 2.5),
+                  child: Obx(() {
+                    final sortType = _videoReplyController.sortType.value;
+                    return Row(
+                      mainAxisAlignment: .spaceBetween,
+                      children: [
+                        Text(
+                          sortType.desc,
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        TextButton.icon(
+                          style: Style.buttonStyle,
+                          onPressed: _videoReplyController.queryBySort,
+                          icon: Icon(
+                            Icons.sort,
+                            size: 16,
+                            color: colorScheme.secondary,
                           ),
-                          TextButton.icon(
-                            style: Style.buttonStyle,
-                            onPressed: _videoReplyController.queryBySort,
-                            icon: Icon(
-                              Icons.sort,
-                              size: 16,
+                          label: Text(
+                            sortType.descShort,
+                            style: TextStyle(
+                              fontSize: 13,
                               color: colorScheme.secondary,
                             ),
-                            label: Text(
-                              sortType.descShort,
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: colorScheme.secondary,
-                              ),
-                            ),
                           ),
-                        ],
-                      );
-                    }),
-                  ),
-                ),
-                if (accessibleNavigation)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const .fromLTRB(12, 8, 12, 4),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: FilledButton.icon(
-                          onPressed: _replyToVideo,
-                          icon: const Icon(Icons.reply),
-                          label: const Text('發表評論'),
                         ),
-                      ),
-                    ),
-                  ),
+                      ],
+                    );
+                  }),
+                ),
+              ),
                 Obx(() => _buildBody(_videoReplyController.loadingState.value)),
               ],
             ),
           ),
-          // A floating semantic sibling can become VoiceOver Read All's next
-          // element while the comments themselves still have more content.
-          // Keep the visual FAB for ordinary navigation, but under accessible
-          // navigation expose the same action inline above the scrollable list
-          // so forward continuous reading never leaves the list mid-stream.
-          fab: accessibleNavigation
-              ? null
-              : SlideTransition(
-                  position: fabAnimation,
-                  child: Padding(
-                    padding: .only(
-                      right: kFloatingActionButtonMargin,
-                      bottom: kFloatingActionButtonMargin + bottom,
-                    ),
-                    child: Semantics(
-                      explicitChildNodes: true,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Semantics(
-                            excludeSemantics: true,
-                            button: true,
-                            label: '發表評論',
-                            child: FloatingActionButton(
-                              heroTag: null,
-                              onPressed: _replyToVideo,
-                              tooltip: '发表评论',
-                              child: const Icon(Icons.reply),
-                            ),
-                          ),
-                        ],
-                      ),
+          fab: SlideTransition(
+            position: fabAnimation,
+            child: Padding(
+              padding: .only(
+                right: kFloatingActionButtonMargin,
+                bottom: kFloatingActionButtonMargin + bottom,
+              ),
+              child: Semantics(
+                explicitChildNodes: true,
+                child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Semantics(
+                    excludeSemantics: true,
+                    sortKey: const OrdinalSortKey(0.5),
+                    button: true,
+                    label: '發表評論',
+                    child: FloatingActionButton(
+                      heroTag: null,
+                      onPressed: () {
+                        feedBack();
+                        _videoReplyController.onReply(
+                          null,
+                          oid: _videoReplyController.aid,
+                          replyType: _videoReplyController.videoType.replyType,
+                        );
+                      },
+                      tooltip: '发表评论',
+                      child: const Icon(Icons.reply),
                     ),
                   ),
+                ],
                 ),
+              ),
+            ),
+          ),
         ),
       ),
     );

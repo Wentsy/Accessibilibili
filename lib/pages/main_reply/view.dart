@@ -1,6 +1,4 @@
 import 'package:flutter/semantics.dart';
-import 'package:PiliPlus/common/a11y/reply_semantics.dart';
-import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -58,29 +56,9 @@ class _MainReplyPageState extends State<MainReplyPage>
     padding = MediaQuery.viewPaddingOf(context);
   }
 
-  String _a11yLabel(ReplyInfo item) {
-    final hasPic = item.content.pictures.isNotEmpty;
-    return '${item.member.name} 說：${item.content.message}'
-        '${hasPic ? '，[圖片]' : ''}'
-        '${item.like > 0 ? '，${item.like} 個讚' : ''}'
-        '${item.count > 0 ? '，共 ${item.count} 條回覆' : ''}';
-  }
-
-  void _replyToTarget() {
-    try {
-      feedBack();
-      _controller.onReply(
-        null,
-        oid: _controller.oid,
-        replyType: _controller.replyType,
-      );
-    } catch (_) {}
-  }
-
   @override
   Widget build(BuildContext context) {
     final colorScheme = ColorScheme.of(context);
-    final accessibleNavigation = MediaQuery.accessibleNavigationOf(context);
     return SimpleScaffold(
       appBar: AppBar(title: const Text('查看评论')),
       body: fabAnimWrapper(
@@ -91,62 +69,50 @@ class _MainReplyPageState extends State<MainReplyPage>
               left: padding.left,
               right: padding.right,
             ),
-            child: VoiceOverPagedScroll(
-              controller: _controller.scrollController,
-              child: CustomScrollView(
-                controller: _controller.scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                cacheExtent: accessibleNavigation
-                    ? MediaQuery.sizeOf(context).height
-                    : null,
-                slivers: [
-                  buildReplyHeader(colorScheme),
-                  if (accessibleNavigation)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const .fromLTRB(12, 8, 12, 4),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: FilledButton.icon(
-                            onPressed: _replyToTarget,
-                            icon: const Icon(Icons.reply),
-                            label: const Text('發表評論'),
-                          ),
-                        ),
-                      ),
-                    ),
-                  Obx(
-                    () => _buildBody(
-                      colorScheme,
-                      _controller.loadingState.value,
-                    ),
-                  ),
-                ],
-              ),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              // 🔴 無障礙：加大預建範圍，讓 VoiceOver 永遠有「下一條」可跳
+              // 注意：不要在這裡包 Semantics(container)——會把捲動區變成語義孤島，
+              // 吞掉 scroll actions 和外部元素（FAB 被蓋掉的元兇）
+              cacheExtent: 3000,
+              semanticChildCount: switch (_controller.loadingState.value) {
+                Success(:final response) => response?.length ?? 0,
+                _ => null,
+              },
+              slivers: [
+                buildReplyHeader(colorScheme),
+                Obx(
+                  () => _buildBody(colorScheme, _controller.loadingState.value),
+                ),
+              ],
             ),
           ),
         ).constraintWidth(),
       ),
-      // Keep the composer reachable, but do not let a floating semantic sibling
-      // interrupt VoiceOver Read All while comments still have more content.
-      // In accessibility mode the same action is exposed inline above the list.
-      fab: accessibleNavigation
-          ? null
-          : SlideTransition(
-              position: fabAnimation,
-              child: Padding(
-                padding: .only(
-                  right: kFloatingActionButtonMargin + padding.right,
-                  bottom: kFloatingActionButtonMargin + padding.bottom,
-                ),
-                child: FloatingActionButton(
-                  heroTag: null,
-                  onPressed: _replyToTarget,
-                  tooltip: '评论',
-                  child: const Icon(Icons.reply),
-                ),
-              ),
-            ),
+      fab: SlideTransition(
+        position: fabAnimation,
+        child: Padding(
+          padding: .only(
+            right: kFloatingActionButtonMargin + padding.right,
+            bottom: kFloatingActionButtonMargin + padding.bottom,
+          ),
+          child: FloatingActionButton(
+            heroTag: null,
+            onPressed: () {
+              try {
+                feedBack();
+                _controller.onReply(
+                  null,
+                  oid: _controller.oid,
+                  replyType: _controller.replyType,
+                );
+              } catch (_) {}
+            },
+            tooltip: '评论',
+            child: const Icon(Icons.reply),
+          ),
+        ),
+      ),
     );
   }
 
@@ -163,11 +129,20 @@ class _MainReplyPageState extends State<MainReplyPage>
       Success(:final response) =>
         response != null && response.isNotEmpty
             ? SliverList.builder(
+                // 🔴 無障礙：固定 key，載入更多時保留元素樹與 VoiceOver 焦點
+                // 🔴 key 含長度：載更多時以增量 diff 更新，保留既有語義節點與焦點
+                key: ValueKey('reply_list_${response?.length ?? 0}'),
                 itemCount: response.length + 1,
                 itemBuilder: (context, index) {
-                  if (index == response.length) {
+                  // 🔴 無障礙：VoiceOver 逐項滑動很慢，倒數第4個就預載
+                  if (index >= response.length - 8) {
                     _controller.onLoadMore();
-                    return Container(
+                  }
+                  if (index == response.length) {
+                    return Semantics(
+                      container: true,
+                      label: _controller.isEnd ? '没有更多了' : '載入更多評論中，請點右下角按鈕',
+                      child: Container(
                       alignment: Alignment.center,
                       margin: EdgeInsets.only(bottom: padding.bottom),
                       height: 125,
@@ -178,53 +153,30 @@ class _MainReplyPageState extends State<MainReplyPage>
                           color: colorScheme.outline,
                         ),
                       ),
+                      ),
+                    );
+                  } else {
+                    return ReplyItemGrpc(
+                      key: ValueKey(response[index].id),
+                      replyItem: response[index],
+                      replyLevel: 1,
+                      a11ySortKey: OrdinalSortKey(index.toDouble()),
+                      replyReply: (replyItem, id) =>
+                          replyReply(context, replyItem, id, colorScheme),
+                      onReply: _controller.onReply,
+                      onDelete: (item, subIndex) =>
+                          _controller.onRemove(index, item, subIndex),
+                      upMid: _controller.upMid,
+                      onCheckReply: (item) =>
+                          _controller.onCheckReply(item, isManual: true),
+                      onToggleTop: (item) => _controller.onToggleTop(
+                        item,
+                        index,
+                        _controller.oid,
+                        _controller.replyType,
+                      ),
                     );
                   }
-
-                  final item = response[index];
-                  final reply = ReplyItemGrpc(
-                    key: ValueKey(item.id),
-                    replyItem: item,
-                    replyLevel: 1,
-                    a11ySortKey: OrdinalSortKey((index + 1).toDouble()),
-                    replyReply: (replyItem, id) =>
-                        replyReply(context, replyItem, id, colorScheme),
-                    onReply: _controller.onReply,
-                    onDelete: (reply, subIndex) =>
-                        _controller.onRemove(index, reply, subIndex),
-                    upMid: _controller.upMid,
-                    onCheckReply: (reply) =>
-                        _controller.onCheckReply(reply, isManual: true),
-                    onToggleTop: (reply) => _controller.onToggleTop(
-                      reply,
-                      index,
-                      _controller.oid,
-                      _controller.replyType,
-                    ),
-                  );
-
-                  return ReplyA11ySemantics(
-                    key: ValueKey('main-reply-${item.id}'),
-                    replyItem: item,
-                    onAccessibilityFocus: () {
-                      if (index >= response.length - 5) {
-                        _controller.onLoadMore();
-                      }
-                    },
-                    label: _a11yLabel(item),
-                    onTap: item.count.toInt() > 0
-                        ? () => replyReply(
-                            context,
-                            item,
-                            null,
-                            colorScheme,
-                          )
-                        : () => _controller.onReply(item),
-                    onTapHint: item.count.toInt() > 0
-                        ? '點兩下展開回覆'
-                        : '點兩下回覆這條評論',
-                    child: reply,
-                  );
                 },
               )
             : HttpError(
@@ -269,6 +221,33 @@ class _MainReplyPageState extends State<MainReplyPage>
           ],
         ),
       ),
+    );
+  }
+
+  /// 🔴 YouTube 式翻頁：滾一屏（VoiceOver「下一頁/上一頁」動作）
+  void _pageDown(dynamic controller) {
+    final sc = controller.scrollController;
+    if (!sc.hasClients) return;
+    final pos = sc.position;
+    final target = (pos.pixels + pos.viewportDimension * 0.9)
+        .clamp(0.0, pos.maxScrollExtent);
+    sc.animateTo(
+      target,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _pageUp(dynamic controller) {
+    final sc = controller.scrollController;
+    if (!sc.hasClients) return;
+    final pos = sc.position;
+    final target = (pos.pixels - pos.viewportDimension * 0.9)
+        .clamp(0.0, pos.maxScrollExtent);
+    sc.animateTo(
+      target,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOut,
     );
   }
 
