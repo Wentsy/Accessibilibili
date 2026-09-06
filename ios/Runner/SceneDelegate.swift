@@ -2,47 +2,36 @@ import Flutter
 import ObjectiveC.runtime
 import UIKit
 
-/// Makes VoiceOver's Read All traverse lazy Flutter scrollables page by page
-/// without changing the Dart widget/layout structure.
+/// Keeps VoiceOver Read All moving through lazy Flutter lists by borrowing the
+/// same `showOnScreen` path that Flutter uses for swipe-to-focus navigation.
 ///
-/// Flutter only exposes the currently-built semantic children of a lazy list.
-/// Read All therefore reaches the end of that semantic container and then
-/// continues into unrelated siblings (for example the bottom tab bar or a
-/// floating "發表評論" button) instead of asking Flutter to scroll.
+/// VoiceOver Read All only walks the semantic elements that are currently
+/// exposed on screen. When it reaches the last visible child of a lazy list it
+/// can fall through to unrelated siblings (bottom tabs, floating buttons, etc.)
+/// instead of asking Flutter for the next list item.
 ///
-/// This patch appends one native, silent accessibility proxy to every vertical
-/// Flutter semantics scroll container that still has content below it. When
-/// VoiceOver reaches that proxy, it asks Flutter to scroll forward, waits for
-/// the semantics tree to refresh, and moves accessibility focus to the first
-/// newly-visible semantic element. The proxy then remains the final element of
-/// the refreshed page, allowing the same hand-off to repeat.
+/// Flutter's iOS engine already has the behavior we want for ordinary
+/// left/right VoiceOver navigation: when an off-screen semantic item is about
+/// to receive focus, `showOnScreen` scrolls it into view. This patch hooks real
+/// accessibility focus changes. As soon as VoiceOver starts reading the last
+/// visible semantic item inside a vertical Flutter scrollable, it proactively
+/// asks the *next semantic item in Flutter's own accessibility order* to show
+/// itself on screen. The current item can keep speaking while Flutter exposes
+/// the following item, so Read All has another list child to continue into.
+///
+/// No Dart widget order, layout, cache extent, FAB placement, or comment UI is
+/// changed by this patch.
 private enum VoiceOverContinuousReadPatch {
-  private typealias CountGetter = @convention(c) (
+  private typealias FocusHandler = @convention(c) (
     AnyObject,
     Selector
-  ) -> Int
-  private typealias ElementGetter = @convention(c) (
+  ) -> Void
+  private typealias ShowOnScreenHandler = @convention(c) (
     AnyObject,
-    Selector,
-    Int
-  ) -> AnyObject?
-  private typealias IndexGetter = @convention(c) (
-    AnyObject,
-    Selector,
-    AnyObject
-  ) -> Int
+    Selector
+  ) -> Void
 
-  private static var proxyAssociationKey: UInt8 = 0
-
-  private final class PageTurnProxy: UIAccessibilityElement {
-    weak var scrollView: UIScrollView?
-    var isTurningPage = false
-
-    override func accessibilityElementDidBecomeFocused() {
-      super.accessibilityElementDidBecomeFocused()
-      VoiceOverContinuousReadPatch.turnPage(from: self)
-    }
-  }
+  private static var lastPrefetchedFocus: ObjectIdentifier?
 
   static func install() {
     _ = installOnce
@@ -50,331 +39,252 @@ private enum VoiceOverContinuousReadPatch {
 
   private static let installOnce: Void = {
     guard
-      let semanticsContainerClass = NSClassFromString("SemanticsObjectContainer"),
+      let semanticsBaseClass = NSClassFromString("SemanticsObject"),
       let scrollViewClass = NSClassFromString("FlutterSemanticsScrollView")
     else {
       return
     }
 
-    installContainerProxyHooks(
-      semanticsContainerClass: semanticsContainerClass,
+    installFocusReadAheadHook(
+      semanticsBaseClass: semanticsBaseClass,
       scrollViewClass: scrollViewClass
     )
   }()
 
-  private static func installContainerProxyHooks(
-    semanticsContainerClass: AnyClass,
+  private static func installFocusReadAheadHook(
+    semanticsBaseClass: AnyClass,
     scrollViewClass: AnyClass
   ) {
-    let countSelector = NSSelectorFromString("accessibilityElementCount")
-    let elementSelector = NSSelectorFromString("accessibilityElementAtIndex:")
-    let indexSelector = NSSelectorFromString("indexOfAccessibilityElement:")
+    let focusSelector = NSSelectorFromString(
+      "accessibilityElementDidBecomeFocused"
+    )
+    let showSelector = NSSelectorFromString("showOnScreen")
 
     guard
-      let countMethod = class_getInstanceMethod(
-        semanticsContainerClass,
-        countSelector
+      let focusMethod = class_getInstanceMethod(
+        semanticsBaseClass,
+        focusSelector
       ),
-      let elementMethod = class_getInstanceMethod(
-        semanticsContainerClass,
-        elementSelector
-      ),
-      let indexMethod = class_getInstanceMethod(
-        semanticsContainerClass,
-        indexSelector
+      let showMethod = class_getInstanceMethod(
+        semanticsBaseClass,
+        showSelector
       )
     else {
       return
     }
 
-    let originalCount = unsafeBitCast(
-      method_getImplementation(countMethod),
-      to: CountGetter.self
+    let originalFocus = unsafeBitCast(
+      method_getImplementation(focusMethod),
+      to: FocusHandler.self
     )
-    let originalElement = unsafeBitCast(
-      method_getImplementation(elementMethod),
-      to: ElementGetter.self
-    )
-    let originalIndex = unsafeBitCast(
-      method_getImplementation(indexMethod),
-      to: IndexGetter.self
+    let showOnScreen = unsafeBitCast(
+      method_getImplementation(showMethod),
+      to: ShowOnScreenHandler.self
     )
 
-    let countBlock: @convention(block) (AnyObject) -> Int = { container in
-      let original = originalCount(container, countSelector)
-      guard
-        pageTurnScrollView(
-          for: container,
-          scrollViewClass: scrollViewClass
-        ) != nil
-      else {
-        return original
-      }
-      return original + 1
-    }
+    let block: @convention(block) (AnyObject) -> Void = { object in
+      // Preserve Flutter's normal focus bookkeeping, Dart
+      // onDidGainAccessibilityFocus callbacks, and existing show-on-screen
+      // behavior first.
+      originalFocus(object, focusSelector)
 
-    let elementBlock: @convention(block) (
-      AnyObject,
-      Int
-    ) -> AnyObject? = { container, index in
-      let originalCountValue = originalCount(container, countSelector)
-      guard index == originalCountValue else {
-        return originalElement(container, elementSelector, index)
+      guard UIAccessibility.isVoiceOverRunning, Thread.isMainThread else {
+        return
       }
 
-      guard
-        let scrollView = pageTurnScrollView(
-          for: container,
-          scrollViewClass: scrollViewClass
-        )
-      else {
-        return originalElement(container, elementSelector, index)
+      let currentID = ObjectIdentifier(object)
+      if
+        let previous = lastPrefetchedFocus,
+        previous != currentID
+      {
+        // A genuinely new VoiceOver item is being read. Allow that item to
+        // become a future read-ahead boundary even if Flutter later reuses the
+        // same semantic object instance elsewhere in the list.
+        lastPrefetchedFocus = nil
       }
 
-      return pageTurnProxy(
-        for: container,
-        scrollView: scrollView
+      readAheadFromFocusedItem(
+        object,
+        scrollViewClass: scrollViewClass,
+        showSelector: showSelector,
+        showOnScreen: showOnScreen
       )
     }
 
-    let indexBlock: @convention(block) (
-      AnyObject,
-      AnyObject
-    ) -> Int = { container, element in
-      if
-        let proxy = objc_getAssociatedObject(
-          container,
-          &proxyAssociationKey
-        ) as? PageTurnProxy,
-        proxy === element,
-        pageTurnScrollView(
-          for: container,
-          scrollViewClass: scrollViewClass
-        ) != nil
-      {
-        return originalCount(container, countSelector)
-      }
-
-      return originalIndex(container, indexSelector, element)
-    }
-
     method_setImplementation(
-      countMethod,
-      imp_implementationWithBlock(countBlock)
-    )
-    method_setImplementation(
-      elementMethod,
-      imp_implementationWithBlock(elementBlock)
-    )
-    method_setImplementation(
-      indexMethod,
-      imp_implementationWithBlock(indexBlock)
+      focusMethod,
+      imp_implementationWithBlock(block)
     )
   }
 
-  private static func pageTurnScrollView(
-    for container: AnyObject,
+  private static func readAheadFromFocusedItem(
+    _ focused: AnyObject,
+    scrollViewClass: AnyClass,
+    showSelector: Selector,
+    showOnScreen: ShowOnScreenHandler
+  ) {
+    guard
+      let focusedObject = focused as? NSObject,
+      let scrollView = nearestVerticalFlutterScrollView(
+        for: focused,
+        scrollViewClass: scrollViewClass
+      ),
+      let viewport = screenFrame(of: scrollView),
+      let owner = semanticsObject(of: scrollView)
+    else {
+      return
+    }
+
+    var orderedObjects: [NSObject] = []
+    for child in semanticChildren(of: owner) {
+      collectFocusableSemanticObjects(
+        from: child,
+        into: &orderedObjects
+      )
+    }
+
+    guard
+      let focusedIndex = orderedObjects.firstIndex(
+        where: { $0 === focusedObject }
+      )
+    else {
+      return
+    }
+
+    // Only act when the item VoiceOver has just started reading is the final
+    // currently-visible semantic item of this Flutter scrollable. This keeps
+    // ordinary focus changes elsewhere untouched and prevents premature page
+    // movement in the middle of a screen.
+    var lastVisibleIndex: Int?
+    for (index, object) in orderedObjects.enumerated() {
+      guard
+        let native = nativeAccessibility(of: object),
+        let frame = accessibilityFrame(of: native),
+        viewport.intersects(frame)
+      else {
+        continue
+      }
+      lastVisibleIndex = index
+    }
+
+    guard lastVisibleIndex == focusedIndex else {
+      return
+    }
+
+    let currentID = ObjectIdentifier(focused)
+    guard lastPrefetchedFocus != currentID else {
+      // Some semantics updates can re-notify focus for the same element. Do not
+      // scroll repeatedly while VoiceOver is still speaking that one item.
+      return
+    }
+    lastPrefetchedFocus = currentID
+
+    if focusedIndex + 1 < orderedObjects.count {
+      let nextObject = orderedObjects[focusedIndex + 1]
+
+      // This is the key: use Flutter's own swipe-navigation primitive rather
+      // than inventing a page turn. If the next semantic item is hidden or just
+      // outside the viewport, Flutter scrolls exactly enough to expose it.
+      showOnScreen(nextObject, showSelector)
+      return
+    }
+
+    // A very lazy Sliver may not have created even one off-screen semantic item
+    // yet. In that case there is nothing to call showOnScreen on, so request
+    // one normal accessibility page scroll only as a bootstrap. Once Flutter
+    // builds the next semantics batch, subsequent boundaries use showOnScreen.
+    if hasRemainingForwardRange(scrollView) {
+      _ = scrollView.accessibilityScroll(.up)
+    }
+  }
+
+  private static func collectFocusableSemanticObjects(
+    from object: NSObject,
+    into result: inout [NSObject]
+  ) {
+    if isFocusableSemanticObject(object) {
+      result.append(object)
+    }
+
+    for child in semanticChildren(of: object) {
+      collectFocusableSemanticObjects(
+        from: child,
+        into: &result
+      )
+    }
+  }
+
+  private static func isFocusableSemanticObject(
+    _ object: NSObject
+  ) -> Bool {
+    guard let native = nativeAccessibility(of: object) else {
+      return false
+    }
+
+    if let element = native as? UIAccessibilityElement {
+      return element.isAccessibilityElement
+    }
+    if let view = native as? UIView {
+      return view.isAccessibilityElement
+    }
+    return false
+  }
+
+  private static func nearestVerticalFlutterScrollView(
+    for object: AnyObject,
     scrollViewClass: AnyClass
   ) -> UIScrollView? {
     guard
-      UIAccessibility.isVoiceOverRunning,
       Thread.isMainThread,
-      let wrapper = container as? NSObject,
-      let owner = semanticsObject(of: wrapper),
-      let native = nativeAccessibility(of: owner),
-      let scrollView = native as? UIScrollView,
-      scrollView.isKind(of: scrollViewClass),
-      isVerticalScrollable(scrollView),
-      hasRemainingForwardRange(scrollView)
+      let itemFrame = accessibilityFrame(of: object)
     else {
       return nil
     }
 
-    return scrollView
-  }
-
-  private static func pageTurnProxy(
-    for container: AnyObject,
-    scrollView: UIScrollView
-  ) -> PageTurnProxy {
-    if
-      let existing = objc_getAssociatedObject(
-        container,
-        &proxyAssociationKey
-      ) as? PageTurnProxy
-    {
-      existing.scrollView = scrollView
-      configureProxy(existing, scrollView: scrollView)
-      return existing
+    var candidates: [(view: UIScrollView, frame: CGRect)] = []
+    for scene in UIApplication.shared.connectedScenes {
+      guard let windowScene = scene as? UIWindowScene else { continue }
+      for window in windowScene.windows where !window.isHidden {
+        collectFlutterScrollViews(
+          in: window,
+          scrollViewClass: scrollViewClass,
+          itemFrame: itemFrame,
+          into: &candidates
+        )
+      }
     }
 
-    let proxy = PageTurnProxy(accessibilityContainer: container)
-    proxy.scrollView = scrollView
-    configureProxy(proxy, scrollView: scrollView)
-    objc_setAssociatedObject(
-      container,
-      &proxyAssociationKey,
-      proxy,
-      .OBJC_ASSOCIATION_RETAIN_NONATOMIC
-    )
-    return proxy
+    // A focused item may live inside nested scrollables. Prefer the smallest
+    // vertical viewport intersecting it, which is the closest semantic scroll
+    // ancestor in practice.
+    return candidates.min {
+      ($0.frame.width * $0.frame.height) <
+        ($1.frame.width * $1.frame.height)
+    }?.view
   }
 
-  private static func configureProxy(
-    _ proxy: PageTurnProxy,
-    scrollView: UIScrollView
+  private static func collectFlutterScrollViews(
+    in view: UIView,
+    scrollViewClass: AnyClass,
+    itemFrame: CGRect,
+    into candidates: inout [(view: UIScrollView, frame: CGRect)]
   ) {
-    proxy.isAccessibilityElement = true
-
-    // U+2060 WORD JOINER is intentionally non-spoken. The element needs a
-    // non-empty label so VoiceOver will traverse it, but it should not add an
-    // audible "next page" item to the user's reading stream.
-    proxy.accessibilityLabel = "\u{2060}"
-    proxy.accessibilityHint = nil
-    proxy.accessibilityValue = nil
-    proxy.accessibilityTraits = []
-
-    if let viewport = screenFrame(of: scrollView) {
-      proxy.accessibilityFrame = CGRect(
-        x: viewport.minX + 1,
-        y: max(viewport.minY + 1, viewport.maxY - 2),
-        width: 1,
-        height: 1
-      )
-    }
-  }
-
-  private static func turnPage(from proxy: PageTurnProxy) {
-    guard
-      UIAccessibility.isVoiceOverRunning,
-      Thread.isMainThread,
-      !proxy.isTurningPage,
-      let scrollView = proxy.scrollView,
+    if
+      view.isKind(of: scrollViewClass),
+      let scrollView = view as? UIScrollView,
       isVerticalScrollable(scrollView),
-      hasRemainingForwardRange(scrollView)
-    else {
-      return
-    }
-
-    let beforeElements = visibleReadableElements(in: scrollView)
-    let beforeIDs = Set(beforeElements.map(ObjectIdentifier.init))
-    let beforeOffset = scrollView.contentOffset.y
-
-    proxy.isTurningPage = true
-
-    // Flutter maps `.up` to SemanticsAction.scrollDown, which is forward
-    // movement through a vertical list.
-    guard scrollView.accessibilityScroll(.up) else {
-      proxy.isTurningPage = false
-      return
-    }
-
-    // Keep VoiceOver anchored to the proxy while Flutter performs the semantic
-    // scroll. This prevents Read All from escaping into sibling controls before
-    // the lazy list has published its next batch of semantics.
-    UIAccessibility.post(notification: .layoutChanged, argument: proxy)
-
-    waitForNextSemanticPage(
-      proxy: proxy,
-      scrollView: scrollView,
-      beforeIDs: beforeIDs,
-      beforeOffset: beforeOffset,
-      attempt: 0
-    )
-  }
-
-  private static func waitForNextSemanticPage(
-    proxy: PageTurnProxy,
-    scrollView: UIScrollView,
-    beforeIDs: Set<ObjectIdentifier>,
-    beforeOffset: CGFloat,
-    attempt: Int
-  ) {
-    let delays: [TimeInterval] = [0.06, 0.10, 0.16, 0.24]
-    guard attempt < delays.count else {
-      proxy.isTurningPage = false
-      UIAccessibility.post(notification: .layoutChanged, argument: nil)
-      return
-    }
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + delays[attempt]) {
-      guard
-        UIAccessibility.isVoiceOverRunning,
-        proxy.isTurningPage,
-        proxy.scrollView === scrollView
-      else {
-        proxy.isTurningPage = false
-        return
-      }
-
-      let afterElements = visibleReadableElements(in: scrollView)
-      let moved = scrollView.contentOffset.y > beforeOffset + 0.5
-      let newElement = afterElements.first {
-        !beforeIDs.contains(ObjectIdentifier($0))
-      }
-
-      if moved, let target = newElement ?? afterElements.first {
-        proxy.isTurningPage = false
-
-        // Apple documents layoutChanged with an accessibility element argument
-        // as the way to move VoiceOver focus after a layout update. Focusing
-        // the first newly-visible Flutter semantic item makes Read All resume
-        // inside the list instead of falling through to the tab bar / FAB.
-        UIAccessibility.post(notification: .layoutChanged, argument: target)
-        return
-      }
-
-      waitForNextSemanticPage(
-        proxy: proxy,
-        scrollView: scrollView,
-        beforeIDs: beforeIDs,
-        beforeOffset: beforeOffset,
-        attempt: attempt + 1
-      )
-    }
-  }
-
-  private static func visibleReadableElements(
-    in scrollView: UIScrollView
-  ) -> [UIAccessibilityElement] {
-    guard
-      let viewport = screenFrame(of: scrollView),
-      let owner = semanticsObject(of: scrollView)
-    else {
-      return []
-    }
-
-    var result: [UIAccessibilityElement] = []
-    for child in semanticChildren(of: owner) {
-      collectVisibleReadableElements(
-        from: child,
-        viewport: viewport,
-        into: &result
-      )
-    }
-    return result
-  }
-
-  private static func collectVisibleReadableElements(
-    from semanticsObject: NSObject,
-    viewport: CGRect,
-    into result: inout [UIAccessibilityElement]
-  ) {
-    if
-      let native = nativeAccessibility(of: semanticsObject),
-      let element = native as? UIAccessibilityElement,
-      element.isAccessibilityElement,
-      let frame = validFrame(of: element),
-      viewport.intersects(frame)
+      let frame = screenFrame(of: scrollView),
+      frame.intersects(itemFrame)
     {
-      result.append(element)
+      candidates.append((scrollView, frame))
     }
 
-    for child in semanticChildren(of: semanticsObject) {
-      collectVisibleReadableElements(
-        from: child,
-        viewport: viewport,
-        into: &result
+    for child in view.subviews {
+      collectFlutterScrollViews(
+        in: child,
+        scrollViewClass: scrollViewClass,
+        itemFrame: itemFrame,
+        into: &candidates
       )
     }
   }
@@ -407,6 +317,25 @@ private enum VoiceOverContinuousReadPatch {
     return object.value(forKey: "semanticsObject") as? NSObject
   }
 
+  private static func accessibilityFrame(
+    of object: AnyObject
+  ) -> CGRect? {
+    if let element = object as? UIAccessibilityElement {
+      return validFrame(element.accessibilityFrame)
+    }
+    if let view = object as? UIView {
+      return screenFrame(of: view)
+    }
+    if
+      let wrapper = object as? NSObject,
+      let native = nativeAccessibility(of: wrapper),
+      native !== object
+    {
+      return accessibilityFrame(of: native)
+    }
+    return nil
+  }
+
   private static func isVerticalScrollable(
     _ scrollView: UIScrollView
   ) -> Bool {
@@ -424,10 +353,7 @@ private enum VoiceOverContinuousReadPatch {
     return scrollView.contentOffset.y < maxOffset - 1
   }
 
-  private static func validFrame(
-    of element: UIAccessibilityElement
-  ) -> CGRect? {
-    let frame = element.accessibilityFrame
+  private static func validFrame(_ frame: CGRect) -> CGRect? {
     guard !frame.isNull, !frame.isInfinite, !frame.isEmpty else {
       return nil
     }
