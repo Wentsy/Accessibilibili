@@ -302,6 +302,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
       int oid = replyItem.oid.toInt();
       int rpid = replyItem.id.toInt();
       final bottomSheet = MiniScaffold.of(context).showBottomSheet(
+        excludeBodySemantics: true,
         constraints: BoxConstraints(
           minHeight: MediaQuery.sizeOf(context).height,
           maxHeight: MediaQuery.sizeOf(context).height,

@@ -18,6 +18,7 @@ class ReplyA11ySemantics extends StatelessWidget {
     this.onTap,
     this.onTapHint,
     this.onAccessibilityFocus,
+    this.sortKey,
   });
 
   final ReplyInfo replyItem;
@@ -26,6 +27,7 @@ class ReplyA11ySemantics extends StatelessWidget {
   final VoidCallback? onTap;
   final String? onTapHint;
   final VoidCallback? onAccessibilityFocus;
+  final SemanticsSortKey? sortKey;
 
   Future<void> _toggleLike(BuildContext context) async {
     final isLiked = replyItem.replyControl.action == Int64.ONE;
@@ -92,6 +94,7 @@ class ReplyA11ySemantics extends StatelessWidget {
         : '$label，$commentTime評論';
     return Semantics(
       container: true,
+      sortKey: sortKey,
       explicitChildNodes: false,
       identifier: 'a11y-read-reply|${replyItem.oid}|${replyItem.id}',
       label: semanticsLabel,

@@ -9,11 +9,14 @@ class BottomSheetLayout
   const BottomSheetLayout({
     super.key,
     this.bottomSheet,
+    this.excludeBodySemantics = false,
     required this.body,
   });
 
   final Widget? bottomSheet;
   final Widget body;
+  /// Opt in for modal comment panels; keep the body mounted and laid out.
+  final bool excludeBodySemantics;
 
   @override
   Iterable<BottomSheetType> get slots => BottomSheetType.values;
@@ -21,7 +24,10 @@ class BottomSheetLayout
   @override
   Widget? childForSlot(slot) => switch (slot) {
     .bottomSheet => bottomSheet,
-    .body => body,
+    .body => ExcludeSemantics(
+      excluding: bottomSheet != null && excludeBodySemantics,
+      child: body,
+    ),
   };
 
   @override

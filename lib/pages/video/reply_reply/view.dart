@@ -294,6 +294,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
         SliverToBoxAdapter(
           child: ReplyA11ySemantics(
             replyItem: firstFloor,
+            sortKey: const OrdinalSortKey(0),
             label: _a11yLabel(firstFloor),
             onTap: () => _controller.onReply(firstFloor, index: -1),
             onTapHint: '點兩下回覆這條評論',
@@ -314,34 +315,39 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
   Widget _sortWidget(ColorScheme colorScheme) {
     return SliverPinnedHeader(
       backgroundColor: colorScheme.surface,
-      child: Padding(
-        padding: const .fromLTRB(12, 2.5, 6, 2.5),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Obx(
-              () {
-                final count = _controller.count.value;
-                return count != -1
-                    ? Text(
-                        '相关回复共${NumUtils.numFormat(count)}条',
-                        style: const TextStyle(fontSize: 13),
-                      )
-                    : const SizedBox.shrink();
-              },
-            ),
-            TextButton.icon(
-              style: Style.buttonStyle,
-              onPressed: _controller.queryBySort,
-              icon: Icon(Icons.sort, size: 16, color: colorScheme.secondary),
-              label: Obx(
-                () => Text(
-                  _controller.sortType.value.label,
-                  style: TextStyle(fontSize: 13, color: colorScheme.secondary),
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        sortKey: const OrdinalSortKey(1),
+        child: Padding(
+          padding: const .fromLTRB(12, 2.5, 6, 2.5),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Obx(
+                () {
+                  final count = _controller.count.value;
+                  return count != -1
+                      ? Text(
+                          '相关回复共${NumUtils.numFormat(count)}条',
+                          style: const TextStyle(fontSize: 13),
+                        )
+                      : const SizedBox.shrink();
+                },
+              ),
+              TextButton.icon(
+                style: Style.buttonStyle,
+                onPressed: _controller.queryBySort,
+                icon: Icon(Icons.sort, size: 16, color: colorScheme.secondary),
+                label: Obx(
+                  () => Text(
+                    _controller.sortType.value.label,
+                    style: TextStyle(fontSize: 13, color: colorScheme.secondary),
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -369,6 +375,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                   final reply = _replyItem(context, item, index);
                   final child = ReplyA11ySemantics(
                     replyItem: item,
+                    sortKey: OrdinalSortKey(index + 2.0),
                     onAccessibilityFocus: () {
                       if (index >= response.length - 5) {
                         _controller.onLoadMore();
@@ -410,6 +417,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                   final reply = _replyItem(context, item, index);
                   final child = ReplyA11ySemantics(
                     replyItem: item,
+                    sortKey: OrdinalSortKey(index + 2.0),
                     label: _a11yLabel(item),
                     onTap: () => _controller.onReply(item, index: index),
                     onTapHint: '點兩下回覆這條評論',
@@ -446,32 +454,37 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
   Widget _threadFooter(ColorScheme colorScheme) {
     _controller.onLoadMore();
     final isEnd = _controller.isEnd;
-    return Container(
-      constraints: const BoxConstraints(minHeight: 125),
-      alignment: Alignment.center,
-      padding: EdgeInsets.fromLTRB(
-        16,
-        20,
-        16,
-        20 + MediaQuery.viewPaddingOf(context).bottom,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            isEnd ? '没有更多了' : '加载中...',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: colorScheme.outline),
-          ),
-          if (isEnd && !isDialogue) ...[
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: _replyToThread,
-              icon: const Icon(Icons.reply),
-              label: const Text('發表回覆'),
+    return Semantics(
+      container: true,
+      explicitChildNodes: true,
+      sortKey: const OrdinalSortKey(double.maxFinite),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 125),
+        alignment: Alignment.center,
+        padding: EdgeInsets.fromLTRB(
+          16,
+          20,
+          16,
+          20 + MediaQuery.viewPaddingOf(context).bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              isEnd ? '没有更多了' : '加载中...',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12, color: colorScheme.outline),
             ),
+            if (isEnd && !isDialogue) ...[
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _replyToThread,
+                icon: const Icon(Icons.reply),
+                label: const Text('發表回覆'),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -485,6 +498,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
       onDelete: (item, subIndex) => _controller.onRemove(index, item, null),
       upMid: _controller.upMid,
       showDialogue: () => MiniScaffold.of(context).showBottomSheet(
+        excludeBodySemantics: true,
         constraints: BoxConstraints(
           minHeight: MediaQuery.sizeOf(context).height,
           maxHeight: MediaQuery.sizeOf(context).height,
