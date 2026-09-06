@@ -349,7 +349,9 @@ class _DynamicDetailPageState
       child: CustomScrollView(
         controller: replyScrollController,
         primary: useOwnReplyViewport ? false : null,
-        cacheExtent: useOwnReplyViewport ? 400 : null,
+        cacheExtent: useOwnReplyViewport
+            ? MediaQuery.sizeOf(context).height * 8
+            : null,
         key: const PageStorageKey(DynType.reply),
         physics: ReloadScrollPhysics(controller: controller),
         slivers: [
