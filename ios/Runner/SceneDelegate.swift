@@ -28,11 +28,11 @@ private final class VoiceOverComposerTouchProxy: UIAccessibilityElement {
 ///
 /// The marked composer remains in Flutter's semantic tree so its real frame and
 /// tap action stay current. While VoiceOver is running it is hidden from normal
-/// linear accessibility traversal. Only FlutterView's outer accessibility
-/// hit-test can expose a temporary proxy when the user's finger is physically
-/// inside the marked composer's screen frame.
+/// linear accessibility traversal. FlutterView and its native semantics scroll
+/// views expose a temporary proxy only inside the marked composer's screen frame.
 private enum VoiceOverComposerTouchBridge {
   private static let composerIdentifier = "a11y-touch-only|publish-comment"
+  private static let replyComposerIdentifier = "a11y-touch-only|publish-reply"
   private static var lastProxy: VoiceOverComposerTouchProxy?
 
   private typealias BoolGetter = @convention(c) (
@@ -61,6 +61,9 @@ private enum VoiceOverComposerTouchBridge {
 
     installLinearTraversalExclusion(on: semanticClass)
     installFlutterViewDirectTouch(on: flutterViewClass)
+    if let scrollClass = NSClassFromString("FlutterSemanticsScrollView") {
+      installFlutterViewDirectTouch(on: scrollClass)
+    }
   }()
 
   private static func installLinearTraversalExclusion(on targetClass: AnyClass) {
@@ -120,7 +123,8 @@ private enum VoiceOverComposerTouchBridge {
 
       if
         let view = object as? UIView,
-        let composer = markedComposer(at: point, in: view)
+        let flutterView = composerSearchView(for: view, at: point),
+        let composer = markedComposer(at: point, in: flutterView)
       {
         let proxy = VoiceOverComposerTouchProxy(target: composer)
         lastProxy = proxy
@@ -130,15 +134,60 @@ private enum VoiceOverComposerTouchBridge {
       return original(object, selector, point, event)
     }
 
-    // FlutterView does not implement this selector itself in Flutter 3.47.1;
-    // add a narrow override on FlutterView while preserving UIView's inherited
-    // implementation as the fallback for every non-composer touch.
+    // Both classes inherit this selector in Flutter 3.47.1. In particular,
+    // FlutterSemanticsScrollView inherits UIScrollView's implementation rather
+    // than SemanticsObject's hit test. Override only the concrete Flutter class;
+    // preserve the captured UIKit implementation for every non-composer touch.
     _ = class_addMethod(
       targetClass,
       selector,
       imp_implementationWithBlock(block),
       typeEncoding
     )
+  }
+
+  private static func composerSearchView(
+    for view: UIView,
+    at screenPoint: CGPoint
+  ) -> UIView? {
+    guard NSStringFromClass(type(of: view)).hasSuffix("FlutterSemanticsScrollView")
+    else {
+      return view
+    }
+
+    // UIKit can hit-test a native scroll view directly, bypassing FlutterView.
+    // Limit this path to a vertical comment viewport at the touched location.
+    // Do not alter its frame, content size, scrolling actions or page-turn traits.
+    guard
+      let scrollView = view as? UIScrollView,
+      scrollView.contentSize.height > scrollView.bounds.height,
+      scrollView.accessibilityFrame.contains(screenPoint),
+      let owner = objectValue(of: scrollView, selectorName: "semanticsObject") as? NSObject,
+      containsReadingReply(owner)
+    else {
+      return nil
+    }
+
+    var ancestor = view.superview
+    while let candidate = ancestor {
+      if NSStringFromClass(type(of: candidate)).hasSuffix("FlutterView") {
+        return candidate
+      }
+      ancestor = candidate.superview
+    }
+    return nil
+  }
+
+  private static func containsReadingReply(_ object: NSObject) -> Bool {
+    if
+      let element = nativeAccessibility(of: object) as? UIAccessibilityElement,
+      element.accessibilityIdentifier?.hasPrefix("a11y-read-reply|") == true
+    {
+      return true
+    }
+    return semanticChildrenInHitTestOrder(of: object).contains {
+      containsReadingReply($0)
+    }
   }
 
   private static func markedComposer(
@@ -202,7 +251,7 @@ private enum VoiceOverComposerTouchBridge {
     else {
       return false
     }
-    return identifier == composerIdentifier
+    return identifier == composerIdentifier || identifier == replyComposerIdentifier
   }
 
   private static func semanticChildrenInHitTestOrder(

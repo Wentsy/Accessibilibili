@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
@@ -187,7 +188,8 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                     ],
                   )
                 : child(),
-            if (!MediaQuery.accessibleNavigationOf(context))
+            if (!MediaQuery.accessibleNavigationOf(context) ||
+                (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS))
               Positioned(
                 right: 16,
                 bottom: 16 + MediaQuery.paddingOf(context).bottom,
@@ -197,9 +199,11 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                   children: [
                     Semantics(
                       excludeSemantics: true,
+                      identifier: 'a11y-touch-only|publish-reply',
                       sortKey: const OrdinalSortKey(0.5),
                       button: true,
                       label: '發表回覆',
+                      onTap: _replyToThread,
                       child: FloatingActionButton(
                         heroTag: 'replyReplyFab',
                         onPressed: _replyToThread,
