@@ -40,10 +40,12 @@ class _RcmdPageState extends State<RcmdPage>
           child: CustomScrollView(
           controller: controller.scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
-          // A huge offscreen cache keeps stale semantic nodes alive under
-          // VoiceOver. Keep normal smooth scrolling unchanged, but constrain
-          // the semantic viewport when accessibility navigation is active.
-          cacheExtent: MediaQuery.accessibleNavigationOf(context) ? 400 : 3000,
+          // Match the proven reply Read All setup: expose several screens of
+          // real lazy-list semantics so the reading chain reaches its page-turn
+          // boundary before VoiceOver falls through to the bottom tab bar.
+          cacheExtent: MediaQuery.accessibleNavigationOf(context)
+              ? MediaQuery.sizeOf(context).height * 8
+              : 3000,
           slivers: [
             SliverPadding(
               padding: const .only(top: Style.cardSpace, bottom: 140),
@@ -105,12 +107,12 @@ class _RcmdPageState extends State<RcmdPage>
                     final actualIndex = index > controller.lastRefreshAt!
                         ? index - 1
                         : index;
+                    final item = response[actualIndex];
                     return VideoCardV(
-                      key: ValueKey(
-                        response[actualIndex].bvid ??
-                            response[actualIndex].aid,
-                      ),
-                      videoItem: response[actualIndex],
+                      key: ValueKey(item.bvid ?? item.aid),
+                      videoItem: item,
+                      a11yReadingIdentifier:
+                          'a11y-read-reply|home-rcmd|${item.bvid ?? item.aid ?? actualIndex}',
                       onRemove: () {
                         if (controller.lastRefreshAt != null &&
                             actualIndex < controller.lastRefreshAt!) {
@@ -127,6 +129,8 @@ class _RcmdPageState extends State<RcmdPage>
                     return VideoCardV(
                       key: ValueKey(item.bvid ?? item.aid ?? index),
                       videoItem: item,
+                      a11yReadingIdentifier:
+                          'a11y-read-reply|home-rcmd|${item.bvid ?? item.aid ?? index}',
                       onRemove: () => controller.loadingState
                         ..value.data!.removeAt(index)
                         ..refresh(),
