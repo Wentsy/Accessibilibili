@@ -89,8 +89,15 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
             controller: _videoReplyController.scrollController,
             child: CustomScrollView(
               controller: _videoReplyController.scrollController,
+              // Read All can consume Flutter semantic nodes beyond the visible
+              // viewport, but unlike ordinary swipe navigation it does not
+              // reliably move the real viewport forward. Keep a bounded larger
+              // cache only while accessible navigation is active so the lazy
+              // sliver exposes a longer semantic window and can naturally build
+              // its load-more sentinel before VoiceOver exhausts the first
+              // screenful of cached nodes. Normal scrolling is unchanged.
               cacheExtent: MediaQuery.accessibleNavigationOf(context)
-                  ? MediaQuery.sizeOf(context).height
+                  ? MediaQuery.sizeOf(context).height * 8
                   : null,
               physics: const AlwaysScrollableScrollPhysics(),
               key: const PageStorageKey(_VideoReplyPanelState),
