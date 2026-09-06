@@ -2,290 +2,325 @@ import Flutter
 import ObjectiveC.runtime
 import UIKit
 
-/// Keeps Flutter's real viewport aligned with VoiceOver during continuous
-/// reading and bridges the *actual screen-level* Read All boundary back to the
-/// vertical Flutter list the user was reading.
+/// Temporary diagnostics for the iOS VoiceOver Read All boundary.
 ///
-/// There are two complementary pieces here:
-///
-/// 1. UIKit exposes both focus notifications and a public API for querying the
-///    element currently focused by VoiceOver. If Read All reaches one of the
-///    semantic nodes Flutter prebuilt just outside the viewport, ask that same
-///    node to `showOnScreen`. This lets the lazy semantics window follow along.
-///
-/// 2. Read All does not consider the last list row to be the end of the page if
-///    the Flutter screen has later sibling controls. In this app that is why a
-///    comment page continues into "發表評論", and the home feed continues into
-///    the bottom tabs. Apple documents `causesPageTurn` on the *last readable
-///    element of the page*, paired with `accessibilityScroll(.next)`. We mark
-///    the true final focusable Flutter semantic element of the screen, remember
-///    the vertical list that contained the user's pre-Read-All focus, and route
-///    that automatic `.next` page request back into that list as `.up` (Flutter
-///    maps `.up` to SemanticsAction.scrollDown).
-///
-/// No Dart widget order, FAB placement, bottom navigation, or cache extent is
-/// changed.
-private enum VoiceOverContinuousReadBridge {
-  private typealias TraitsGetter = @convention(c) (
+/// This intentionally does NOT try to repair or page any Flutter list. It only
+/// observes the same accessibility methods UIKit/VoiceOver can use while
+/// traversing Flutter semantics and keeps the latest trace in the iOS clipboard
+/// so it can be pasted after reproducing the stall without Xcode/device logs.
+private enum VoiceOverReadAllDiagnostics {
+  private typealias VoidHandler = @convention(c) (
     AnyObject,
     Selector
-  ) -> UInt64
+  ) -> Void
+  private typealias BoolHandler = @convention(c) (
+    AnyObject,
+    Selector
+  ) -> Bool
+  private typealias BoolChildHandler = @convention(c) (
+    AnyObject,
+    Selector,
+    AnyObject
+  ) -> Bool
   private typealias ScrollHandler = @convention(c) (
     AnyObject,
     Selector,
     Int
   ) -> Bool
+  private typealias CountGetter = @convention(c) (
+    AnyObject,
+    Selector
+  ) -> Int
+  private typealias ElementGetter = @convention(c) (
+    AnyObject,
+    Selector,
+    Int
+  ) -> AnyObject?
+  private typealias IndexGetter = @convention(c) (
+    AnyObject,
+    Selector,
+    AnyObject
+  ) -> Int
 
-  private final class WeakScrollBox {
-    weak var value: UIScrollView?
-  }
-
-  private static let activeVerticalScroll = WeakScrollBox()
+  private static var events: [String] = []
+  private static let maxEvents = 180
+  private static var startTime = Date.timeIntervalSinceReferenceDate
+  private static var clipboardWorkItem: DispatchWorkItem?
   private static var focusObserver: NSObjectProtocol?
   private static var statusObserver: NSObjectProtocol?
-  private static var pollTimer: Timer?
-  private static var lastRepairObject: ObjectIdentifier?
-  private static var lastRepairTime: TimeInterval = 0
 
   static func install() {
     _ = installOnce
   }
 
   private static let installOnce: Void = {
-    installPageTurnHooks()
-    installFocusTracking()
+    startFreshTrace(reason: "launch")
+
+    guard
+      let semanticsClass = NSClassFromString("SemanticsObject"),
+      let containerClass = NSClassFromString("SemanticsObjectContainer"),
+      let scrollViewClass = NSClassFromString("FlutterSemanticsScrollView")
+    else {
+      record("ERR", "Flutter accessibility runtime classes missing")
+      return
+    }
+
+    installSemanticHooks(on: semanticsClass)
+    installContainerHooks(on: containerClass)
+    installScrollViewHook(on: scrollViewClass)
+    installPublicFocusNotifications()
+
+    record("READY", "diagnostics installed")
   }()
 
-  // MARK: - Screen-level Read All page turn
+  // MARK: - Semantic object events
 
-  private static func installPageTurnHooks() {
-    guard
-      let flutterSemanticClass = NSClassFromString("FlutterSemanticsObject"),
-      let semanticsBaseClass = NSClassFromString("SemanticsObject")
-    else {
-      return
-    }
-
-    installRootTailTraitHook(on: flutterSemanticClass)
-    installSemanticScrollHook(on: semanticsBaseClass)
-
-    if let flutterViewControllerClass = NSClassFromString("FlutterViewController") {
-      installViewControllerScrollFallback(on: flutterViewControllerClass)
-    }
-  }
-
-  private static func installRootTailTraitHook(on semanticClass: AnyClass) {
-    let selector = NSSelectorFromString("accessibilityTraits")
-    guard let method = class_getInstanceMethod(semanticClass, selector) else {
-      return
-    }
-
-    let original = unsafeBitCast(
-      method_getImplementation(method),
-      to: TraitsGetter.self
+  private static func installSemanticHooks(on semanticsClass: AnyClass) {
+    installVoidHook(
+      on: semanticsClass,
+      selectorName: "accessibilityElementDidBecomeFocused",
+      code: "F"
     )
 
-    let block: @convention(block) (AnyObject) -> UInt64 = { object in
-      let rawTraits = original(object, selector)
-      guard isCurrentScreenReadAllTail(object) else {
-        return rawTraits
-      }
-
-      var traits = UIAccessibilityTraits(rawValue: rawTraits)
-      traits.insert(.causesPageTurn)
-      return traits.rawValue
-    }
-
-    method_setImplementation(method, imp_implementationWithBlock(block))
-  }
-
-  private static func installSemanticScrollHook(on semanticsBaseClass: AnyClass) {
-    let selector = NSSelectorFromString("accessibilityScroll:")
-    guard let method = class_getInstanceMethod(semanticsBaseClass, selector) else {
-      return
-    }
-
-    let original = unsafeBitCast(
-      method_getImplementation(method),
-      to: ScrollHandler.self
+    installVoidHook(
+      on: semanticsClass,
+      selectorName: "showOnScreen",
+      code: "S"
     )
 
-    let block: @convention(block) (AnyObject, Int) -> Bool = {
-      object,
-      rawDirection in
-      guard
-        UIAccessibility.isVoiceOverRunning,
-        let direction = UIAccessibilityScrollDirection(rawValue: rawDirection),
-        direction == .next,
-        let scrollView = activeReadableScroll(),
-        isCurrentScreenReadAllTail(object) || isRootSemanticObject(object)
-      else {
-        return original(object, selector, rawDirection)
-      }
+    installBoolHook(
+      on: semanticsClass,
+      selectorName: "accessibilityScrollToVisible",
+      code: "V0"
+    )
 
-      return performForwardPageTurn(on: scrollView)
-    }
+    installChildBoolHook(
+      on: semanticsClass,
+      selectorName: "accessibilityScrollToVisibleWithChild:",
+      code: "VC"
+    )
 
-    method_setImplementation(method, imp_implementationWithBlock(block))
+    installScrollHook(
+      on: semanticsClass,
+      selectorName: "accessibilityScroll:",
+      code: "RS"
+    )
   }
 
-  private static func installViewControllerScrollFallback(
-    on viewControllerClass: AnyClass
+  private static func installVoidHook(
+    on targetClass: AnyClass,
+    selectorName: String,
+    code: String
   ) {
-    let selector = NSSelectorFromString("accessibilityScroll:")
-    guard
-      let inheritedMethod = class_getInstanceMethod(
-        viewControllerClass,
-        selector
-      ),
-      let typeEncoding = method_getTypeEncoding(inheritedMethod)
-    else {
+    let selector = NSSelectorFromString(selectorName)
+    guard let method = class_getInstanceMethod(targetClass, selector) else {
+      record("MISS", selectorName)
       return
     }
 
     let original = unsafeBitCast(
-      method_getImplementation(inheritedMethod),
+      method_getImplementation(method),
+      to: VoidHandler.self
+    )
+
+    let block: @convention(block) (AnyObject) -> Void = { object in
+      let before = describe(object)
+      record(code, "before \(before)")
+      original(object, selector)
+      record(code, "after  \(describe(object))")
+    }
+
+    method_setImplementation(method, imp_implementationWithBlock(block))
+  }
+
+  private static func installBoolHook(
+    on targetClass: AnyClass,
+    selectorName: String,
+    code: String
+  ) {
+    let selector = NSSelectorFromString(selectorName)
+    guard let method = class_getInstanceMethod(targetClass, selector) else {
+      record("MISS", selectorName)
+      return
+    }
+
+    let original = unsafeBitCast(
+      method_getImplementation(method),
+      to: BoolHandler.self
+    )
+
+    let block: @convention(block) (AnyObject) -> Bool = { object in
+      record(code, "before \(describe(object))")
+      let result = original(object, selector)
+      record(code, "ret=\(result ? 1 : 0) \(describe(object))")
+      return result
+    }
+
+    method_setImplementation(method, imp_implementationWithBlock(block))
+  }
+
+  private static func installChildBoolHook(
+    on targetClass: AnyClass,
+    selectorName: String,
+    code: String
+  ) {
+    let selector = NSSelectorFromString(selectorName)
+    guard let method = class_getInstanceMethod(targetClass, selector) else {
+      record("MISS", selectorName)
+      return
+    }
+
+    let original = unsafeBitCast(
+      method_getImplementation(method),
+      to: BoolChildHandler.self
+    )
+
+    let block: @convention(block) (AnyObject, AnyObject) -> Bool = {
+      object,
+      child in
+      record(
+        code,
+        "parent{\(describe(object))} child{\(describe(child))}"
+      )
+      let result = original(object, selector, child)
+      record(
+        code,
+        "ret=\(result ? 1 : 0) child{\(describe(child))}"
+      )
+      return result
+    }
+
+    method_setImplementation(method, imp_implementationWithBlock(block))
+  }
+
+  private static func installScrollHook(
+    on targetClass: AnyClass,
+    selectorName: String,
+    code: String
+  ) {
+    let selector = NSSelectorFromString(selectorName)
+    guard let method = class_getInstanceMethod(targetClass, selector) else {
+      record("MISS", selectorName)
+      return
+    }
+
+    let original = unsafeBitCast(
+      method_getImplementation(method),
       to: ScrollHandler.self
     )
 
     let block: @convention(block) (AnyObject, Int) -> Bool = {
       object,
       rawDirection in
-      guard
-        UIAccessibility.isVoiceOverRunning,
-        let direction = UIAccessibilityScrollDirection(rawValue: rawDirection),
-        direction == .next,
-        let scrollView = activeReadableScroll()
-      else {
-        return original(object, selector, rawDirection)
-      }
-
-      return performForwardPageTurn(on: scrollView)
+      let direction = scrollDirectionName(rawDirection)
+      record(code, "dir=\(direction) before \(describe(object))")
+      let result = original(object, selector, rawDirection)
+      record(
+        code,
+        "dir=\(direction) ret=\(result ? 1 : 0) after \(describe(object))"
+      )
+      return result
     }
 
-    let replacement = imp_implementationWithBlock(block)
-
-    // Add an override when FlutterViewController inherits UIKit's method so we
-    // never mutate UIViewController's global implementation.
-    if !class_addMethod(
-      viewControllerClass,
-      selector,
-      replacement,
-      typeEncoding
-    ) {
-      guard let ownMethod = class_getInstanceMethod(
-        viewControllerClass,
-        selector
-      ) else {
-        return
-      }
-      method_setImplementation(ownMethod, replacement)
-    }
+    method_setImplementation(method, imp_implementationWithBlock(block))
   }
 
-  private static func isCurrentScreenReadAllTail(_ object: AnyObject) -> Bool {
+  // MARK: - Flutter semantics container traversal
+
+  private static func installContainerHooks(on containerClass: AnyClass) {
+    let countSelector = NSSelectorFromString("accessibilityElementCount")
+    let elementSelector = NSSelectorFromString("accessibilityElementAtIndex:")
+    let indexSelector = NSSelectorFromString("indexOfAccessibilityElement:")
+
     guard
-      UIAccessibility.isVoiceOverRunning,
-      activeReadableScroll() != nil,
-      let semanticObject = object as? NSObject,
-      let root = rootSemanticAncestor(of: semanticObject),
-      let tail = lastFocusableDescendant(root),
-      tail === semanticObject
+      let countMethod = class_getInstanceMethod(containerClass, countSelector),
+      let elementMethod = class_getInstanceMethod(containerClass, elementSelector),
+      let indexMethod = class_getInstanceMethod(containerClass, indexSelector)
     else {
-      return false
+      record("MISS", "SemanticsObjectContainer traversal methods")
+      return
     }
 
-    return true
-  }
+    let originalCount = unsafeBitCast(
+      method_getImplementation(countMethod),
+      to: CountGetter.self
+    )
+    let originalElement = unsafeBitCast(
+      method_getImplementation(elementMethod),
+      to: ElementGetter.self
+    )
+    let originalIndex = unsafeBitCast(
+      method_getImplementation(indexMethod),
+      to: IndexGetter.self
+    )
 
-  private static func isRootSemanticObject(_ object: AnyObject) -> Bool {
-    guard let semanticObject = object as? NSObject else {
-      return false
-    }
-    return semanticParent(of: semanticObject) == nil &&
-      semanticObject.responds(to: NSSelectorFromString("nativeAccessibility"))
-  }
+    let elementBlock: @convention(block) (
+      AnyObject,
+      Int
+    ) -> AnyObject? = { container, index in
+      let count = originalCount(container, countSelector)
+      let element = originalElement(container, elementSelector, index)
 
-  private static func rootSemanticAncestor(of object: NSObject) -> NSObject? {
-    var current: NSObject? = object
-    var last: NSObject?
-
-    while let node = current {
-      last = node
-      current = semanticParent(of: node)
-    }
-
-    return last
-  }
-
-  private static func lastFocusableDescendant(_ object: NSObject) -> NSObject? {
-    for child in semanticChildren(of: object).reversed() {
-      if let result = lastFocusableDescendant(child) {
-        return result
+      // The user's reproducible symptom occurs within roughly 2-3 items of the
+      // traversal boundary, so keep the trace focused on the last five entries.
+      if index >= max(0, count - 5) {
+        let elementDescription = element.map(describe) ?? "nil"
+        record("E", "i=\(index)/\(count) \(elementDescription)")
       }
+      return element
     }
 
-    return isFocusableSemanticObject(object) ? object : nil
-  }
-
-  private static func activeReadableScroll() -> UIScrollView? {
-    guard
-      let scrollView = activeVerticalScroll.value,
-      scrollView.window != nil,
-      isVerticalScrollable(scrollView),
-      hasRemainingForwardRange(scrollView)
-    else {
-      return nil
-    }
-    return scrollView
-  }
-
-  private static func performForwardPageTurn(on scrollView: UIScrollView) -> Bool {
-    guard
-      isVerticalScrollable(scrollView),
-      hasRemainingForwardRange(scrollView)
-    else {
-      return false
-    }
-
-    // FlutterSemanticsScrollView forwards this to its SemanticsObject. Flutter
-    // maps `.up` to SemanticsAction.scrollDown (forward in a vertical list).
-    let handled = scrollView.accessibilityScroll(.up)
-    if handled {
-      weak var weakScrollView = scrollView
-      DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-        guard
-          UIAccessibility.isVoiceOverRunning,
-          weakScrollView?.window != nil
-        else {
-          return
-        }
-        UIAccessibility.post(notification: .pageScrolled, argument: nil)
+    let indexBlock: @convention(block) (
+      AnyObject,
+      AnyObject
+    ) -> Int = { container, element in
+      let result = originalIndex(container, indexSelector, element)
+      let count = originalCount(container, countSelector)
+      if result >= max(0, count - 5) || result < 0 {
+        record(
+          "I",
+          "i=\(result)/\(count) \(describe(element))"
+        )
       }
+      return result
     }
-    return handled
+
+    method_setImplementation(
+      elementMethod,
+      imp_implementationWithBlock(elementBlock)
+    )
+    method_setImplementation(
+      indexMethod,
+      imp_implementationWithBlock(indexBlock)
+    )
   }
 
-  // MARK: - Keep the real viewport following VoiceOver's virtual focus
+  // MARK: - Hidden Flutter semantics UIScrollView
 
-  private static func installFocusTracking() {
+  private static func installScrollViewHook(on scrollViewClass: AnyClass) {
+    installScrollHook(
+      on: scrollViewClass,
+      selectorName: "accessibilityScroll:",
+      code: "RV"
+    )
+  }
+
+  // MARK: - Public UIKit focus notification
+
+  private static func installPublicFocusNotifications() {
     focusObserver = NotificationCenter.default.addObserver(
       forName: UIAccessibility.elementFocusedNotification,
       object: nil,
       queue: .main
     ) { notification in
-      guard UIAccessibility.isVoiceOverRunning else { return }
+      let focused = notification.userInfo?[
+        UIAccessibility.focusedElementUserInfoKey
+      ] ?? UIAccessibility.focusedElement(using: .notificationVoiceOver)
 
-      if
-        let focused = notification.userInfo?[
-          UIAccessibility.focusedElementUserInfoKey
-        ]
-      {
-        followVoiceOverFocus(focused)
-      } else if let focused = UIAccessibility.focusedElement(
-        using: .notificationVoiceOver
-      ) {
-        followVoiceOverFocus(focused)
+      if let focused {
+        record("NF", describe(focused))
+      } else {
+        record("NF", "nil")
       }
     }
 
@@ -294,172 +329,161 @@ private enum VoiceOverContinuousReadBridge {
       object: nil,
       queue: .main
     ) { _ in
-      if UIAccessibility.isVoiceOverRunning {
-        startPolling()
-      } else {
-        stopPolling()
-      }
-    }
-
-    if UIAccessibility.isVoiceOverRunning {
-      startPolling()
+      startFreshTrace(
+        reason: UIAccessibility.isVoiceOverRunning ? "vo-on" : "vo-off"
+      )
     }
   }
 
-  private static func startPolling() {
-    stopPolling()
+  // MARK: - Trace formatting
 
-    let timer = Timer(timeInterval: 0.12, repeats: true) { _ in
-      guard
-        UIAccessibility.isVoiceOverRunning,
-        let focused = UIAccessibility.focusedElement(
-          using: .notificationVoiceOver
-        )
-      else {
-        return
-      }
-      followVoiceOverFocus(focused)
+  private static func describe(_ object: AnyObject) -> String {
+    let className = String(describing: type(of: object))
+
+    guard let semantic = flutterSemanticObject(from: object) else {
+      return "c=\(className) no-sem"
     }
 
-    pollTimer = timer
-    RunLoop.main.add(timer, forMode: .common)
+    let uid = semanticUID(semantic).map(String.init) ?? "?"
+
+    guard let scrollView = verticalFlutterScrollAncestor(of: semantic) else {
+      return "c=\(className) uid=\(uid) list=0"
+    }
+
+    let position = scrollPosition(scrollView)
+    let relation = viewportRelation(of: semantic, in: scrollView)
+    let tail = tailDistance(of: semantic, in: scrollView)
+      .map(String.init) ?? "?"
+
+    return "c=\(className) uid=\(uid) list=1 tail=\(tail) rel=\(relation) \(position)"
   }
 
-  private static func stopPolling() {
-    pollTimer?.invalidate()
-    pollTimer = nil
-    activeVerticalScroll.value = nil
-    lastRepairObject = nil
-    lastRepairTime = 0
-  }
-
-  private static func followVoiceOverFocus(_ focused: Any) {
-    guard Thread.isMainThread else {
-      DispatchQueue.main.async {
-        followVoiceOverFocus(focused)
-      }
-      return
-    }
-
-    guard
-      let semanticObject = flutterSemanticObject(from: focused),
-      let scrollView = verticalFlutterScrollAncestor(of: semanticObject),
-      scrollView.window != nil
-    else {
-      // If Read All later moves to a sibling control such as the comment FAB or
-      // bottom navigation, deliberately keep the last vertical list remembered.
-      // That is the page we must advance when the screen-level tail requests
-      // `.next`.
-      return
-    }
-
-    activeVerticalScroll.value = scrollView
-
-    guard shouldBringFocusedItemInward(semanticObject, inside: scrollView) else {
-      return
-    }
-
-    let objectID = ObjectIdentifier(semanticObject)
-    let now = Date.timeIntervalSinceReferenceDate
-
-    if
-      lastRepairObject == objectID,
-      now - lastRepairTime < 0.28
-    {
-      return
-    }
-
-    lastRepairObject = objectID
-    lastRepairTime = now
-
-    let selector = NSSelectorFromString("showOnScreen")
-    guard semanticObject.responds(to: selector) else {
-      return
-    }
-
-    DispatchQueue.main.async {
-      guard
-        UIAccessibility.isVoiceOverRunning,
-        semanticObject.responds(to: selector),
-        verticalFlutterScrollAncestor(of: semanticObject)?.window != nil
-      else {
-        return
-      }
-      _ = semanticObject.perform(selector)
-    }
-  }
-
-  private static func shouldBringFocusedItemInward(
-    _ semanticObject: NSObject,
-    inside scrollView: UIScrollView
-  ) -> Bool {
-    guard let viewport = screenFrame(of: scrollView) else {
-      return true
-    }
-
-    guard
-      let native = nativeAccessibility(of: semanticObject),
-      let itemFrame = accessibilityFrame(of: native)
-    else {
-      return true
-    }
-
-    let verticalInset = min(48, max(12, viewport.height * 0.08))
-    let safeViewport = viewport.insetBy(dx: 0, dy: verticalInset)
-
-    if !viewport.intersects(itemFrame) {
-      return true
-    }
-
-    return itemFrame.midY < safeViewport.minY ||
-      itemFrame.midY > safeViewport.maxY
-  }
-
-  // MARK: - Flutter semantics runtime helpers
-
-  private static func flutterSemanticObject(from focused: Any) -> NSObject? {
-    guard let object = focused as? NSObject else {
+  private static func flutterSemanticObject(from object: AnyObject) -> NSObject? {
+    guard let value = object as? NSObject else {
       return nil
     }
 
     if
-      object.responds(to: NSSelectorFromString("nativeAccessibility")),
-      object.responds(to: NSSelectorFromString("parent"))
+      value.responds(to: NSSelectorFromString("nativeAccessibility")),
+      value.responds(to: NSSelectorFromString("parent"))
     {
-      return object
+      return value
     }
 
     let selector = NSSelectorFromString("semanticsObject")
     if
-      object.responds(to: selector),
-      let semanticObject = object.value(forKey: "semanticsObject") as? NSObject
+      value.responds(to: selector),
+      let semantic = value.value(forKey: "semanticsObject") as? NSObject
     {
-      return semanticObject
+      return semantic
     }
 
     return nil
   }
 
   private static func verticalFlutterScrollAncestor(
-    of semanticObject: NSObject
+    of semantic: NSObject
   ) -> UIScrollView? {
-    var current: NSObject? = semanticObject
+    var current: NSObject? = semantic
 
     while let node = current {
       if
         let native = nativeAccessibility(of: node),
         let scrollView = native as? UIScrollView,
-        NSStringFromClass(type(of: scrollView)).contains(
+        String(describing: type(of: scrollView)).contains(
           "FlutterSemanticsScrollView"
         ),
-        isVerticalScrollable(scrollView)
+        scrollView.contentSize.height > scrollView.bounds.height + 1
       {
         return scrollView
       }
-
       current = semanticParent(of: node)
     }
 
+    return nil
+  }
+
+  private static func tailDistance(
+    of semantic: NSObject,
+    in scrollView: UIScrollView
+  ) -> Int? {
+    guard let owner = semanticsObject(of: scrollView) else {
+      return nil
+    }
+
+    var ordered: [NSObject] = []
+    for child in semanticChildren(of: owner) {
+      collectFocusableSemantics(child, into: &ordered)
+    }
+
+    guard let index = ordered.firstIndex(where: { $0 === semantic }) else {
+      return nil
+    }
+    return ordered.count - 1 - index
+  }
+
+  private static func collectFocusableSemantics(
+    _ object: NSObject,
+    into result: inout [NSObject]
+  ) {
+    if isFocusableSemanticObject(object) {
+      result.append(object)
+    }
+    for child in semanticChildren(of: object) {
+      collectFocusableSemantics(child, into: &result)
+    }
+  }
+
+  private static func viewportRelation(
+    of semantic: NSObject,
+    in scrollView: UIScrollView
+  ) -> String {
+    guard
+      let viewport = screenFrame(of: scrollView),
+      let native = nativeAccessibility(of: semantic),
+      let item = accessibilityFrame(of: native)
+    else {
+      return "?"
+    }
+
+    if item.maxY < viewport.minY {
+      return "above"
+    }
+    if item.minY > viewport.maxY {
+      return "below"
+    }
+
+    let edge = min(56, max(16, viewport.height * 0.10))
+    if item.midY <= viewport.minY + edge {
+      return "top"
+    }
+    if item.midY >= viewport.maxY - edge {
+      return "bottom"
+    }
+    return "inside"
+  }
+
+  private static func scrollPosition(_ scrollView: UIScrollView) -> String {
+    let maxOffset = max(
+      0,
+      scrollView.contentSize.height - scrollView.bounds.height
+    )
+    return String(
+      format: "off=%.0f/%.0f",
+      scrollView.contentOffset.y,
+      maxOffset
+    )
+  }
+
+  private static func semanticUID(_ object: NSObject) -> Int? {
+    let selector = NSSelectorFromString("uid")
+    guard object.responds(to: selector) else {
+      return nil
+    }
+
+    if let number = object.value(forKey: "uid") as? NSNumber {
+      return number.intValue
+    }
     return nil
   }
 
@@ -467,12 +491,11 @@ private enum VoiceOverContinuousReadBridge {
     let selector = NSSelectorFromString("children")
     guard
       object.responds(to: selector),
-      let rawChildren = object.value(forKey: "children") as? NSArray
+      let children = object.value(forKey: "children") as? NSArray
     else {
       return []
     }
-
-    return rawChildren.compactMap { $0 as? NSObject }
+    return children.compactMap { $0 as? NSObject }
   }
 
   private static func semanticParent(of object: NSObject) -> NSObject? {
@@ -481,6 +504,14 @@ private enum VoiceOverContinuousReadBridge {
       return nil
     }
     return object.value(forKey: "parent") as? NSObject
+  }
+
+  private static func semanticsObject(of object: NSObject) -> NSObject? {
+    let selector = NSSelectorFromString("semanticsObject")
+    guard object.responds(to: selector) else {
+      return nil
+    }
+    return object.value(forKey: "semanticsObject") as? NSObject
   }
 
   private static func nativeAccessibility(of object: NSObject) -> AnyObject? {
@@ -495,7 +526,6 @@ private enum VoiceOverContinuousReadBridge {
     guard let native = nativeAccessibility(of: object) else {
       return false
     }
-
     if let element = native as? UIAccessibilityElement {
       return element.isAccessibilityElement
     }
@@ -509,25 +539,10 @@ private enum VoiceOverContinuousReadBridge {
     if let element = object as? UIAccessibilityElement {
       return validFrame(element.accessibilityFrame)
     }
-
     if let view = object as? UIView {
       return screenFrame(of: view)
     }
-
     return nil
-  }
-
-  private static func isVerticalScrollable(_ scrollView: UIScrollView) -> Bool {
-    scrollView.bounds.height > 1 &&
-      scrollView.contentSize.height > scrollView.bounds.height + 1
-  }
-
-  private static func hasRemainingForwardRange(_ scrollView: UIScrollView) -> Bool {
-    let maxOffset = max(
-      0,
-      scrollView.contentSize.height - scrollView.bounds.height
-    )
-    return scrollView.contentOffset.y < maxOffset - 1
   }
 
   private static func validFrame(_ frame: CGRect) -> CGRect? {
@@ -544,6 +559,61 @@ private enum VoiceOverContinuousReadBridge {
     let frameInWindow = view.convert(view.bounds, to: window)
     return window.convert(frameInWindow, to: nil)
   }
+
+  private static func scrollDirectionName(_ raw: Int) -> String {
+    guard let direction = UIAccessibilityScrollDirection(rawValue: raw) else {
+      return "raw\(raw)"
+    }
+
+    switch direction {
+    case .right: return "right"
+    case .left: return "left"
+    case .up: return "up"
+    case .down: return "down"
+    case .next: return "next"
+    case .previous: return "previous"
+    @unknown default: return "raw\(raw)"
+    }
+  }
+
+  private static func startFreshTrace(reason: String) {
+    DispatchQueue.main.async {
+      startTime = Date.timeIntervalSinceReferenceDate
+      events.removeAll(keepingCapacity: true)
+      record("START", reason)
+    }
+  }
+
+  private static func record(_ code: String, _ detail: String) {
+    guard Thread.isMainThread else {
+      DispatchQueue.main.async {
+        record(code, detail)
+      }
+      return
+    }
+
+    let elapsed = Date.timeIntervalSinceReferenceDate - startTime
+    let line = String(format: "%07.3f %@ %@", elapsed, code, detail)
+    events.append(line)
+
+    if events.count > maxEvents {
+      events.removeFirst(events.count - maxEvents)
+    }
+
+    scheduleClipboardUpdate()
+  }
+
+  private static func scheduleClipboardUpdate() {
+    clipboardWorkItem?.cancel()
+
+    let work = DispatchWorkItem {
+      let header = "ACCESSIBILIBILI_READALL_DIAG_V1"
+      UIPasteboard.general.string = ([header] + events).joined(separator: "\n")
+    }
+
+    clipboardWorkItem = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: work)
+  }
 }
 
 class SceneDelegate: FlutterSceneDelegate {
@@ -552,7 +622,7 @@ class SceneDelegate: FlutterSceneDelegate {
     willConnectTo session: UISceneSession,
     options connectionOptions: UIScene.ConnectionOptions
   ) {
-    VoiceOverContinuousReadBridge.install()
+    VoiceOverReadAllDiagnostics.install()
     super.scene(
       scene,
       willConnectTo: session,
