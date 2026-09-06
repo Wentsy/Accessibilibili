@@ -247,7 +247,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
         child: CustomScrollView(
           key: PageStorageKey('reply-thread-${widget.rpid}-${widget.dialog ?? 0}'),
           cacheExtent: MediaQuery.accessibleNavigationOf(context)
-              ? MediaQuery.sizeOf(context).height
+              ? MediaQuery.sizeOf(context).height * 8
               : 3000,
           controller: scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
