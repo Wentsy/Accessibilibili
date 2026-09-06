@@ -33,11 +33,10 @@ private final class TouchOnlyAccessibilityProxy: UIAccessibilityElement {
 ///
 /// Composer actions marked `a11y-touch-only|...` stay in Flutter's semantic
 /// tree so their original frame and tap action remain available, but they are
-/// not exposed as ordinary accessibility elements. Flutter's existing semantic
-/// hit-test is left intact; only when that hit-test actually lands on one of
-/// these marked actions do we return a temporary proxy that VoiceOver can focus
-/// by direct touch. This keeps swipe navigation and Read All unchanged outside
-/// those explicitly marked composer controls.
+/// not exposed as ordinary accessibility elements. Flutter's semantic hit-test
+/// normally skips such non-elements, so the marked node gets one narrow chance
+/// to return a temporary proxy when direct touch actually lands inside its own
+/// frame. All other hit testing remains owned by Flutter.
 private enum VoiceOverReplyReadingBridge {
   private static let replyIdentifierPrefix = "a11y-read-reply|"
   private static let touchOnlyIdentifierPrefix = "a11y-touch-only|"
@@ -193,6 +192,21 @@ private enum VoiceOverReplyReadingBridge {
         return original(object, selector, point, event)
       }
 
+      // Flutter's original hit-test checks isAccessibilityElement only after
+      // descending into a semantic node. Our touch-only composer deliberately
+      // reports false there so swipe navigation and Read All skip it. Intercept
+      // that exact node first when the user's finger is physically inside its
+      // frame, then expose only a temporary proxy for direct touch exploration.
+      if
+        let element = object as? UIAccessibilityElement,
+        isTouchOnlyElement(element),
+        CGRectContainsPoint(element.accessibilityFrame, point)
+      {
+        let proxy = TouchOnlyAccessibilityProxy(target: element)
+        lastTouchOnlyProxy = proxy
+        return proxy
+      }
+
       guard let result = original(object, selector, point, event) else {
         return nil
       }
@@ -201,6 +215,8 @@ private enum VoiceOverReplyReadingBridge {
         return result
       }
 
+      // Keep this fallback in case a future Flutter engine happens to return a
+      // marked element directly despite its isAccessibilityElement override.
       guard
         let element = result as? UIAccessibilityElement,
         isTouchOnlyElement(element)
