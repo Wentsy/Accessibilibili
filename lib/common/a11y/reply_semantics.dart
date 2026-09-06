@@ -124,7 +124,7 @@ class _ReplyA11ySemanticsState extends State<ReplyA11ySemantics> {
       a11yActionFeedback(message: message);
       (context as Element).markNeedsBuild();
     } else {
-      final message = isDisliked ? '取消踩失败' : '点赞失败，需要登录';
+      final message = isDisliked ? '取消踩失败' : '点踩失败，需要登录';
       SmartDialog.showToast(message);
       a11yActionFeedback(message: message);
     }
