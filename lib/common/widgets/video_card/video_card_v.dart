@@ -33,11 +33,13 @@ import 'package:material_ui/material_ui.dart';
 class VideoCardV extends StatelessWidget {
   final BaseRcmdVideoItemModel videoItem;
   final VoidCallback? onRemove;
+  final String? a11yReadingIdentifier;
 
   const VideoCardV({
     super.key,
     required this.videoItem,
     this.onRemove,
+    this.a11yReadingIdentifier,
   });
 
   Future<void> onPushDetail() async {
@@ -182,6 +184,7 @@ class VideoCardV extends StatelessWidget {
       container: true,
       explicitChildNodes: false,
       excludeSemantics: true,
+      identifier: a11yReadingIdentifier,
       button: false,
       label: a11yLabel,
       hint: '點兩下開啟影片。上滑有更多操作',
