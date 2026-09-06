@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
-class ReplyA11ySemantics extends StatelessWidget {
+class ReplyA11ySemantics extends StatefulWidget {
   const ReplyA11ySemantics({
     super.key,
     required this.replyItem,
@@ -27,7 +27,53 @@ class ReplyA11ySemantics extends StatelessWidget {
   final String? onTapHint;
   final VoidCallback? onAccessibilityFocus;
 
+  @override
+  State<ReplyA11ySemantics> createState() => _ReplyA11ySemanticsState();
+}
+
+class _ReplyA11ySemanticsState extends State<ReplyA11ySemantics> {
+  bool _didRequestReadAhead = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleVoiceOverReadAhead();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReplyA11ySemantics oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.replyItem.id != widget.replyItem.id) {
+      _didRequestReadAhead = false;
+      _scheduleVoiceOverReadAhead();
+    }
+  }
+
+  void _scheduleVoiceOverReadAhead() {
+    if (
+      _didRequestReadAhead ||
+      widget.onAccessibilityFocus == null ||
+      !MediaQuery.accessibleNavigationOf(context)
+    ) {
+      return;
+    }
+
+    _didRequestReadAhead = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+
+      // VoiceOver Read All does not reliably move accessibility focus through
+      // every lazily-built row. Treat a comment entering Flutter's viewport /
+      // cache as a read-ahead signal as well. Callers already gate this to the
+      // final few rows and their controllers de-duplicate in-flight requests,
+      // so main comments and nested replies can preload the next API page
+      // before continuous reading reaches the current semantic boundary.
+      widget.onAccessibilityFocus?.call();
+    });
+  }
+
   Future<void> _toggleLike(BuildContext context) async {
+    final replyItem = widget.replyItem;
     final isLiked = replyItem.replyControl.action == Int64.ONE;
     final action = isLiked ? 0 : 1;
     final res = await ReplyHttp.likeReply(
@@ -58,6 +104,7 @@ class ReplyA11ySemantics extends StatelessWidget {
   }
 
   Future<void> _toggleDislike(BuildContext context) async {
+    final replyItem = widget.replyItem;
     final isDisliked = replyItem.replyControl.action == Int64.TWO;
     final action = isDisliked ? 0 : 1;
     final wasLiked = replyItem.replyControl.action == Int64.ONE;
@@ -77,7 +124,7 @@ class ReplyA11ySemantics extends StatelessWidget {
       a11yActionFeedback(message: message);
       (context as Element).markNeedsBuild();
     } else {
-      final message = isDisliked ? '取消踩失败' : '点踩失败，需要登录';
+      final message = isDisliked ? '取消踩失败' : '点赞失败，需要登录';
       SmartDialog.showToast(message);
       a11yActionFeedback(message: message);
     }
@@ -85,21 +132,22 @@ class ReplyA11ySemantics extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final replyItem = widget.replyItem;
     final action = replyItem.replyControl.action;
     final commentTime = DateFormatUtils.a11yDateFormat(replyItem.ctime.toInt());
     final semanticsLabel = commentTime.isEmpty
-        ? label
-        : '$label，$commentTime評論';
+        ? widget.label
+        : '${widget.label}，$commentTime評論';
     return Semantics(
       container: true,
       explicitChildNodes: false,
       label: semanticsLabel,
-      hint: onTapHint,
+      hint: widget.onTapHint,
       textDirection: TextDirection.ltr,
-      onTap: onTap,
-      onTapHint: onTapHint,
+      onTap: widget.onTap,
+      onTapHint: widget.onTapHint,
       onDidGainAccessibilityFocus: () {
-        onAccessibilityFocus?.call();
+        widget.onAccessibilityFocus?.call();
         // Make the next lazy-list nodes available without a scroll animation
         // racing VoiceOver's read-from-current-item traversal.
         a11yEnsureVisible(context, immediate: true);
@@ -112,7 +160,7 @@ class ReplyA11ySemantics extends StatelessWidget {
           label: action == Int64.TWO ? '取消踩' : '点踩这条评论',
         ): () => _toggleDislike(context),
       },
-      child: ExcludeSemantics(child: child),
+      child: ExcludeSemantics(child: widget.child),
     );
   }
 }
