@@ -187,29 +187,30 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                     ],
                   )
                 : child(),
-            if (!MediaQuery.accessibleNavigationOf(context))
-              Positioned(
-                right: 16,
-                bottom: 16 + MediaQuery.paddingOf(context).bottom,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Semantics(
-                      excludeSemantics: true,
-                      sortKey: const OrdinalSortKey(0.5),
-                      button: true,
-                      label: '發表回覆',
-                      child: FloatingActionButton(
-                        heroTag: 'replyReplyFab',
-                        onPressed: _replyToThread,
-                        tooltip: '发表回复',
-                        child: const Icon(Icons.reply),
-                      ),
+            Positioned(
+              right: 16,
+              bottom: 16 + MediaQuery.paddingOf(context).bottom,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Semantics(
+                    excludeSemantics: true,
+                    identifier: 'a11y-touch-only|publish-reply',
+                    sortKey: const OrdinalSortKey(0.5),
+                    button: true,
+                    label: '發表回覆',
+                    onTap: _replyToThread,
+                    child: FloatingActionButton(
+                      heroTag: 'replyReplyFab',
+                      onPressed: _replyToThread,
+                      tooltip: '发表回复',
+                      child: const Icon(Icons.reply),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+            ),
           ],
         ),
       ),
@@ -459,7 +460,9 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, color: colorScheme.outline),
           ),
-          if (isEnd && !isDialogue) ...[
+          if (isEnd &&
+              !isDialogue &&
+              !MediaQuery.accessibleNavigationOf(context)) ...[
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: _replyToThread,
