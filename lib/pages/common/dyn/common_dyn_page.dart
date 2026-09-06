@@ -373,19 +373,35 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
     child: replyButton,
   );
 
-  Widget get replyButton => FloatingActionButton(
-    heroTag: null,
-    onPressed: () {
-      try {
-        feedBack();
-        controller.onReply(
-          null,
-          oid: controller.oid,
-          replyType: controller.replyType,
-        );
-      } catch (_) {}
-    },
-    tooltip: '评论',
-    child: const Icon(Icons.reply),
-  );
+  void _publishComment() {
+    try {
+      feedBack();
+      controller.onReply(
+        null,
+        oid: controller.oid,
+        replyType: controller.replyType,
+      );
+    } catch (_) {}
+  }
+
+  Widget get replyButton {
+    final button = FloatingActionButton(
+      heroTag: null,
+      onPressed: _publishComment,
+      tooltip: '评论',
+      child: const Icon(Icons.reply),
+    );
+    if (!MediaQuery.accessibleNavigationOf(context)) {
+      return button;
+    }
+    return Semantics(
+      container: true,
+      excludeSemantics: true,
+      identifier: 'a11y-touch-only|publish-comment',
+      button: true,
+      label: '發表評論',
+      onTap: _publishComment,
+      child: button,
+    );
+  }
 }
