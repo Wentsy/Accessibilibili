@@ -93,6 +93,7 @@ class ReplyA11ySemantics extends StatelessWidget {
     return Semantics(
       container: true,
       explicitChildNodes: false,
+      identifier: 'a11y-read-reply|${replyItem.oid}|${replyItem.id}',
       label: semanticsLabel,
       hint: onTapHint,
       textDirection: TextDirection.ltr,
