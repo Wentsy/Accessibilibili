@@ -4,19 +4,15 @@ import UIKit
 
 /// Temporary diagnostics for the iOS VoiceOver Read All boundary.
 ///
-/// This intentionally does NOT try to repair or page any Flutter list. It only
-/// observes the same accessibility methods UIKit/VoiceOver can use while
-/// traversing Flutter semantics and keeps the latest trace in the iOS clipboard
-/// so it can be pasted after reproducing the stall without Xcode/device logs.
+/// This version deliberately does not repair or page any Flutter list. It only
+/// observes accessibility traversal and writes the latest trace to the iOS
+/// clipboard so the failing and succeeding swipe paths can be compared without
+/// Xcode/device logs.
 private enum VoiceOverReadAllDiagnostics {
   private typealias VoidHandler = @convention(c) (
     AnyObject,
     Selector
   ) -> Void
-  private typealias BoolHandler = @convention(c) (
-    AnyObject,
-    Selector
-  ) -> Bool
   private typealias BoolChildHandler = @convention(c) (
     AnyObject,
     Selector,
@@ -67,7 +63,11 @@ private enum VoiceOverReadAllDiagnostics {
 
     installSemanticHooks(on: semanticsClass)
     installContainerHooks(on: containerClass)
-    installScrollViewHook(on: scrollViewClass)
+    installScrollHook(
+      on: scrollViewClass,
+      selectorName: "accessibilityScroll:",
+      code: "RV"
+    )
     installPublicFocusNotifications()
 
     record("READY", "diagnostics installed")
@@ -81,25 +81,16 @@ private enum VoiceOverReadAllDiagnostics {
       selectorName: "accessibilityElementDidBecomeFocused",
       code: "F"
     )
-
     installVoidHook(
       on: semanticsClass,
       selectorName: "showOnScreen",
       code: "S"
     )
-
-    installBoolHook(
-      on: semanticsClass,
-      selectorName: "accessibilityScrollToVisible",
-      code: "V0"
-    )
-
     installChildBoolHook(
       on: semanticsClass,
       selectorName: "accessibilityScrollToVisibleWithChild:",
       code: "VC"
     )
-
     installScrollHook(
       on: semanticsClass,
       selectorName: "accessibilityScroll:",
@@ -124,36 +115,9 @@ private enum VoiceOverReadAllDiagnostics {
     )
 
     let block: @convention(block) (AnyObject) -> Void = { object in
-      let before = describe(object)
-      record(code, "before \(before)")
+      record(code, "before \(describe(object))")
       original(object, selector)
       record(code, "after  \(describe(object))")
-    }
-
-    method_setImplementation(method, imp_implementationWithBlock(block))
-  }
-
-  private static func installBoolHook(
-    on targetClass: AnyClass,
-    selectorName: String,
-    code: String
-  ) {
-    let selector = NSSelectorFromString(selectorName)
-    guard let method = class_getInstanceMethod(targetClass, selector) else {
-      record("MISS", selectorName)
-      return
-    }
-
-    let original = unsafeBitCast(
-      method_getImplementation(method),
-      to: BoolHandler.self
-    )
-
-    let block: @convention(block) (AnyObject) -> Bool = { object in
-      record(code, "before \(describe(object))")
-      let result = original(object, selector)
-      record(code, "ret=\(result ? 1 : 0) \(describe(object))")
-      return result
     }
 
     method_setImplementation(method, imp_implementationWithBlock(block))
@@ -261,11 +225,11 @@ private enum VoiceOverReadAllDiagnostics {
       let count = originalCount(container, countSelector)
       let element = originalElement(container, elementSelector, index)
 
-      // The user's reproducible symptom occurs within roughly 2-3 items of the
-      // traversal boundary, so keep the trace focused on the last five entries.
+      // The reproducible boundary is roughly 2-3 items wide. Logging the final
+      // five entries keeps the clipboard useful without drowning it in noise.
       if index >= max(0, count - 5) {
-        let elementDescription = element.map(describe) ?? "nil"
-        record("E", "i=\(index)/\(count) \(elementDescription)")
+        let description = element.map(describe) ?? "nil"
+        record("E", "i=\(index)/\(count) \(description)")
       }
       return element
     }
@@ -277,10 +241,7 @@ private enum VoiceOverReadAllDiagnostics {
       let result = originalIndex(container, indexSelector, element)
       let count = originalCount(container, countSelector)
       if result >= max(0, count - 5) || result < 0 {
-        record(
-          "I",
-          "i=\(result)/\(count) \(describe(element))"
-        )
+        record("I", "i=\(result)/\(count) \(describe(element))")
       }
       return result
     }
@@ -295,16 +256,6 @@ private enum VoiceOverReadAllDiagnostics {
     )
   }
 
-  // MARK: - Hidden Flutter semantics UIScrollView
-
-  private static func installScrollViewHook(on scrollViewClass: AnyClass) {
-    installScrollHook(
-      on: scrollViewClass,
-      selectorName: "accessibilityScroll:",
-      code: "RV"
-    )
-  }
-
   // MARK: - Public UIKit focus notification
 
   private static func installPublicFocusNotifications() {
@@ -312,16 +263,29 @@ private enum VoiceOverReadAllDiagnostics {
       forName: UIAccessibility.elementFocusedNotification,
       object: nil,
       queue: .main
-    ) { notification in
-      let uiFocused: AnyObject? = UIAccessibility.focusedElement(using: .notificationVoiceOver)
-      let noteFocused: AnyObject? = notification.userInfo?[UIAccessibility.focusedElementUserInfoKey] as? AnyObject
-      let focused = noteFocused ?? uiFocused
-
-      if let focused {
-        record("NF", describe(focused))
-      } else {
+    ) { _ in
+      // Do not read focusedElementUserInfoKey here. In the Xcode/iOS SDK used
+      // by CI, that dictionary value is imported as `Any`, while
+      // UIAccessibility.focusedElement(using:) is also `Any?`. Trying to merge
+      // either value through `AnyObject?` makes Swift's class-constrained type
+      // inference fail. The public query API alone provides the same VoiceOver
+      // virtual focus needed by this diagnostic.
+      guard let rawFocused = UIAccessibility.focusedElement(
+        using: .notificationVoiceOver
+      ) else {
         record("NF", "nil")
+        return
       }
+
+      guard let focused = rawFocused as? NSObject else {
+        record(
+          "NF",
+          "c=\(String(describing: type(of: rawFocused))) no-nsobject"
+        )
+        return
+      }
+
+      record("NF", describe(focused))
     }
 
     statusObserver = NotificationCenter.default.addObserver(
