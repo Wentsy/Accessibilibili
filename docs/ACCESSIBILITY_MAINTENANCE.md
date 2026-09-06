@@ -8,9 +8,10 @@
 
 ## 版本基準
 
-- **目前已知完整實機驗證過的無障礙基準：`2a14e69b480dabb5d6bbf94bb17e8677a299f9c2`**
+- **目前已知完整實機驗證過的無障礙基準：`ca2c24181fe2482f0ecb7be65c8622e3d32ac07b`**（2026-09-07）
   - 包含既有低延遲三指翻頁、VoiceOver 原生翻頁回饋、主導航、評論與樓中樓、影片／評論時間、UP 頁、觀看紀錄、稍後再看等功能。
   - 另外包含 2026-09-04 完成實機驗證的 **iOS 原生富文字評論編輯器**：真正 `UITextView + NSTextAttachment`、圖片表情逐字朗讀、一張貼圖一個 selection slot、表情面板後鍵盤恢復、有貼圖時雙擊跳開頭／結尾、插入點位置公告、貼圖一次 Backspace 刪除及穩定刪除旁白。
+  - 2026-09-07 實機驗證完成：影片外層、樓中樓、動態評論的 **Read All 自動跨頁**；普通 VoiceOver 左右滑跨頁；評論／回覆按鈕 direct-touch；樓中樓底部不穿到外層；以及回滑時統計／排序列不插入回覆之間。
 - 舊的歷史完整基準：`f31c65e34cd5c05b6d5c3c9f020ed3450656fe2e`。
 - 建立本文件早期版本時的程式快照：`3d86e42e9bca40491ba0813514fb6cfae7ebd79b`。
 
@@ -168,6 +169,12 @@ lib/pages/main/controller.dart
 - 關閉樓中樓後，主評論區「發表評論」恢復。
 - 回覆樓層與回覆特定使用者的語意不可混淆。
 - 評論時間放在整則旁白最後。
+- 外層、樓中樓、動態評論的 **Read All** 可越過目前已建立的評論，自動翻到下一頁；普通左右滑仍完全由 Flutter 正常處理。
+- `ios/Runner/SceneDelegate.swift` 的 `VoiceOverReplyReadingBridge` 只把 `a11y-read-reply|...` 回覆串成閱讀鏈，並只在末端翻同一垂直列表。不可擴大為 container traversal、`accessibilityElementAtIndex` 捲動或全域 focus 移動。
+- `VoiceOverComposerTouchBridge` 只服務 `a11y-touch-only|publish-comment` 與 `a11y-touch-only|publish-reply`：線性左右滑不應碰到浮動按鈕，但觸摸探索按鈕實際 frame 內必須能朗讀並雙擊。它同時處理 FlutterView 與原生 `FlutterSemanticsScrollView`；後者是獨立 `UIScrollView`，不能只修改背後 `SemanticsObject`。
+- 樓中樓／對話以 `MiniScaffold.showBottomSheet(excludeBodySemantics: true)` 開啟時，底下外層語意必須排除到面板關閉；widget 仍保持掛載，關閉後恢復。否則「沒有更多」後會穿到外層評論。
+- iOS VoiceOver 模式下，樓中樓「相關回覆／按時間／按熱度」隨內容捲走；其他情況可吸頂。每頁持續可見的 pinned header 會在回滑時插入回覆閱讀鏈。
+- 主評論「發表評論」、樓中樓「發表回覆」都要在列表仍可翻頁時實測觸摸探索；不可因此破壞 Read All、三指翻頁或普通左右滑。
 
 共用評論語義：
 
@@ -247,6 +254,10 @@ lib/utils/date_utils.dart
 - [ ] 展開樓中樓後可找到「發表回覆」。
 - [ ] 關閉樓中樓後主評論「發表評論」重新出現。
 - [ ] 樓中樓左右瀏覽不觸礁、不突然跳回第一則。
+- [ ] 影片外層、樓中樓、動態評論各用 Read All 連讀跨至少兩頁；前向與回滑回覆順序皆正確。
+- [ ] 樓中樓到底後繼續右滑不會穿到外層；關閉後外層語意恢復。
+- [ ] 樓中樓回滑跨頁時，「相關回覆共…條／按時間／按熱度」不插入兩則回覆之間；回到頂部仍可切換排序。
+- [ ] 評論列表尚可翻頁時，觸摸探索能找到「發表評論」；樓中樓同樣找到「發表回覆」，雙擊開啟正確編輯器。
 - [ ] 觀看紀錄最後朗讀正確「…看過」時間。
 - [ ] 稍後再看使用 `add_at` 朗讀「…再看」，沒有拿 `pubdate` 冒充。
 - [ ] 播放器 VoiceOver 進度調整正常。
@@ -279,21 +290,23 @@ upstream-sync/YYYY-MM-DD
   └─ 合入 PiliPlus 官方最新版、處理 conflict、交 Hermes 打包、實機測試
 ```
 
-大版本更新前可建立保險 tag，例如：
+日後大版本同步前可建立保險 tag，例如：
 
 ```text
 stable-2026-09-accessibility
 ```
 
-目前如果要標記富文字完成後的穩定點，應至少能回到：
+目前正式穩定點：
 
 ```text
-2a14e69b480dabb5d6bbf94bb17e8677a299f9c2
+ca2c24181fe2482f0ecb7be65c8622e3d32ac07b
 ```
+
+日常只保留 `main`。實驗、archive 與已合併的 `upstream-sync/*` 分支完成驗收後刪除；Git commit 歷史與穩定 tag 已足夠回溯，避免未知用途分支被誤當成基準。
 
 ## 給 Hermes／未來維護者的短版指令
 
-> 同步 PiliPlus 上游時，先從 Accessibilibili `main` 建立獨立 `upstream-sync` 分支，再合入 `bggRGjQaUbCoE/PiliPlus:main`。不要直接覆蓋本 fork 的無障礙檔案。發生 conflict 時要保留上游新功能，同時重新套回 Accessibilibili 的 VoiceOver semantics、焦點／viewport 同步、低延遲三指翻頁、iOS `pageScrolled`、評論／樓中樓、日期朗讀，以及 iOS native `UITextView + NSTextAttachment` 富文字編輯基準。圖片表情必須維持一張一個 UTF-16 slot、Character rotor 可朗讀 `[doge]` 等名稱、表情面板後可恢復鍵盤、有貼圖時可雙擊跳頭尾、一次 Backspace 刪一張且刪除旁白穩定。編譯後必須跑本文件與 `docs/IOS_RICH_TEXT_VOICEOVER_BASELINE.md` 的 VoiceOver 實機清單，全部通過才合回 `main`。
+> 同步 PiliPlus 上游時，先從 Accessibilibili `main` 建立獨立 `upstream-sync` 分支，再合入 `bggRGjQaUbCoE/PiliPlus:main`。不要直接覆蓋本 fork 的無障礙檔案。發生 conflict 時保留上游新功能，同時重新套回 VoiceOver semantics、焦點／viewport 同步、低延遲三指翻頁、iOS `pageScrolled`、日期朗讀、評論／樓中樓，以及原生 `UITextView + NSTextAttachment` 富文字基準。評論還要保留 Read All 跨頁、普通左右滑、外層與樓中樓 direct-touch 發表按鈕、浮層語意隔離，以及 iOS VoiceOver 的樓中樓排序列隨內容捲走。圖片表情必須維持一張一個 UTF-16 slot、Character rotor 可朗讀 `[doge]` 等名稱、表情面板後可恢復鍵盤、有貼圖時可雙擊跳頭尾、一次 Backspace 刪一張且刪除旁白穩定。編譯後必須跑本文件與 `docs/IOS_RICH_TEXT_VOICEOVER_BASELINE.md` 的 VoiceOver 實機清單，全部通過才合回 `main`。
 
 ---
 
