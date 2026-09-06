@@ -1,5 +1,35 @@
 # Composer 觸摸優先與樓中樓後續修正
 
+## Backward 閱讀鏈續接（待實機驗證）
+
+使用者確認 `d720c09f55a421d25d996781cae978d607ddfe87` 已解決底部穿牆，
+但回翻時統計／排序仍插隊。本次完整保留該版 Dart 隔離與排序、composer bridge
+及 forward page-turn，只修改閱讀鏈 `.previous` 成功捲動後的完成處理。
+
+記錄翻頁前評論 identifier 與原 viewport；等待 120ms，再於同一 viewport 的
+最新語意樹尋找原評論及前一則。僅在 viewport 已往回捲、前一則可見、
+焦點仍屬原評論時，以 `layoutChanged(previous)` 續接，不發無目標的
+`pageScrolled(nil)`。語意未就緒最多再等四次 40ms；找不到目標則沿用原通知。
+新閱讀鏈捲動、焦點離開或 viewport 移除時取消，不追焦、不搜尋其他面板。
+
+尚不能證明單指左滑一定經過此閱讀鏈入口；Flutter 的 swipe-to-focus /
+showOnScreen 也會捲動畫面。Sol 提出的原因目前是待驗證假設，不是已確認根因。
+保留 `[ReplyBackward]` 原生日誌（不含評論內容或 identifier）：
+
+- `page request`：確實收到閱讀鏈往回翻頁。
+- `resumed at preceding reply`：找到目標並送出定向通知。
+- `cancelled`：焦點／viewport 已改變，取消延遲動作。
+- `fallback`：等待後仍無可見前一則，使用原完成通知。
+
+若插隊時完全沒有 `page request`，下一步應查普通 swipe-to-focus 捲動路徑，
+不要擴大此補丁到全域焦點操作。若有 resumed 仍插隊，需再驗證 UIKit 是否採用
+通知目標。Hermes 可用 macOS Console 收集手機日誌並搜尋 `[ReplyBackward]`。
+
+此環境無 iOS SDK／手機，未編譯或實機驗證；已檢查 diff，並以程式比對
+composer bridge、forward handler、原通知函式及全部 Dart 檔均未改變。
+實機請測反向連續跨頁、不跳過／重複回覆，並複驗前向 Read All、按鈕觸摸、
+底部不穿牆，以及回翻後立刻關閉面板時不會把焦點拉回。
+
 使用者已回報 `3e5095f75075ffc0be5e00a41e63204cb860d6b1` 的觸摸優先修正
 完全實測通過。以下保留該次修改紀錄；新的待驗證項目是樓中樓底部穿到
 外層評論，以及反向瀏覽時吸頂標頭插入評論之間。
