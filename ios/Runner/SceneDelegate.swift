@@ -2,7 +2,7 @@ import Flutter
 import ObjectiveC.runtime
 import UIKit
 
-private final class TouchOnlyAccessibilityProxy: UIAccessibilityElement {
+private final class VoiceOverComposerTouchProxy: UIAccessibilityElement {
   weak var target: UIAccessibilityElement?
 
   init(target: UIAccessibilityElement) {
@@ -22,6 +22,228 @@ private final class TouchOnlyAccessibilityProxy: UIAccessibilityElement {
   }
 }
 
+/// Gives direct VoiceOver touch one narrow escape hatch for the floating
+/// "發表評論" controls without changing Flutter's normal swipe traversal or
+/// the Read All/page-turn bridge below.
+///
+/// The marked composer remains in Flutter's semantic tree so its real frame and
+/// tap action stay current. While VoiceOver is running it is hidden from normal
+/// linear accessibility traversal. Only FlutterView's outer accessibility
+/// hit-test can expose a temporary proxy when the user's finger is physically
+/// inside the marked composer's screen frame.
+private enum VoiceOverComposerTouchBridge {
+  private static let composerIdentifier = "a11y-touch-only|publish-comment"
+  private static var lastProxy: VoiceOverComposerTouchProxy?
+
+  private typealias BoolGetter = @convention(c) (
+    AnyObject,
+    Selector
+  ) -> Bool
+
+  private typealias HitTestHandler = @convention(c) (
+    AnyObject,
+    Selector,
+    CGPoint,
+    AnyObject?
+  ) -> AnyObject?
+
+  static func install() {
+    _ = installOnce
+  }
+
+  private static let installOnce: Void = {
+    guard
+      let semanticClass = NSClassFromString("FlutterSemanticsObject"),
+      let flutterViewClass = NSClassFromString("FlutterView")
+    else {
+      return
+    }
+
+    installLinearTraversalExclusion(on: semanticClass)
+    installFlutterViewDirectTouch(on: flutterViewClass)
+  }()
+
+  private static func installLinearTraversalExclusion(on targetClass: AnyClass) {
+    let selector = NSSelectorFromString("isAccessibilityElement")
+    guard
+      let inheritedMethod = class_getInstanceMethod(targetClass, selector),
+      let typeEncoding = method_getTypeEncoding(inheritedMethod)
+    else {
+      return
+    }
+
+    let original = unsafeBitCast(
+      method_getImplementation(inheritedMethod),
+      to: BoolGetter.self
+    )
+
+    let block: @convention(block) (AnyObject) -> Bool = { object in
+      if UIAccessibility.isVoiceOverRunning && isMarkedComposer(object) {
+        return false
+      }
+      return original(object, selector)
+    }
+
+    // FlutterSemanticsObject inherits this method from SemanticsObject in the
+    // engine version used by the app. Add a class-local override only; never
+    // replace SemanticsObject/NSObject globally.
+    _ = class_addMethod(
+      targetClass,
+      selector,
+      imp_implementationWithBlock(block),
+      typeEncoding
+    )
+  }
+
+  private static func installFlutterViewDirectTouch(on targetClass: AnyClass) {
+    let selector = NSSelectorFromString("_accessibilityHitTest:withEvent:")
+    guard
+      let inheritedMethod = class_getInstanceMethod(targetClass, selector),
+      let typeEncoding = method_getTypeEncoding(inheritedMethod)
+    else {
+      return
+    }
+
+    let original = unsafeBitCast(
+      method_getImplementation(inheritedMethod),
+      to: HitTestHandler.self
+    )
+
+    let block: @convention(block) (
+      AnyObject,
+      CGPoint,
+      AnyObject?
+    ) -> AnyObject? = { object, point, event in
+      guard UIAccessibility.isVoiceOverRunning else {
+        return original(object, selector, point, event)
+      }
+
+      if
+        let view = object as? UIView,
+        let composer = markedComposer(at: point, in: view)
+      {
+        let proxy = VoiceOverComposerTouchProxy(target: composer)
+        lastProxy = proxy
+        return proxy
+      }
+
+      return original(object, selector, point, event)
+    }
+
+    // FlutterView does not implement this selector itself in Flutter 3.47.1;
+    // add a narrow override on FlutterView while preserving UIView's inherited
+    // implementation as the fallback for every non-composer touch.
+    _ = class_addMethod(
+      targetClass,
+      selector,
+      imp_implementationWithBlock(block),
+      typeEncoding
+    )
+  }
+
+  private static func markedComposer(
+    at point: CGPoint,
+    in flutterView: UIView
+  ) -> UIAccessibilityElement? {
+    guard let accessibilityRoots = flutterView.accessibilityElements else {
+      return nil
+    }
+
+    for root in accessibilityRoots {
+      guard let rootObject = root as? NSObject else { continue }
+      let semanticRoot: NSObject
+      if
+        NSStringFromClass(type(of: rootObject)).hasSuffix(
+          "SemanticsObjectContainer"
+        ),
+        let owner = objectValue(
+          of: rootObject,
+          selectorName: "semanticsObject"
+        ) as? NSObject
+      {
+        semanticRoot = owner
+      } else {
+        semanticRoot = rootObject
+      }
+
+      if let composer = findMarkedComposer(at: point, in: semanticRoot) {
+        return composer
+      }
+    }
+    return nil
+  }
+
+  private static func findMarkedComposer(
+    at point: CGPoint,
+    in object: NSObject
+  ) -> UIAccessibilityElement? {
+    // Mirror Flutter's direct-touch ordering so a currently presented route or
+    // sheet wins over semantics behind it.
+    for child in semanticChildrenInHitTestOrder(of: object) {
+      if let hit = findMarkedComposer(at: point, in: child) {
+        return hit
+      }
+    }
+
+    guard
+      let native = nativeAccessibility(of: object) as? UIAccessibilityElement,
+      isMarkedComposer(native),
+      CGRectContainsPoint(native.accessibilityFrame, point)
+    else {
+      return nil
+    }
+    return native
+  }
+
+  private static func isMarkedComposer(_ object: AnyObject?) -> Bool {
+    guard
+      let element = object as? UIAccessibilityElement,
+      let identifier = element.accessibilityIdentifier
+    else {
+      return false
+    }
+    return identifier == composerIdentifier
+  }
+
+  private static func semanticChildrenInHitTestOrder(
+    of object: NSObject
+  ) -> [NSObject] {
+    if
+      let value = objectValue(
+        of: object,
+        selectorName: "childrenInHitTestOrder"
+      ) as? NSArray
+    {
+      return value.compactMap { $0 as? NSObject }
+    }
+
+    if
+      let value = objectValue(of: object, selectorName: "children") as? NSArray
+    {
+      return value.compactMap { $0 as? NSObject }
+    }
+    return []
+  }
+
+  private static func nativeAccessibility(of object: NSObject) -> AnyObject? {
+    objectValue(of: object, selectorName: "nativeAccessibility")
+  }
+
+  private static func objectValue(
+    of object: NSObject,
+    selectorName: String
+  ) -> AnyObject? {
+    let selector = NSSelectorFromString(selectorName)
+    guard
+      object.responds(to: selector),
+      let result = object.perform(selector)
+    else {
+      return nil
+    }
+    return result.takeUnretainedValue()
+  }
+}
+
 /// Keeps ordinary Flutter accessibility traversal untouched while giving
 /// VoiceOver's text-reading path a separate chain made only from reply text.
 ///
@@ -31,17 +253,11 @@ private final class TouchOnlyAccessibilityProxy: UIAccessibilityElement {
 /// Flutter scrollable gets `causesPageTurn`; only the resulting `.next` page
 /// request is translated to Flutter's vertical forward scroll action.
 ///
-/// Composer actions marked `a11y-touch-only|...` stay in Flutter's semantic
-/// tree so their original frame and tap action remain available, but they are
-/// not exposed as ordinary accessibility elements. During direct touch only,
-/// the containing Flutter scroll semantic gets one narrow chance to return a
-/// temporary proxy when the finger lands inside a marked composer's real
-/// screen frame. This lets the composer win over UIKit's scroll-page hit area
-/// without changing swipe traversal or Read All.
+/// This deliberately does not hook accessibility container enumeration,
+/// focus callbacks, hit testing, or showOnScreen, so normal left/right VoiceOver
+/// navigation remains owned by Flutter.
 private enum VoiceOverReplyReadingBridge {
   private static let replyIdentifierPrefix = "a11y-read-reply|"
-  private static let touchOnlyIdentifierPrefix = "a11y-touch-only|"
-  private static var lastTouchOnlyProxy: TouchOnlyAccessibilityProxy?
 
   private typealias TraitsGetter = @convention(c) (
     AnyObject,
@@ -57,18 +273,6 @@ private enum VoiceOverReplyReadingBridge {
   private typealias ObjectGetter = @convention(c) (
     AnyObject,
     Selector
-  ) -> AnyObject?
-
-  private typealias BoolGetter = @convention(c) (
-    AnyObject,
-    Selector
-  ) -> Bool
-
-  private typealias HitTestHandler = @convention(c) (
-    AnyObject,
-    Selector,
-    CGPoint,
-    AnyObject?
   ) -> AnyObject?
 
   static func install() {
@@ -98,8 +302,6 @@ private enum VoiceOverReplyReadingBridge {
 
     installPageTurnTrait(on: semanticClass)
     installPageTurnScroll(on: semanticsBaseClass)
-    installTouchOnlyAccessibilityElementOverride(on: semanticClass)
-    installTouchOnlyHitTest(on: semanticsBaseClass)
   }()
 
   // MARK: - Reading-only text links
@@ -133,167 +335,14 @@ private enum VoiceOverReplyReadingBridge {
       return original?(object, selector)
     }
 
+    // FlutterSemanticsObject inherits these getters. Add a narrow override on
+    // Flutter's class only; never mutate NSObject/UIKit implementations.
     _ = class_addMethod(
       targetClass,
       selector,
       imp_implementationWithBlock(block),
       typeEncoding
     )
-  }
-
-  // MARK: - Touch-only composer actions
-
-  private static func installTouchOnlyAccessibilityElementOverride(
-    on targetClass: AnyClass
-  ) {
-    let selector = NSSelectorFromString("isAccessibilityElement")
-    guard let inheritedMethod = class_getInstanceMethod(targetClass, selector),
-          let typeEncoding = method_getTypeEncoding(inheritedMethod)
-    else {
-      return
-    }
-
-    let original = unsafeBitCast(
-      method_getImplementation(inheritedMethod),
-      to: BoolGetter.self
-    )
-
-    let block: @convention(block) (AnyObject) -> Bool = { object in
-      if UIAccessibility.isVoiceOverRunning && isTouchOnlyElement(object) {
-        return false
-      }
-      return original(object, selector)
-    }
-
-    let implementation = imp_implementationWithBlock(block)
-    if !class_addMethod(targetClass, selector, implementation, typeEncoding) {
-      if let ownMethod = class_getInstanceMethod(targetClass, selector) {
-        method_setImplementation(ownMethod, implementation)
-      }
-    }
-  }
-
-  private static func installTouchOnlyHitTest(on targetClass: AnyClass) {
-    let selector = NSSelectorFromString("_accessibilityHitTest:withEvent:")
-    guard let method = class_getInstanceMethod(targetClass, selector) else {
-      return
-    }
-
-    let original = unsafeBitCast(
-      method_getImplementation(method),
-      to: HitTestHandler.self
-    )
-
-    let block: @convention(block) (
-      AnyObject,
-      CGPoint,
-      AnyObject?
-    ) -> AnyObject? = { object, point, event in
-      guard UIAccessibility.isVoiceOverRunning else {
-        return original(object, selector, point, event)
-      }
-
-      // A Flutter scroll semantic can consume direct VoiceOver touch as a
-      // page-up/page-down region before the floating composer child/sibling is
-      // reached. When the finger is physically inside one of our explicitly
-      // marked composer frames, let that composer win first. The point passed
-      // by Flutter is already in global/screen coordinates, matching
-      // UIAccessibilityElement.accessibilityFrame.
-      if
-        let semanticObject = object as? NSObject,
-        isFlutterScrollableSemantic(semanticObject),
-        let composer = touchOnlyElement(at: point, underRootOf: semanticObject)
-      {
-        let proxy = TouchOnlyAccessibilityProxy(target: composer)
-        lastTouchOnlyProxy = proxy
-        return proxy
-      }
-
-      // Also handle the marked node itself in case traversal reaches it before
-      // a scroll semantic does.
-      if
-        let element = object as? UIAccessibilityElement,
-        isTouchOnlyElement(element),
-        CGRectContainsPoint(element.accessibilityFrame, point)
-      {
-        let proxy = TouchOnlyAccessibilityProxy(target: element)
-        lastTouchOnlyProxy = proxy
-        return proxy
-      }
-
-      guard let result = original(object, selector, point, event) else {
-        return nil
-      }
-
-      if result is TouchOnlyAccessibilityProxy {
-        return result
-      }
-
-      guard
-        let element = result as? UIAccessibilityElement,
-        isTouchOnlyElement(element)
-      else {
-        return result
-      }
-
-      let proxy = TouchOnlyAccessibilityProxy(target: element)
-      lastTouchOnlyProxy = proxy
-      return proxy
-    }
-
-    method_setImplementation(method, imp_implementationWithBlock(block))
-  }
-
-  private static func isTouchOnlyElement(_ object: AnyObject?) -> Bool {
-    guard
-      let element = object as? UIAccessibilityElement,
-      let identifier = element.accessibilityIdentifier
-    else {
-      return false
-    }
-    return identifier.hasPrefix(touchOnlyIdentifierPrefix)
-  }
-
-  private static func isFlutterScrollableSemantic(_ object: NSObject) -> Bool {
-    guard let native = nativeAccessibility(of: object) as? UIScrollView else {
-      return false
-    }
-    return NSStringFromClass(type(of: native)).hasSuffix(
-      "FlutterSemanticsScrollView"
-    )
-  }
-
-  private static func touchOnlyElement(
-    at point: CGPoint,
-    underRootOf object: NSObject
-  ) -> UIAccessibilityElement? {
-    var root = object
-    while let parent = semanticParent(of: root) {
-      root = parent
-    }
-    return findTouchOnlyElement(at: point, in: root)
-  }
-
-  private static func findTouchOnlyElement(
-    at point: CGPoint,
-    in object: NSObject
-  ) -> UIAccessibilityElement? {
-    // Follow Flutter's hit-test ordering so a composer in a currently presented
-    // reply sheet wins over an overlapping composer behind it.
-    for child in semanticChildrenInHitTestOrder(of: object) {
-      if let hit = findTouchOnlyElement(at: point, in: child) {
-        return hit
-      }
-    }
-
-    guard
-      let native = nativeAccessibility(of: object) as? UIAccessibilityElement,
-      isTouchOnlyElement(native),
-      CGRectContainsPoint(native.accessibilityFrame, point)
-    else {
-      return nil
-    }
-    return native
   }
 
   // MARK: - Automatic page turn at the end of the reply reading chain
@@ -350,6 +399,8 @@ private enum VoiceOverReplyReadingBridge {
         shouldCauseForwardPageTurn(object),
         let ancestor = verticalScrollAncestor(of: object)
       {
+        // Flutter maps UIAccessibilityScrollDirection.up to
+        // SemanticsAction.scrollDown, i.e. forward through a vertical list.
         let didScroll = original(
           ancestor.semanticObject,
           selector,
@@ -554,20 +605,6 @@ private enum VoiceOverReplyReadingBridge {
     return value.compactMap { $0 as? NSObject }
   }
 
-  private static func semanticChildrenInHitTestOrder(
-    of object: NSObject
-  ) -> [NSObject] {
-    guard
-      let value = objectValue(
-        of: object,
-        selectorName: "childrenInHitTestOrder"
-      ) as? NSArray
-    else {
-      return semanticChildren(of: object)
-    }
-    return value.compactMap { $0 as? NSObject }
-  }
-
   private static func nativeAccessibility(of object: NSObject) -> AnyObject? {
     objectValue(of: object, selectorName: "nativeAccessibility")
   }
@@ -593,6 +630,7 @@ class SceneDelegate: FlutterSceneDelegate {
     willConnectTo session: UISceneSession,
     options connectionOptions: UIScene.ConnectionOptions
   ) {
+    VoiceOverComposerTouchBridge.install()
     VoiceOverReplyReadingBridge.install()
     super.scene(
       scene,
