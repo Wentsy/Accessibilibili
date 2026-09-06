@@ -313,9 +313,9 @@ private enum VoiceOverReadAllDiagnostics {
       object: nil,
       queue: .main
     ) { notification in
-      let focused: AnyObject? =
-        notification.userInfo?[UIAccessibility.focusedElementUserInfoKey] as? AnyObject
-        ?? UIAccessibility.focusedElement(using: .notificationVoiceOver)
+      let uiFocused: AnyObject? = UIAccessibility.focusedElement(using: .notificationVoiceOver)
+      let noteFocused: AnyObject? = notification.userInfo?[UIAccessibility.focusedElementUserInfoKey] as? AnyObject
+      let focused = noteFocused ?? uiFocused
 
       if let focused {
         record("NF", describe(focused))
