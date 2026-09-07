@@ -71,6 +71,25 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
     queryData();
   }
 
+  void _setFallbackTabs() {
+    tab2 = const [
+      SpaceTab2(title: '动态', param: 'dynamic'),
+      SpaceTab2(
+        title: '投稿',
+        param: 'contribute',
+        items: [SpaceTab2Item(title: '视频', param: 'video')],
+      ),
+      SpaceTab2(title: '收藏', param: 'favorite'),
+      SpaceTab2(title: '追番', param: 'bangumi'),
+    ];
+    tabs = tab2!.map((item) => Tab(text: item.title)).toList();
+    tabController?.dispose();
+    tabController = TabController(
+      vsync: this,
+      length: tabs.length,
+    );
+  }
+
   @override
   bool customHandleResponse(bool isRefresh, Success<SpaceData> response) {
     final data = response.response;
@@ -113,35 +132,44 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
       hasSeasonOrSeries = true;
     }
     tab2?.retainWhere((item) => MemberTabType.contains(item.param!));
+    if (tab2?.isNotEmpty == true &&
+        data.hasItem != true &&
+        tab2!.first.param == 'home') {
+      // remove empty home tab
+      tab2!.removeAt(0);
+    }
+
     if (tab2?.isNotEmpty == true) {
-      if (data.hasItem != true && tab2!.first.param == 'home') {
-        // remove empty home tab
-        tab2!.removeAt(0);
+      int initialIndex = -1;
+      MemberTabType memberTab = Pref.memberTab;
+      if (memberTab != MemberTabType.def) {
+        initialIndex = tab2!.indexWhere((item) {
+          return item.param == memberTab.name;
+        });
       }
-      if (tab2!.isNotEmpty) {
-        int initialIndex = -1;
-        MemberTabType memberTab = Pref.memberTab;
-        if (memberTab != MemberTabType.def) {
-          initialIndex = tab2!.indexWhere((item) {
-            return item.param == memberTab.name;
-          });
+      if (initialIndex == -1) {
+        if (data.defaultTab == 'video') {
+          data.defaultTab = 'contribute';
         }
-        if (initialIndex == -1) {
-          if (data.defaultTab == 'video') {
-            data.defaultTab = 'contribute';
-          }
-          initialIndex = tab2!.indexWhere((item) {
-            return item.param == data.defaultTab;
-          });
-        }
-        tabs = tab2!.map((item) => Tab(text: item.title ?? '')).toList();
-        tabController?.dispose();
-        tabController = TabController(
-          vsync: this,
-          length: tabs.length,
-          initialIndex: max(0, initialIndex),
-        );
+        initialIndex = tab2!.indexWhere((item) {
+          return item.param == data.defaultTab;
+        });
       }
+      tabs = tab2!.map((item) => Tab(text: item.title ?? '')).toList();
+      tabController?.dispose();
+      tabController = TabController(
+        vsync: this,
+        length: tabs.length,
+        initialIndex: max(0, initialIndex),
+      );
+    } else {
+      // The app space API can return code=0 with an empty/missing `tab2` for
+      // some public UP spaces (for example a user reached through a subscribed
+      // collection without following the uploader). Previously that success
+      // response bypassed handleError() and MemberPage rendered only its empty
+      // body. Keep the valid profile response/header, but provide the same
+      // basic public-space tabs used by the error fallback.
+      _setFallbackTabs();
     }
     if (mid == account.mid) {
       spaceSetting = data.setting;
@@ -152,22 +180,7 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
 
   @override
   bool handleError(String? errMsg) {
-    tab2 = const [
-      SpaceTab2(title: '动态', param: 'dynamic'),
-      SpaceTab2(
-        title: '投稿',
-        param: 'contribute',
-        items: [SpaceTab2Item(title: '视频', param: 'video')],
-      ),
-      SpaceTab2(title: '收藏', param: 'favorite'),
-      SpaceTab2(title: '追番', param: 'bangumi'),
-    ];
-    tabs = tab2!.map((item) => Tab(text: item.title)).toList();
-    tabController?.dispose();
-    tabController = TabController(
-      vsync: this,
-      length: tabs.length,
-    );
+    _setFallbackTabs();
     username = errMsg;
     loadingState.value = const Success(null);
     return true;
