@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/widgets/avatars.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/dynamics/result.dart';
 import 'package:PiliPlus/pages/dynamics/widgets/action_panel.dart';
 import 'package:PiliPlus/pages/dynamics/widgets/author_panel.dart';
@@ -11,11 +12,13 @@ import 'package:PiliPlus/pages/dynamics_repost/view.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
+import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/widgets.dart' show WidgetsBinding;
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -199,20 +202,46 @@ class DynamicPanel extends StatelessWidget {
     }
 
     void visitAuthor() {
-      final mid = item.modules.moduleAuthor?.mid;
-      if (mid == null || mid <= 0) return;
+      final author = item.modules.moduleAuthor;
+      final sourceMid = author?.mid;
+      if (author == null || sourceMid == null || sourceMid <= 0) return;
 
       // VoiceOver custom actions execute inside Flutter's semantics callback.
-      // Pushing a GetX route synchronously from that callback can leave the
-      // semantics route transition half-applied. Defer one frame, then use the
-      // exact same route used by the visible dynamic author header and the
-      // working Follow list entry.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Defer navigation one frame so the semantics transition can finish.
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!context.mounted) return;
         feedBack();
-        Get.toNamed('/member?mid=$mid');
+
+        if (author.type == 'AUTHOR_TYPE_NORMAL') {
+          Get.toNamed('/member?mid=$sourceMid');
+          return;
+        }
+
+        if (author.type == 'AUTHOR_TYPE_UGC_SEASON') {
+          // For subscribed UGC seasons Bilibili puts the video's aid in
+          // module_author.mid, not the uploader's UID. Resolve the video owner
+          // first, then open that real member page.
+          final aid =
+              item.modules.moduleDynamic?.major?.ugcSeason?.aid ?? sourceMid;
+          final result = await VideoHttp.videoIntro(bvid: IdUtils.av2bv(aid));
+          if (!context.mounted) return;
+          if (result case Success(:final response)) {
+            final ownerMid = response.owner?.mid;
+            if (ownerMid != null && ownerMid > 0) {
+              Get.toNamed('/member?mid=$ownerMid');
+              return;
+            }
+          }
+          SmartDialog.showToast('無法取得UP主資料');
+        }
       });
     }
+
+    final authorType = item.modules.moduleAuthor?.type;
+    final canVisitAuthor =
+        (item.modules.moduleAuthor?.mid ?? 0) > 0 &&
+        (authorType == 'AUTHOR_TYPE_NORMAL' ||
+            authorType == 'AUTHOR_TYPE_UGC_SEASON');
 
     final child = Material(
       type: MaterialType.transparency,
@@ -298,7 +327,7 @@ class DynamicPanel extends StatelessWidget {
                 ): toggleLike,
               if (item.modules.moduleFold != null && onUnfold != null)
                 const CustomSemanticsAction(label: '展開更多動態'): onUnfold!,
-              if ((item.modules.moduleAuthor?.mid ?? 0) > 0)
+              if (canVisitAuthor)
                 const CustomSemanticsAction(label: '造訪使用者'): visitAuthor,
               const CustomSemanticsAction(label: '更多操作'): openMoreMenu,
             },
