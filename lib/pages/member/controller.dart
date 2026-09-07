@@ -62,7 +62,6 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   List<ReservationCardItem>? reserves;
 
   final fromViewAid = Get.parameters['from_view_aid'];
-  final initialTab = Get.parameters['tab'];
 
   final scrollKey = GlobalKey<ExtendedNestedScrollViewState>();
 
@@ -121,21 +120,11 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
       }
       if (tab2!.isNotEmpty) {
         int initialIndex = -1;
-
-        // Some navigation entry points intentionally request a specific member
-        // tab. Snapshot the query parameter when this controller is created and
-        // honor it before the user's normal default-tab preference.
-        if (initialTab?.isNotEmpty == true) {
-          initialIndex = tab2!.indexWhere((item) => item.param == initialTab);
-        }
-
-        if (initialIndex == -1) {
-          MemberTabType memberTab = Pref.memberTab;
-          if (memberTab != MemberTabType.def) {
-            initialIndex = tab2!.indexWhere((item) {
-              return item.param == memberTab.name;
-            });
-          }
+        MemberTabType memberTab = Pref.memberTab;
+        if (memberTab != MemberTabType.def) {
+          initialIndex = tab2!.indexWhere((item) {
+            return item.param == memberTab.name;
+          });
         }
         if (initialIndex == -1) {
           if (data.defaultTab == 'video') {
@@ -174,14 +163,10 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
       SpaceTab2(title: '追番', param: 'bangumi'),
     ];
     tabs = tab2!.map((item) => Tab(text: item.title)).toList();
-    final requestedIndex = initialTab?.isNotEmpty == true
-        ? tab2!.indexWhere((item) => item.param == initialTab)
-        : -1;
     tabController?.dispose();
     tabController = TabController(
       vsync: this,
       length: tabs.length,
-      initialIndex: max(0, requestedIndex),
     );
     username = errMsg;
     loadingState.value = const Success(null);
