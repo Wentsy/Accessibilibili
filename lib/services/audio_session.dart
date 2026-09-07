@@ -76,11 +76,11 @@ class AudioSessionHandler with WidgetsBindingObserver {
         // while the screen is unavailable, and keep the app-owned mixable
         // AVAudioSession asserted without ever deactivating it.
         setActive(true).ignore();
-        player.setProperty('video-sync', 'audio').ignore();
+        player.setProperty('video-sync', 'audio');
         break;
       case AppLifecycleState.resumed:
         setActive(true).ignore();
-        player.setProperty('video-sync', Pref.videoSync).ignore();
+        player.setProperty('video-sync', Pref.videoSync);
         break;
       case AppLifecycleState.detached:
         break;
