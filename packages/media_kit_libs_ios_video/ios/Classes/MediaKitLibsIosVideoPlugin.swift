@@ -19,12 +19,14 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "setBackgroundPlaybackEnabled":
-      Self.backgroundPlaybackEnabled = call.arguments as? Bool ?? false
-      if !Self.backgroundPlaybackEnabled {
+      let enabled = call.arguments as? Bool ?? false
+      if !enabled && Self.backgroundPlaybackEnabled {
         // If the preference is turned off after a previous background session,
-        // immediately return to the VoiceOver-friendly foreground role.
-        applyPlaybackRole(background: false)
+        // immediately return to the VoiceOver-friendly foreground role before
+        // clearing the flag that guards normal lifecycle transitions.
+        applyPlaybackRole(background: false, force: true)
       }
+      Self.backgroundPlaybackEnabled = enabled
       result(nil)
     default:
       result(FlutterMethodNotImplemented)
@@ -74,8 +76,8 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
     }
   }
 
-  private func applyPlaybackRole(background: Bool) {
-    guard Self.backgroundPlaybackEnabled else { return }
+  private func applyPlaybackRole(background: Bool, force: Bool = false) {
+    guard force || Self.backgroundPlaybackEnabled else { return }
 
     let session = AVAudioSession.sharedInstance()
     do {
