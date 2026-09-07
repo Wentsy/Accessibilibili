@@ -101,7 +101,9 @@ dependencies:
       url: https://github.com/bggRGjQaUbCoE/flutter_sortable_wrap.git
       ref: master
   flutter_svg: ^2.0.14
-  flutter_volume_controller: ^2.0.0
+  # iOS volume observation must preserve the app-owned mixable playback session.
+  flutter_volume_controller:
+    path: packages/flutter_volume_controller
   font_awesome_flutter:
     git:
       url: https://github.com/bggRGjQaUbCoE/font_awesome_flutter.git

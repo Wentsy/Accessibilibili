@@ -783,10 +783,9 @@ packages:
   flutter_volume_controller:
     dependency: "direct main"
     description:
-      name: flutter_volume_controller
-      sha256: f9ba12aa17880c1ee3e1668f14eefbc6704e2fed90ed0b2ca97b7dee71133240
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/flutter_volume_controller"
+      relative: true
+    source: path
     version: "2.0.2"
   flutter_web_plugins:
     dependency: transitive

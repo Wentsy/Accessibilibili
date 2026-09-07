@@ -1,0 +1,42 @@
+group 'com.yosemiteyss.flutter_volume_controller'
+version '1.0-SNAPSHOT'
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+
+def agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0] as int
+def builtInKotlinProperty = rootProject.findProperty('android.builtInKotlin')
+def usesBuiltInKotlin = agpMajor >= 9 &&
+        (builtInKotlinProperty == null || builtInKotlinProperty.toString().toBoolean())
+
+if (!usesBuiltInKotlin) {
+    apply plugin: 'kotlin-android'
+}
+
+android {
+    if (project.android.hasProperty("namespace")) {
+        namespace 'com.yosemiteyss.flutter_volume_controller'
+    }
+    compileSdkVersion 36
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    if (!usesBuiltInKotlin) {
+        kotlinOptions {
+            jvmTarget = '1.8'
+        }
+    }
+
+    defaultConfig {
+        minSdkVersion 16
+    }
+}
