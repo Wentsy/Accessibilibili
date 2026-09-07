@@ -8,9 +8,26 @@ class AudioSessionHandler {
   late AudioSession session;
   late final Future<void> _ready;
   bool _playInterrupted = false;
+  bool _iosSessionActive = false;
 
   Future<bool> setActive(bool active) async {
     await _ready;
+
+    if (Platform.isIOS) {
+      // Keep one mixable iOS audio session alive for the whole app lifetime.
+      // Repeated activate/deactivate cycles can rebuild the system audio route
+      // right as playback starts, which may clip VoiceOver mid-utterance even
+      // though the category itself allows mixing.
+      if (!active) return true;
+      if (_iosSessionActive) return true;
+
+      _iosSessionActive = await session.setActive(
+        true,
+        avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
+      );
+      return _iosSessionActive;
+    }
+
     return session.setActive(
       active,
       avAudioSessionSetActiveOptions: active
@@ -32,7 +49,7 @@ class AudioSessionHandler {
         // `playback` is non-mixable on iOS by default. Activating such a
         // session can cut off VoiceOver speech that is already in progress.
         // Keep the playback category, but explicitly allow simultaneous audio
-        // so starting a video does not steal the accessibility speech channel.
+        // so video audio and accessibility speech can coexist.
         avAudioSessionCategory: AVAudioSessionCategory.playback,
         avAudioSessionCategoryOptions:
             AVAudioSessionCategoryOptions.mixWithOthers,
@@ -45,10 +62,26 @@ class AudioSessionHandler {
       ),
     );
 
+    // On iOS, activate the mixable session during app initialization instead
+    // of at the instant a video begins. Normal pause/dispose paths intentionally
+    // leave it active, avoiding route churn between VoiceOver and the player.
+    if (Platform.isIOS) {
+      _iosSessionActive = await session.setActive(
+        true,
+        avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
+      );
+    }
+
     session.interruptionEventStream.listen((event) {
       final playerStatus = PlPlayerController.getPlayerStatusIfExists();
       // final player = PlPlayerController.getInstance();
       if (event.begin) {
+        // A real iOS interruption may deactivate the app's audio session. Mark
+        // it for one legitimate reactivation after the interruption ends.
+        if (Platform.isIOS && event.type != AudioInterruptionType.duck) {
+          _iosSessionActive = false;
+        }
+
         if (playerStatus != PlayerStatus.playing) return;
         // if (!player.playerStatus.playing) return;
         switch (event.type) {
