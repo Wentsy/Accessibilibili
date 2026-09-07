@@ -1,4 +1,5 @@
 import 'package:flutter/semantics.dart';
+import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -50,6 +51,17 @@ class _MainReplyPageState extends State<MainReplyPage>
 
   late EdgeInsets padding;
 
+  void _publishComment() {
+    try {
+      feedBack();
+      _controller.onReply(
+        null,
+        oid: _controller.oid,
+        replyType: _controller.replyType,
+      );
+    } catch (_) {}
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -60,6 +72,9 @@ class _MainReplyPageState extends State<MainReplyPage>
   Widget build(BuildContext context) {
     final colorScheme = ColorScheme.of(context);
     return SimpleScaffold(
+      bottomBar: useVoiceOverComposerDock(context)
+          ? VoiceOverComposerDock(onPressed: _publishComment)
+          : null,
       appBar: AppBar(title: const Text('查看评论')),
       body: fabAnimWrapper(
         child: refreshIndicator(
@@ -89,7 +104,7 @@ class _MainReplyPageState extends State<MainReplyPage>
           ),
         ).constraintWidth(),
       ),
-      fab: SlideTransition(
+      fab: useVoiceOverComposerDock(context) ? null : SlideTransition(
         position: fabAnimation,
         child: Padding(
           padding: .only(
@@ -98,16 +113,7 @@ class _MainReplyPageState extends State<MainReplyPage>
           ),
           child: FloatingActionButton(
             heroTag: null,
-            onPressed: () {
-              try {
-                feedBack();
-                _controller.onReply(
-                  null,
-                  oid: _controller.oid,
-                  replyType: _controller.replyType,
-                );
-              } catch (_) {}
-            },
+            onPressed: _publishComment,
             tooltip: '评论',
             child: const Icon(Icons.reply),
           ),

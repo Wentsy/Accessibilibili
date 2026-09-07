@@ -55,7 +55,8 @@ class _MatchInfoPageState extends CommonDynPageState<MatchInfoPage> {
             ),
           ),
         ).constraintWidth(),
-        fab: SlideTransition(
+        bottomBar: dockComposer ? composerDock : null,
+        fab: dockComposer ? null : SlideTransition(
           position: fabAnimation,
           child: fabButton,
         ),

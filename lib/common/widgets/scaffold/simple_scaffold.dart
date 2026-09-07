@@ -10,12 +10,15 @@ class SimpleScaffold extends StatelessWidget {
     this.backgroundColor,
     this.fab,
     this.appBar,
+    this.bottomBar,
     required this.body,
   });
 
   final Color? backgroundColor;
   final Widget? fab;
   final Widget? appBar;
+  /// Reserves body height for a fixed footer; unlike [fab], never overlays it.
+  final Widget? bottomBar;
   final Widget body;
 
   @override
@@ -25,6 +28,7 @@ class SimpleScaffold extends StatelessWidget {
       child: ScaffoldLayout(
         fab: fab,
         appBar: appBar,
+        bottomBar: bottomBar,
         body: body,
       ),
     );
@@ -39,11 +43,13 @@ class ScaffoldLayout
     super.key,
     this.fab,
     this.appBar,
+    this.bottomBar,
     required this.body,
   });
 
   final Widget? fab;
   final Widget? appBar;
+  final Widget? bottomBar;
   final Widget body;
 
   @override
@@ -53,7 +59,9 @@ class ScaffoldLayout
   Widget? childForSlot(slot) => switch (slot) {
     .fab => fab,
     .appBar => appBar,
-    .body => body,
+    .body => bottomBar == null
+        ? body
+        : Column(children: [Expanded(child: body), bottomBar!]),
   };
 
   @override

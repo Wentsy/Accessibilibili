@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/semantics.dart';
+import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
@@ -156,7 +157,11 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
     return SimpleColoredBox(
       color: theme.canvasColor,
       child: MiniScaffold(
-        body: Stack(
+        body: ScaffoldLayout(
+          bottomBar: useVoiceOverComposerDock(context)
+              ? VoiceOverComposerDock(onPressed: _replyToThread, reply: true)
+              : null,
+          body: Stack(
           children: [
             widget.isVideoDetail
                 ? Column(
@@ -188,8 +193,8 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                     ],
                   )
                 : child(),
-            if (!MediaQuery.accessibleNavigationOf(context) ||
-                (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS))
+            if (!useVoiceOverComposerDock(context) &&
+                !MediaQuery.accessibleNavigationOf(context))
               Positioned(
                 right: 16,
                 bottom: 16 + MediaQuery.paddingOf(context).bottom,
@@ -215,6 +220,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                 ),
               ),
           ],
+          ),
         ),
       ),
     );
@@ -485,7 +491,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: colorScheme.outline),
             ),
-            if (isEnd && !isDialogue) ...[
+            if (isEnd && !isDialogue && !useVoiceOverComposerDock(context)) ...[
               const SizedBox(height: 12),
               FilledButton.icon(
                 onPressed: _replyToThread,

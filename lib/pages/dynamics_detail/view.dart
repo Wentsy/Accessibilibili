@@ -115,7 +115,8 @@ class _DynamicDetailPageState
           padding: EdgeInsets.only(left: padding.left, right: padding.right),
           child: _buildBody(),
         ),
-        fab: SlideTransition(
+        bottomBar: dockComposer ? composerFooter(_buildBottom()) : null,
+        fab: dockComposer ? null : SlideTransition(
           position: fabAnimation,
           child: _buildBottom(),
         ),
@@ -493,7 +494,7 @@ class _DynamicDetailPageState
 
   Widget _buildBottom() {
     if (!controller.showDynActionBar) {
-      return fabButton;
+      return dockComposer ? const SizedBox.shrink() : fabButton;
     }
 
     final primary = theme.colorScheme.primary;
@@ -536,7 +537,7 @@ class _DynamicDetailPageState
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Padding(
+          if (!dockComposer) Padding(
             padding: const EdgeInsets.only(
               right: kFloatingActionButtonMargin,
               bottom: kFloatingActionButtonMargin,
@@ -552,7 +553,7 @@ class _DynamicDetailPageState
                 ),
               ),
             ),
-            padding: EdgeInsets.only(bottom: padding.bottom),
+            padding: EdgeInsets.only(bottom: dockComposer ? 0 : padding.bottom),
             child: Row(
               children: [
                 Expanded(

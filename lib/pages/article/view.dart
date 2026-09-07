@@ -63,7 +63,8 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
           padding: .only(left: padding.left, right: padding.right),
           child: _buildPage(),
         ),
-        fab: SlideTransition(
+        bottomBar: dockComposer ? composerFooter(_buildBottom()) : null,
+        fab: dockComposer ? null : SlideTransition(
           position: fabAnimation,
           child: _buildBottom(),
         ),
@@ -333,7 +334,7 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
 
   Widget _buildBottom() {
     if (!controller.showDynActionBar) {
-      return fabButton;
+      return dockComposer ? const SizedBox.shrink() : fabButton;
     }
 
     late final primary = theme.colorScheme.primary;
@@ -384,14 +385,16 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
         );
 
         if (stats == null) {
-          return Align(alignment: .bottomRight, child: btn);
+          return dockComposer
+              ? const SizedBox.shrink()
+              : Align(alignment: .bottomRight, child: btn);
         }
 
         return Column(
           mainAxisSize: .min,
           crossAxisAlignment: .end,
           children: [
-            btn,
+            if (!dockComposer) btn,
             Container(
               decoration: BoxDecoration(
                 color: theme.colorScheme.surface,
@@ -401,7 +404,7 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
                   ),
                 ),
               ),
-              padding: .only(bottom: padding.bottom),
+              padding: .only(bottom: dockComposer ? 0 : padding.bottom),
               child: Row(
                 children: [
                   Expanded(

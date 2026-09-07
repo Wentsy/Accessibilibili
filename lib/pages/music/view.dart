@@ -194,7 +194,8 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
         }
         return ScaffoldLayout(
           body: child,
-          fab: _buildBottom(response),
+          bottomBar: dockComposer ? composerFooter(_buildBottom(response)) : null,
+          fab: dockComposer ? null : _buildBottom(response),
         );
       default:
         return const SizedBox.shrink();
@@ -203,6 +204,7 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
 
   Widget _buildBottom(MusicDetail item) {
     if (!controller.showDynActionBar) {
+      if (dockComposer) return const SizedBox.shrink();
       return Padding(
         padding: const .only(right: kFloatingActionButtonMargin),
         child: SlideTransition(
@@ -244,13 +246,11 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
       );
     }
 
-    return SlideTransition(
-      position: fabAnimation,
-      child: Column(
+    final actions = Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Padding(
+          if (!dockComposer) Padding(
             padding: const EdgeInsets.only(
               right: kFloatingActionButtonMargin,
               bottom: kFloatingActionButtonMargin,
@@ -268,7 +268,7 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
                 ),
               ),
             ),
-            padding: EdgeInsets.only(bottom: padding.bottom),
+            padding: EdgeInsets.only(bottom: dockComposer ? 0 : padding.bottom),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -342,8 +342,10 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
             ),
           ),
         ],
-      ),
     );
+    return dockComposer
+        ? actions
+        : SlideTransition(position: fabAnimation, child: actions);
   }
 
   Widget _buildArtist(Artist artist, TextStyle? style) {

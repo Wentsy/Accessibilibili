@@ -1,4 +1,5 @@
 import 'package:flutter/semantics.dart';
+import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -297,7 +298,10 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
         return child;
       }
 
-      if (isPortrait) {
+      // A horizontal inline sheet owns only the comment column. The full-page
+      // footer would otherwise remain reachable below it. Use the existing
+      // full route in VoiceOver mode so route isolation also covers the dock.
+      if (isPortrait || dockComposer) {
         Get.to(
           replyReplyPage,
           routeName: 'dynamicDetail-Copy',
@@ -384,6 +388,15 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
       );
     } catch (_) {}
   }
+
+  bool get dockComposer => useVoiceOverComposerDock(context);
+
+  Widget get composerDock => VoiceOverComposerDock(onPressed: _publishComment);
+
+  Widget composerFooter(Widget actions) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [actions, composerDock],
+  );
 
   Widget get replyButton {
     final button = FloatingActionButton(

@@ -1,4 +1,5 @@
 import 'package:flutter/semantics.dart';
+import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
@@ -95,6 +96,9 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
         onRefresh: _videoReplyController.onRefresh,
         isClampingScrollPhysics: widget.isNested,
         child: ScaffoldLayout(
+          bottomBar: useVoiceOverComposerDock(context)
+              ? VoiceOverComposerDock(onPressed: publishComment)
+              : null,
           body: VoiceOverPagedScroll(
             controller: _videoReplyController.scrollController,
             child: CustomScrollView(
@@ -150,7 +154,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
               ],
             ),
           ),
-          fab: SlideTransition(
+          fab: useVoiceOverComposerDock(context) ? null : SlideTransition(
             position: fabAnimation,
             child: Padding(
               padding: .only(
