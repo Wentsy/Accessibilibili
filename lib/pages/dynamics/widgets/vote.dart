@@ -80,7 +80,15 @@ class _VotePanelState extends State<VotePanel> {
                 ? '已结束'
                 : '已完成',
           ),
-          if (_enabled) Obx(() => Text('${groupValue.length} / $_maxCnt')),
+          if (_enabled)
+            Obx(
+              () => Semantics(
+                label: '已选择 ${groupValue.length} 项，最多可选择 $_maxCnt 项',
+                child: ExcludeSemantics(
+                  child: Text('${groupValue.length} / $_maxCnt'),
+                ),
+              ),
+            ),
         ],
       ),
       Flexible(
@@ -292,19 +300,49 @@ class _VotePanelState extends State<VotePanel> {
   Widget get _checkBoxes => Row(
     spacing: 16,
     children: [
-      CheckBoxText(
-        text: '显示比例',
-        selected: _showPercentage,
-        onChanged: (value) {
+      Semantics(
+        container: true,
+        checked: _showPercentage,
+        label: '显示投票比例',
+        hint: '双击切换',
+        onTap: () {
           setState(() {
-            _showPercentage = value;
+            _showPercentage = !_showPercentage;
           });
         },
+        child: ExcludeSemantics(
+          child: CheckBoxText(
+            text: '显示比例',
+            selected: _showPercentage,
+            onChanged: (value) {
+              setState(() {
+                _showPercentage = value;
+              });
+            },
+          ),
+        ),
       ),
-      CheckBoxText(
-        text: '匿名',
-        selected: anonymous,
-        onChanged: (val) => anonymous = val,
+      Semantics(
+        container: true,
+        checked: anonymous,
+        label: '匿名投票',
+        hint: '双击切换',
+        onTap: () {
+          setState(() {
+            anonymous = !anonymous;
+          });
+        },
+        child: ExcludeSemantics(
+          child: CheckBoxText(
+            text: '匿名',
+            selected: anonymous,
+            onChanged: (value) {
+              setState(() {
+                anonymous = value;
+              });
+            },
+          ),
+        ),
       ),
     ],
   );
@@ -322,93 +360,112 @@ class _VotePanelState extends State<VotePanel> {
         builder: (context) {
           final opt = _voteInfo.options[index];
           final selected = groupValue.contains(opt.optIdx);
-          return InkWell(
-            onTap: !_enabled
+          final onTap = !_enabled
+              ? null
+              : () => _onSelected(context, !selected, opt.optIdx!);
+          return Semantics(
+            container: true,
+            button: onTap != null,
+            selected: selected,
+            label: '投票选项：${opt.optDesc ?? '选项 ${index + 1}'}',
+            value: _showPercentage
+                ? '${(_percentage[index] * 100).toStringAsFixed(0)}%'
+                : null,
+            hint: onTap == null
                 ? null
-                : () => _onSelected(context, !selected, opt.optIdx!),
+                : selected
+                ? '双击取消选择'
+                : '双击选择',
+            onTap: onTap,
             onLongPress: PlatformUtils.isMobile ? onLongPress : null,
-            onSecondaryTap: PlatformUtils.isDesktop ? onLongPress : null,
-            borderRadius: const .all(.circular(6)),
-            child: Column(
-              spacing: 5,
-              crossAxisAlignment: .stretch,
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
+            child: ExcludeSemantics(
+              child: InkWell(
+                onTap: onTap,
+                onLongPress: PlatformUtils.isMobile ? onLongPress : null,
+                onSecondaryTap: PlatformUtils.isDesktop ? onLongPress : null,
+                borderRadius: const .all(.circular(6)),
+                child: Column(
+                  spacing: 5,
+                  crossAxisAlignment: .stretch,
                   children: [
-                    AspectRatio(
-                      aspectRatio: 1,
-                      child: LayoutBuilder(
-                        builder: (context, constraints) => NetworkImgLayer(
-                          src: opt.imgUrl,
-                          width: constraints.maxWidth,
-                          height: constraints.maxHeight,
-                          borderRadius: const .vertical(top: .circular(6)),
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        AspectRatio(
+                          aspectRatio: 1,
+                          child: LayoutBuilder(
+                            builder: (context, constraints) => NetworkImgLayer(
+                              src: opt.imgUrl,
+                              width: constraints.maxWidth,
+                              height: constraints.maxHeight,
+                              borderRadius: const .vertical(top: .circular(6)),
+                            ),
+                          ),
                         ),
+                        if (_enabled || selected)
+                          Positioned(
+                            right: 4,
+                            top: 4,
+                            width: 20,
+                            height: 20,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: selected
+                                    ? colorScheme.primaryContainer
+                                    : null,
+                                border: selected
+                                    ? null
+                                    : Border.all(
+                                        color: colorScheme.primaryContainer,
+                                      ),
+                              ),
+                              child: selected
+                                  ? Icon(
+                                      size: 15,
+                                      Icons.check_rounded,
+                                      color: colorScheme.onPrimaryContainer,
+                                    )
+                                  : null,
+                            ),
+                          ),
+                        if (_showPercentage) ...[
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: -1,
+                            child: LinearProgressIndicator(
+                              // ignore: deprecated_member_use
+                              year2023: true,
+                              value: _percentage[index],
+                            ),
+                          ),
+                          PBadge(
+                            right: 6,
+                            bottom: 8,
+                            type: PBadgeType.primary,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 3,
+                              vertical: 1,
+                            ),
+                            text:
+                                '${(_percentage[index] * 100).toStringAsFixed(0)}%',
+                          ),
+                        ],
+                      ],
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      child: Text(
+                        opt.optDesc!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13),
                       ),
                     ),
-                    if (_enabled || selected)
-                      Positioned(
-                        right: 4,
-                        top: 4,
-                        width: 20,
-                        height: 20,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: selected
-                                ? colorScheme.primaryContainer
-                                : null,
-                            border: selected
-                                ? null
-                                : Border.all(
-                                    color: colorScheme.primaryContainer,
-                                  ),
-                          ),
-                          child: selected
-                              ? Icon(
-                                  size: 15,
-                                  Icons.check_rounded,
-                                  color: colorScheme.onPrimaryContainer,
-                                )
-                              : null,
-                        ),
-                      ),
-                    if (_showPercentage) ...[
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: -1,
-                        child: LinearProgressIndicator(
-                          // ignore: deprecated_member_use
-                          year2023: true,
-                          value: _percentage[index],
-                        ),
-                      ),
-                      PBadge(
-                        right: 6,
-                        bottom: 8,
-                        type: PBadgeType.primary,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 3,
-                          vertical: 1,
-                        ),
-                        text:
-                            '${(_percentage[index] * 100).toStringAsFixed(0)}%',
-                      ),
-                    ],
                   ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 5),
-                  child: Text(
-                    opt.optDesc!,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -480,47 +537,68 @@ class PercentageChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = ColorScheme.of(context);
-    return Tooltip(
-      message: label,
-      child: Material(
-        borderRadius: const .all(.circular(8)),
-        color: selected ? colorScheme.secondaryContainer : null,
-        child: InkWell(
-          onTap: onSelected,
-          borderRadius: const .all(.circular(8)),
-          child: Container(
-            padding: _padding,
-            decoration: VoteDecoration(
+    return Semantics(
+      container: true,
+      button: onSelected != null,
+      selected: selected,
+      label: '投票选项：$label',
+      value: percentage == null
+          ? null
+          : '${(percentage! * 100).toStringAsFixed(0)}%',
+      hint: onSelected == null
+          ? null
+          : selected
+          ? '双击取消选择'
+          : '双击选择',
+      onTap: onSelected,
+      child: ExcludeSemantics(
+        child: Tooltip(
+          message: label,
+          child: Material(
+            borderRadius: const .all(.circular(8)),
+            color: selected ? colorScheme.secondaryContainer : null,
+            child: InkWell(
+              onTap: onSelected,
               borderRadius: const .all(.circular(8)),
-              border: .all(color: colorScheme.outlineVariant),
-              percentage: percentage ?? 0,
-              color: selected
-                  ? colorScheme.inversePrimary
-                  : colorScheme.outlineVariant,
-            ),
-            child: Row(
-              spacing: 8,
-              children: [
-                Expanded(
-                  child: Row(
-                    spacing: 4,
-                    mainAxisSize: .min,
-                    children: [
-                      Flexible(
-                        child: Text(label, maxLines: 1, overflow: .ellipsis),
-                      ),
-                      if (selected)
-                        Icon(
-                          Icons.check_circle,
-                          size: 12,
-                          color: colorScheme.onPrimaryContainer,
-                        ),
-                    ],
-                  ),
+              child: Container(
+                padding: _padding,
+                decoration: VoteDecoration(
+                  borderRadius: const .all(.circular(8)),
+                  border: .all(color: colorScheme.outlineVariant),
+                  percentage: percentage ?? 0,
+                  color: selected
+                      ? colorScheme.inversePrimary
+                      : colorScheme.outlineVariant,
                 ),
-                if (percentage != null)
-                  Text('${(percentage! * 100).toStringAsFixed(0)}%'),
-              ],
+                child: Row(
+                  spacing: 8,
+                  children: [
+                    Expanded(
+                      child: Row(
+                        spacing: 4,
+                        mainAxisSize: .min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              label,
+                              maxLines: 1,
+                              overflow: .ellipsis,
+                            ),
+                          ),
+                          if (selected)
+                            Icon(
+                              Icons.check_circle,
+                              size: 12,
+                              color: colorScheme.onPrimaryContainer,
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (percentage != null)
+                      Text('${(percentage! * 100).toStringAsFixed(0)}%'),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
