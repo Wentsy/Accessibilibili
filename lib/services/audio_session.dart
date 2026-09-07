@@ -111,9 +111,17 @@ class AudioSessionHandler with WidgetsBindingObserver {
 
     switch (state) {
       case AppLifecycleState.inactive:
-        // `inactive` also covers temporary overlays and transitions. Retain
-        // VoiceOver mixing until Flutter confirms the app is backgrounded.
-        setActive(true).ignore();
+        // A paused player can be suspended before Flutter reaches `hidden` or
+        // `paused`. In that state iOS never sees us become the primary Now
+        // Playing app, so a lock-screen/Home-screen Magic Tap has nothing to
+        // resume. Claim the primary playback role one lifecycle step earlier
+        // only when already paused. Active playback keeps the proven mixable
+        // VoiceOver path until the app is actually backgrounded.
+        if (player.state.playing) {
+          setActive(true).ignore();
+        } else {
+          _setIosPlaybackRole(foreground: false).ignore();
+        }
         player.setProperty('video-sync', 'audio');
         break;
       case AppLifecycleState.hidden:

@@ -43,6 +43,19 @@ pause/dispose 行為。2026-09-08 已完成實機回歸：背景 Magic Tap、回
 背景音訊與 VoiceOver 的穩定基準。其他媒體 App 已在播放時的競合行為仍應在
 日後變更 session 邏輯時額外驗證。
 
+### 前景先暫停再退背景的補充修正
+
+2026-09-08 後續發現另一條 lifecycle 邊界：若在前景先暫停，再回主畫面或
+鎖屏，App 可能在抵達 `hidden/paused`、切成主要 playback session 之前就被
+iOS suspend，因此背景 Magic Tap 找不到可恢復的 Now Playing 目標。播放中退
+背景不受影響，是因為持續輸出的 AudioUnit 能讓 lifecycle 流程走完。
+
+補充處理只在 `inactive` 且播放器已暫停時，提前切成非混音的主要 playback
+session；播放中的 `inactive` 仍保留已驗證的前景 `mixWithOthers` 路徑，直到
+`hidden/paused` 才接管。`resumed` 仍恢復混音，不能回退 VoiceOver coexistence。
+此邊界修正已完成靜態檢查，尚待 iPhone 實機確認後才能取代 `a30dbbe` 的穩定
+基準資格。
+
 ## 調查基準與已確認的程式路徑
 
 本次以 main `3e612e8ac404ab90ace464475e0cd69f3db9d7fb` 為起點。
@@ -117,6 +130,7 @@ Hermes 拉取 main 後執行 flutter pub get、cd ios && pod install，再正常
 3. 重複進出影片後再鎖屏，排除音量監聽取消／重建造成的 session 停用。
 4. 實體音量鍵與 App 音量控制正常，音量指示仍會更新。
 5. 背景播放關閉時仍按原設定暫停；耳機拔出與鎖屏暫停／播放控制正常。
+6. 在前景先暫停，再回主畫面與鎖屏；兩處 Magic Tap 都能直接恢復播放。
 
 若仍失敗，需在實機記錄原生 category/options、interruption userInfo 及 mpv
 pause/core-idle/audio-pts，而不是回退已成功的 VoiceOver session 所有權修復。
