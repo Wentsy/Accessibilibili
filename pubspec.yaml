@@ -101,9 +101,9 @@ dependencies:
       url: https://github.com/bggRGjQaUbCoE/flutter_sortable_wrap.git
       ref: master
   flutter_svg: ^2.0.14
-  # iOS volume observation must preserve the app-owned mixable playback session.
-  flutter_volume_controller:
-    path: packages/flutter_volume_controller
+  # Declared as hosted so git dependencies which require the hosted package can
+  # be solved. The app-wide override below selects the local iOS session patch.
+  flutter_volume_controller: ^2.0.0
   font_awesome_flutter:
     git:
       url: https://github.com/bggRGjQaUbCoE/font_awesome_flutter.git
@@ -175,6 +175,11 @@ dependencies:
       ref: main
 
 dependency_overrides:
+  # Pub requires a single source for each package across the whole graph.
+  # media_kit_video declares flutter_volume_controller as hosted; overriding it
+  # here routes both the direct and transitive requests to the patched package.
+  flutter_volume_controller:
+    path: packages/flutter_volume_controller
   flutter_inappwebview_android:
     git:
       url: https://github.com/bggRGjQaUbCoE/flutter_inappwebview.git
