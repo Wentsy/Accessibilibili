@@ -1,6 +1,5 @@
 import AVFoundation
 import Flutter
-import MediaPlayer
 import UIKit
 
 public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
@@ -21,9 +20,21 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
     switch call.method {
     case "setBackgroundPlaybackEnabled":
       let enabled = call.arguments as? Bool ?? false
-      if !enabled && Self.backgroundPlaybackEnabled {
+      let wasEnabled = Self.backgroundPlaybackEnabled
+
+      if enabled {
+        // MPRemoteCommandCenter targets are installed by audio_service, but its
+        // iOS fork never explicitly registers the application for remote-control
+        // delivery. Active audio makes iOS infer that role while already
+        // playing; a foreground-paused player has no audio output to do that for
+        // us before suspension. Keep the app registered for system media events
+        // for the whole lifetime of background playback instead.
+        UIApplication.shared.beginReceivingRemoteControlEvents()
+      } else if wasEnabled {
         applyPlaybackRole(background: false, force: true)
+        UIApplication.shared.endReceivingRemoteControlEvents()
       }
+
       Self.backgroundPlaybackEnabled = enabled
       result(nil)
     default:
@@ -41,8 +52,9 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
           queue: .main
         ) { [weak self] _ in
           guard let self else { return }
+          guard Self.backgroundPlaybackEnabled else { return }
+          UIApplication.shared.beginReceivingRemoteControlEvents()
           self.applyPlaybackRole(background: true)
-          self.reassertPausedNowPlayingIfNeeded()
         }
       )
       lifecycleObservers.append(
@@ -62,8 +74,9 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
           queue: .main
         ) { [weak self] _ in
           guard let self else { return }
+          guard Self.backgroundPlaybackEnabled else { return }
+          UIApplication.shared.beginReceivingRemoteControlEvents()
           self.applyPlaybackRole(background: true)
-          self.reassertPausedNowPlayingIfNeeded()
         }
       )
       lifecycleObservers.append(
@@ -95,37 +108,6 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
     } catch {
       // Dart's audio_session path remains a fallback on the next transition.
     }
-  }
-
-  private func reassertPausedNowPlayingIfNeeded() {
-    guard Self.backgroundPlaybackEnabled else { return }
-
-    let center = MPNowPlayingInfoCenter.default()
-    guard var info = center.nowPlayingInfo else { return }
-
-    // Leave the already-working playing -> background path untouched. The
-    // audio_service bridge publishes playbackRate == 0 for a paused item.
-    let playbackRate =
-      (info[MPNowPlayingInfoPropertyPlaybackRate] as? NSNumber)?.doubleValue ?? 0
-    guard playbackRate == 0 else { return }
-
-    // The custom audio_service also writes DefaultPlaybackRate == 0 while
-    // paused. Keep current rate at zero, but restore a resumable baseline and
-    // republish the same metadata after this app becomes the primary playback
-    // session. This gives iOS a fresh paused Now Playing candidate to route a
-    // lock-screen/Magic Tap Play command to.
-    let defaultRate =
-      (info[MPNowPlayingInfoPropertyDefaultPlaybackRate] as? NSNumber)?.doubleValue ?? 0
-    if defaultRate <= 0 {
-      info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
-    }
-    info[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
-    center.nowPlayingInfo = info
-
-    // audio_service still owns the command targets; do not add duplicates.
-    let commands = MPRemoteCommandCenter.shared()
-    commands.playCommand.isEnabled = true
-    commands.togglePlayPauseCommand.isEnabled = true
   }
 
   deinit {
