@@ -1,5 +1,6 @@
 import AVFoundation
 import Flutter
+import MediaPlayer
 import UIKit
 
 public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
@@ -21,9 +22,6 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
     case "setBackgroundPlaybackEnabled":
       let enabled = call.arguments as? Bool ?? false
       if !enabled && Self.backgroundPlaybackEnabled {
-        // If the preference is turned off after a previous background session,
-        // immediately return to the VoiceOver-friendly foreground role before
-        // clearing the flag that guards normal lifecycle transitions.
         applyPlaybackRole(background: false, force: true)
       }
       Self.backgroundPlaybackEnabled = enabled
@@ -42,7 +40,9 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
           object: nil,
           queue: .main
         ) { [weak self] _ in
-          self?.applyPlaybackRole(background: true)
+          guard let self else { return }
+          self.applyPlaybackRole(background: true)
+          self.reassertPausedNowPlayingIfNeeded()
         }
       )
       lifecycleObservers.append(
@@ -61,7 +61,9 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
           object: nil,
           queue: .main
         ) { [weak self] _ in
-          self?.applyPlaybackRole(background: true)
+          guard let self else { return }
+          self.applyPlaybackRole(background: true)
+          self.reassertPausedNowPlayingIfNeeded()
         }
       )
       lifecycleObservers.append(
@@ -84,11 +86,6 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
       ? []
       : [.mixWithOthers]
     do {
-      // Flutter lifecycle callbacks are asynchronous and a paused player has no
-      // active AudioUnit keeping the process alive. Perform this tiny category
-      // switch synchronously from UIKit's scene lifecycle instead: background
-      // becomes the primary Now Playing app, foreground remains mixable so
-      // VoiceOver speech is not cut off by video audio.
       try session.setCategory(
         .playback,
         mode: .default,
@@ -96,9 +93,39 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
       )
       try session.setActive(true, options: [])
     } catch {
-      // Dart's audio_session path remains as a fallback on the next lifecycle
-      // or playback transition; a transient AVAudioSession refusal is harmless.
+      // Dart's audio_session path remains a fallback on the next transition.
     }
+  }
+
+  private func reassertPausedNowPlayingIfNeeded() {
+    guard Self.backgroundPlaybackEnabled else { return }
+
+    let center = MPNowPlayingInfoCenter.default()
+    guard var info = center.nowPlayingInfo else { return }
+
+    // Leave the already-working playing -> background path untouched. The
+    // audio_service bridge publishes playbackRate == 0 for a paused item.
+    let playbackRate =
+      (info[MPNowPlayingInfoPropertyPlaybackRate] as? NSNumber)?.doubleValue ?? 0
+    guard playbackRate == 0 else { return }
+
+    // The custom audio_service also writes DefaultPlaybackRate == 0 while
+    // paused. Keep current rate at zero, but restore a resumable baseline and
+    // republish the same metadata after this app becomes the primary playback
+    // session. This gives iOS a fresh paused Now Playing candidate to route a
+    // lock-screen/Magic Tap Play command to.
+    let defaultRate =
+      (info[MPNowPlayingInfoPropertyDefaultPlaybackRate] as? NSNumber)?.doubleValue ?? 0
+    if defaultRate <= 0 {
+      info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = 1.0
+    }
+    info[MPNowPlayingInfoPropertyPlaybackRate] = 0.0
+    center.nowPlayingInfo = info
+
+    // audio_service still owns the command targets; do not add duplicates.
+    let commands = MPRemoteCommandCenter.shared()
+    commands.playCommand.isEnabled = true
+    commands.togglePlayPauseCommand.isEnabled = true
   }
 
   deinit {

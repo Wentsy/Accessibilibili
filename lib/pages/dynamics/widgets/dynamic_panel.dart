@@ -10,10 +10,13 @@ import 'package:PiliPlus/pages/dynamics/widgets/interaction.dart';
 import 'package:PiliPlus/pages/dynamics_repost/view.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/extension/theme_ext.dart';
+import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
+import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 class DynamicPanel extends StatelessWidget {
@@ -197,17 +200,18 @@ class DynamicPanel extends StatelessWidget {
 
     void visitAuthor() {
       final mid = item.modules.moduleAuthor?.mid;
-      if (mid != null && mid > 0) {
-        // Custom accessibility actions may run while another member route is
-        // still in the navigator stack. Disable GetX's route-name duplicate
-        // suppression and pass the UID as a real route parameter; otherwise
-        // the newly built member page can inherit an empty/stale parameter and
-        // render as a blank page.
-        PageUtils.toDupNamed(
-          '/member',
-          parameters: {'mid': mid.toString()},
-        );
-      }
+      if (mid == null || mid <= 0) return;
+
+      // VoiceOver custom actions execute inside Flutter's semantics callback.
+      // Pushing a GetX route synchronously from that callback can leave the
+      // semantics route transition half-applied. Defer one frame, then use the
+      // exact same route used by the visible dynamic author header and the
+      // working Follow list entry.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        feedBack();
+        Get.toNamed('/member?mid=$mid');
+      });
     }
 
     final child = Material(
