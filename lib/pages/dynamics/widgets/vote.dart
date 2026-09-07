@@ -71,19 +71,15 @@ class _VotePanelState extends State<VotePanel> {
     final usePortrait = size.width < 600 || size.shortestSide >= 600;
     final right = [
       Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment:
+            _enabled ? MainAxisAlignment.end : MainAxisAlignment.start,
         children: [
-          Text(
-            _enabled
-                ? '投票选项'
-                : groupValue.isEmpty
-                ? '已结束'
-                : '已完成',
-          ),
+          if (!_enabled)
+            Text(groupValue.isEmpty ? '已结束' : '已完成'),
           if (_enabled)
             Obx(
               () => Semantics(
-                label: '已选择 ${groupValue.length} 项，最多可选择 $_maxCnt 项',
+                label: '${groupValue.length} 项，最多可选择 $_maxCnt 项',
                 child: ExcludeSemantics(
                   child: Text('${groupValue.length} / $_maxCnt'),
                 ),
@@ -367,7 +363,7 @@ class _VotePanelState extends State<VotePanel> {
             container: true,
             button: onTap != null,
             selected: selected,
-            label: '投票选项：${opt.optDesc ?? '选项 ${index + 1}'}',
+            label: opt.optDesc ?? '选项 ${index + 1}',
             value: _showPercentage
                 ? '${(_percentage[index] * 100).toStringAsFixed(0)}%'
                 : null,
@@ -541,7 +537,7 @@ class PercentageChip extends StatelessWidget {
       container: true,
       button: onSelected != null,
       selected: selected,
-      label: '投票选项：$label',
+      label: label,
       value: percentage == null
           ? null
           : '${(percentage! * 100).toStringAsFixed(0)}%',
