@@ -4,10 +4,15 @@ import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:audio_session/audio_session.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:flutter/widgets.dart'
     show AppLifecycleState, WidgetsBinding, WidgetsBindingObserver;
 
 class AudioSessionHandler with WidgetsBindingObserver {
+  static const MethodChannel _backgroundAudioChannel = MethodChannel(
+    'accessibilibili/background_audio',
+  );
+
   late AudioSession session;
   late final Future<void> _ready;
   bool _playInterrupted = false;
@@ -28,6 +33,19 @@ class AudioSessionHandler with WidgetsBindingObserver {
       ),
       androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
     );
+  }
+
+  Future<void> _syncIosBackgroundPlaybackPreference() async {
+    if (!Platform.isIOS) return;
+    try {
+      await _backgroundAudioChannel.invokeMethod<void>(
+        'setBackgroundPlaybackEnabled',
+        Pref.continuePlayInBackground,
+      );
+    } catch (_) {
+      // Keep the existing audio_session lifecycle path as a fallback if the
+      // local native wrapper is temporarily unavailable during app bootstrap.
+    }
   }
 
   Future<void> _setIosPlaybackRole({required bool foreground}) async {
@@ -59,6 +77,13 @@ class AudioSessionHandler with WidgetsBindingObserver {
     await _ready;
 
     if (Platform.isIOS) {
+      // Persist the latest background-play preference in native code while the
+      // app is still safely executing in the foreground. This is especially
+      // important for the "pause first, then leave the app" path: once mpv has
+      // stopped its AudioUnit, Flutter may be suspended before an async session
+      // reconfiguration can finish.
+      _syncIosBackgroundPlaybackPreference().ignore();
+
       // Normal pause/dispose paths intentionally keep the iOS session alive so
       // starting or stopping video never rebuilds the audio route underneath
       // VoiceOver. libmpv also skips AVAudioSession management on iOS, so the
@@ -104,6 +129,7 @@ class AudioSessionHandler with WidgetsBindingObserver {
     // alive can still make its observer pause playback in the background.
     final continueInBackground = Pref.continuePlayInBackground;
     controller.continuePlayInBackground.value = continueInBackground;
+    _syncIosBackgroundPlaybackPreference().ignore();
     if (!continueInBackground) return;
 
     final player = controller.videoPlayerController;
@@ -111,26 +137,20 @@ class AudioSessionHandler with WidgetsBindingObserver {
 
     switch (state) {
       case AppLifecycleState.inactive:
-        // A paused player can be suspended before Flutter reaches `hidden` or
-        // `paused`. In that state iOS never sees us become the primary Now
-        // Playing app, so a lock-screen/Home-screen Magic Tap has nothing to
-        // resume. Claim the primary playback role one lifecycle step earlier
-        // only when already paused. Active playback keeps the proven mixable
-        // VoiceOver path until the app is actually backgrounded.
-        if (player.state.playing) {
-          setActive(true).ignore();
-        } else {
-          _setIosPlaybackRole(foreground: false).ignore();
-        }
+        // `inactive` also covers temporary overlays and transitions. Keep the
+        // proven foreground mixWithOthers role here so VoiceOver remains
+        // uninterrupted. The local iOS wrapper performs the non-mixable switch
+        // synchronously at UIScene.didEnterBackground, after this point.
+        setActive(true).ignore();
         player.setProperty('video-sync', 'audio');
         break;
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
         // display-resample is tied to display vsync. iOS stops presenting
         // Flutter frames in the background, which can stall mpv's playback
-        // clock and therefore its audio too. Use audio as the master clock
-        // while the screen is unavailable, and keep the app-owned mixable
-        // AVAudioSession asserted without ever deactivating it.
+        // clock and therefore its audio too. Use audio as the master clock.
+        // Native scene lifecycle has already synchronously promoted the
+        // AVAudioSession; reassert it here as a redundant async fallback.
         _setIosPlaybackRole(foreground: false).ignore();
         player.setProperty('video-sync', 'audio');
         break;
@@ -157,6 +177,7 @@ class AudioSessionHandler with WidgetsBindingObserver {
         true,
         avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
       );
+      await _syncIosBackgroundPlaybackPreference();
     }
 
     session.interruptionEventStream.listen((event) {
