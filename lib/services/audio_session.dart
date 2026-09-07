@@ -12,6 +12,12 @@ class AudioSessionHandler with WidgetsBindingObserver {
   late final Future<void> _ready;
   bool _playInterrupted = false;
 
+  bool get _keepIosBackgroundPlayback {
+    if (!Platform.isIOS || !Pref.continuePlayInBackground) return false;
+    final state = WidgetsBinding.instance.lifecycleState;
+    return state != null && state != AppLifecycleState.resumed;
+  }
+
   Future<bool> setActive(bool active) async {
     await _ready;
 
@@ -118,11 +124,26 @@ class AudioSessionHandler with WidgetsBindingObserver {
     }
 
     session.interruptionEventStream.listen((event) {
+      // audio_session maps an iOS interruption begin to `unknown`. When iOS is
+      // moving this app into the background, treating that notification as a
+      // media pause defeats the user's explicit background-play preference and
+      // produces the system-like fade-out/fade-in heard on lock/home. Let the
+      // system own the temporary interruption while keeping mpv logically
+      // playing; when it ends, only reassert our mixable session.
+      if (_keepIosBackgroundPlayback) {
+        if (!event.begin) {
+          setActive(true).ignore();
+          if (_playInterrupted) {
+            PlPlayerController.playIfExists();
+            _playInterrupted = false;
+          }
+        }
+        return;
+      }
+
       final playerStatus = PlPlayerController.getPlayerStatusIfExists();
-      // final player = PlPlayerController.getInstance();
       if (event.begin) {
         if (playerStatus != PlayerStatus.playing) return;
-        // if (!player.playerStatus.playing) return;
         switch (event.type) {
           case AudioInterruptionType.duck:
             // Mobile volume control changes the iOS system output volume,
@@ -134,16 +155,13 @@ class AudioSessionHandler with WidgetsBindingObserver {
                 showIndicator: false,
               );
             }
-            // player.setVolume(player.volume.value * 0.5);
             break;
           case AudioInterruptionType.pause:
             PlPlayerController.pauseIfExists(isInterrupt: true);
-            // player.pause(isInterrupt: true);
             _playInterrupted = true;
             break;
           case AudioInterruptionType.unknown:
             PlPlayerController.pauseIfExists(isInterrupt: true);
-            // player.pause(isInterrupt: true);
             _playInterrupted = true;
             break;
         }
@@ -156,11 +174,9 @@ class AudioSessionHandler with WidgetsBindingObserver {
                 showIndicator: false,
               );
             }
-            // player.setVolume(player.volume.value * 2);
             break;
           case AudioInterruptionType.pause:
             if (_playInterrupted) PlPlayerController.playIfExists();
-            //player.play();
             break;
           case AudioInterruptionType.unknown:
             break;
@@ -172,10 +188,6 @@ class AudioSessionHandler with WidgetsBindingObserver {
     // 耳机拔出暂停
     session.becomingNoisyEventStream.listen((_) {
       PlPlayerController.pauseIfExists();
-      // final player = PlPlayerController.getInstance();
-      // if (player.playerStatus.playing) {
-      //   player.pause();
-      // }
     });
   }
 }
