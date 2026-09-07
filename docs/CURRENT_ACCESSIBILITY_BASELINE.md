@@ -4,14 +4,35 @@
 
 ## 目前基準
 
-- 日期：2026-09-06
+- 日期：2026-09-08
 - 分支：`main`
-- 已驗證基準 commit：`1ba8aacad7b2fa3720cb00f7c30a75dc7fe72d49`
-- Commit：`fix(a11y): bypass TabBarView warp for home tabs`
+- 已驗證基準 commit：`a30dbbe67c37553e89c3d9e05eda97640df1819a`
+- Commit：`fix(ios): promote background playback for Magic Tap`
 
 只要後續版本沒有明確完成新一輪 VoiceOver 實機驗證，就應把這個 commit 視為目前可回退的無障礙穩定點。
 
-這個基準包含此前已驗證的無障礙能力，以及本輪新確認的首頁導航與影視卡片行為。
+這個基準包含此前已驗證的無障礙能力、首頁導航與影視卡片行為、動態投票語義，以及本輪實機確認的 iOS 影片音訊行為：開始播放不截斷 VoiceOver、背景播放、桌面／鎖屏 VoiceOver Magic Tap 播放暫停、回到 App 後 VoiceOver 正常朗讀。
+
+## iOS 影片音訊穩定基準
+
+播放影片時，VoiceOver 正在朗讀的內容不能被影片音訊中途切斷；背景播放設定開啟後，回主畫面與鎖屏也必須持續播放。系統將背景播放當作 Now Playing 時，桌面與鎖屏的 VoiceOver 雙指雙擊必須可以暫停與恢復，回到 App 後仍可正常閱讀。
+
+這組行為由下列邊界共同維持：
+
+- `lib/services/audio_session.dart`：前景使用 `playback + mixWithOthers`，讓 VoiceOver 與影片共存；`hidden/paused` 才改為主要 playback session，使系統把 Magic Tap 路由給 Accessibilibili；`resumed` 先恢復混音。
+- `lib/plugin/pl_player/controller.dart`：iOS 使用 `audiounit`，並保留 `audiounit-skip-session-management=yes`，由 App 管理 shared AVAudioSession；不要讓 libmpv 再自行 activate/deactivate session。
+- `packages/flutter_volume_controller`：音量觀察只讀取／觀察 output volume，不能改寫 category、activation，也不能在取消監聽時停用 shared session。
+- `lib/services/audio_handler.dart`：保留 `MediaAction.playPause` 與背景 media click 對影片播放器的即時 toggle；否則音訊仍可播放，但系統的切換指令可能失效。
+
+不要把這些檔案各自還原成上游預設實作。它們的互動關係是這項實機基準的一部分；完整排查記錄見 `docs/IOS_BACKGROUND_AUDIO.md`。
+
+## 動態投票穩定基準
+
+`lib/pages/dynamics/widgets/vote.dart` 的每個投票選項、圖片投票與百分比選項都必須是單一可操作的 VoiceOver 節點。朗讀內容是選項文字、已選取狀態、百分比（顯示比例時）及「雙擊選擇／取消選擇」提示；不能把圖片、勾選圖示、比例進度條、百分比 badge 與文字拆成一串重複焦點。
+
+投票建立頁的「顯示投票比例」和「匿名投票」也必須各自朗讀為已勾選／未勾選的可切換控制。可選項數必須朗讀成「N 項，最多可選擇 M 項」，不重複加上「已選擇」或「投票選項」等無資訊前綴。
+
+同步上游時保留外層 `Semantics`、`selected/checked`、共用 `onTap` 以及內層 `ExcludeSemantics`；這些是投票能可靠操作且不冗讀的必要組合。
 
 ## 本輪新增且不可回退的行為
 
@@ -138,6 +159,13 @@ ae3fe2b7bcc054853e00ee3cb2b0ee93f0aea007  fix(a11y): remove redundant bottom nav
 8606097a1abb6d828bea2348226bfe65c5b216e7  fix(a11y): use direct semantics actions for home tabs
 b0021bc735bd1808f13e9f07d352e62848af36ce  fix(a11y): add missing dart:ui SemanticsRole import for home tabs
 1ba8aacad7b2fa3720cb00f7c30a75dc7fe72d49  fix(a11y): bypass TabBarView warp for home tabs
+f2ae922820e20ef8864afba60e451a4fa7c78505  fix(ios): preserve VoiceOver speech during playback
+334d747e088f6b43712f46b9ac6d68750397cb2b  fix(a11y): expose poll selection state
+cc667db9c824dc422bb3a34b47f1999e5d5b7a26  fix(a11y): trim redundant poll labels
+6097c507ffcfda8ab4bac8b2c8cf2d19cc5224cd  fix(ios): preserve playback session during volume observation
+0f23684bdf06d6eb14471b1f1700f4559ee19a79  fix(ios): resolve patched volume plugin override
+6a800285dcd67619ab4cb2567ace11e51d43df3f  fix(ios): enable background VoiceOver playback toggle
+a30dbbe67c37553e89c3d9e05eda97640df1819a  fix(ios): promote background playback for Magic Tap
 ```
 
 ## 與其他基準文件的關係

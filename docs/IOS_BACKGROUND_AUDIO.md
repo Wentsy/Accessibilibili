@@ -16,8 +16,8 @@
 onPlay/onPause callbacks 及其他媒體按鈕處理。不新增 debounce、計時器或
 額外等待，也不改音訊 session 與已成功的背景播放設定。
 
-待實機驗證：播放中回主畫面／鎖屏，雙指雙擊暫停，再雙指雙擊恢復；等待
-數次播放進度更新後重試；檢查控制中心獨立播放／暫停及 App 內手勢正常。
+實機驗證已通過：播放中回主畫面／鎖屏，雙指雙擊可暫停及恢復；回 App 後
+VoiceOver 正常朗讀。
 手勢辨識時間與媒體控制權由 iOS 管理，不能保證其他 App 自訂 Magic Tap、
 通話或另一個媒體 App 接管時仍控制 Accessibilibili。此環境無 Flutter/Xcode，
 尚未做本次編譯或手勢延遲實測。
@@ -38,14 +38,16 @@ playback + mixWithOthers 會讓 iOS 將 App 視為次要混音來源，Now Playi
   較舊的非同步 configure 最後覆寫新狀態。
 
 不改 libmpv skip-session-management、AudioUnit、背景 video-sync 或播放器
-pause/dispose 行為。此方案需實機同時回歸：背景 Magic Tap、回前景朗讀、
-進出背景瞬間的 VoiceOver 語音完整性，以及其他媒體 App 已在播放時的行為。
+pause/dispose 行為。2026-09-08 已完成實機回歸：背景 Magic Tap、回前景朗讀、
+進出背景瞬間的 VoiceOver 語音完整性均通過；此版本 `a30dbbe` 是目前 iOS
+背景音訊與 VoiceOver 的穩定基準。其他媒體 App 已在播放時的競合行為仍應在
+日後變更 session 邏輯時額外驗證。
 
 ## 調查基準與已確認的程式路徑
 
 本次以 main `3e612e8ac404ab90ace464475e0cd69f3db9d7fb` 為起點。
 使用者確認 `0742107` 之後前景播放與 VoiceOver 共存成功，但回主畫面或
-鎖屏會淡出停止、回前景淡入恢復。此次修正尚待 iPhone 實測。
+鎖屏會淡出停止、回前景淡入恢復。後續已在 iPhone 實測完成修正。
 
 前面的修復必須保留：
 
@@ -65,8 +67,8 @@ pause/dispose 行為。此方案需實機同時回歸：背景 Magic Tap、回�
 2. `setActive(true)`。
 
 ambient 允許混音，所以 VoiceOver 仍然正常，但不提供鎖屏背景播放行為。
-這是可由程式碼確認的 session 所有權衝突；與使用者現象吻合，最終效果仍需
-裝機驗證。Dart 端 configure 的快取不會反映其他插件改寫的原生 category，
+這是可由程式碼確認的 session 所有權衝突；後續已由實機背景播放驗證。Dart
+端 configure 的快取不會反映其他插件改寫的原生 category，
 僅 setActive(true) 不會恢復 playback category。
 
 此外，VolumeListener.onCancel 會 setActive(false)，播放器 UI 釋放或重新
@@ -102,8 +104,8 @@ activate。這些隱藏的所有權變更一併移除。
 
 ## 驗證
 
-開發環境沒有 Flutter SDK、Xcode 或 iPhone，不能在此宣稱編譯或實機通過。
-已做來源差異與依賴路徑檢查；非 iOS 平台程式維持上游內容。
+開發環境沒有 Flutter SDK、Xcode 或 iPhone；初次修正時以來源差異與依賴路徑
+檢查為準，後續由使用者 iPhone 實機驗證通過。
 
 Hermes 拉取 main 後執行 flutter pub get、cd ios && pod install，再正常編譯
 與簽名。此版更換了原生插件來源，必須重編 IPA，hot reload 不會生效。

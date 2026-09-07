@@ -8,10 +8,12 @@
 
 ## 版本基準
 
-- **目前已知完整實機驗證過的無障礙基準：`ca2c24181fe2482f0ecb7be65c8622e3d32ac07b`**（2026-09-07）
+- **目前已知完整實機驗證過的無障礙基準：`a30dbbe67c37553e89c3d9e05eda97640df1819a`**（2026-09-08）
   - 包含既有低延遲三指翻頁、VoiceOver 原生翻頁回饋、主導航、評論與樓中樓、影片／評論時間、UP 頁、觀看紀錄、稍後再看等功能。
   - 另外包含 2026-09-04 完成實機驗證的 **iOS 原生富文字評論編輯器**：真正 `UITextView + NSTextAttachment`、圖片表情逐字朗讀、一張貼圖一個 selection slot、表情面板後鍵盤恢復、有貼圖時雙擊跳開頭／結尾、插入點位置公告、貼圖一次 Backspace 刪除及穩定刪除旁白。
   - 2026-09-07 實機驗證完成：影片外層、樓中樓、動態評論的 **Read All 自動跨頁**；普通 VoiceOver 左右滑跨頁；評論／回覆按鈕 direct-touch；樓中樓底部不穿到外層；以及回滑時統計／排序列不插入回覆之間。
+  - 2026-09-08 實機驗證完成：動態投票選項、圖片投票、投票比例與匿名選項可由 VoiceOver 獨立朗讀、選取與取消選取，且不重複朗讀裝飾性圖示／比例。
+  - 2026-09-08 實機驗證完成：iOS 影片背景播放可跨主畫面與鎖屏持續；桌面及鎖屏的 VoiceOver Magic Tap 可播放／暫停；回到 App 後影片音訊不影響 VoiceOver 正常朗讀。
 - 舊的歷史完整基準：`f31c65e34cd5c05b6d5c3c9f020ed3450656fe2e`。
 - 建立本文件早期版本時的程式快照：`3d86e42e9bca40491ba0813514fb6cfae7ebd79b`。
 
@@ -264,7 +266,12 @@ lib/utils/date_utils.dart
 - [ ] 觀看紀錄最後朗讀正確「…看過」時間。
 - [ ] 稍後再看使用 `add_at` 朗讀「…再看」，沒有拿 `pubdate` 冒充。
 - [ ] 播放器 VoiceOver 進度調整正常。
+- [ ] VoiceOver 正在朗讀時開始播放影片，朗讀不被截斷；暫停、離開播放器也不造成不必要的音訊切換。
 - [ ] VoiceOver Magic Tap 能播放／暫停。
+- [ ] 背景播放開啟時，回主畫面與鎖屏各等待至少 30 秒，播放與進度持續。
+- [ ] 在主畫面與鎖屏以 VoiceOver 雙指雙擊各做一次「暫停 → 恢復」；回 App 後朗讀正常、不吞字。
+- [ ] 動態投票每個文字／圖片選項各只是一個焦點，朗讀選項文字、選取狀態、百分比與選擇／取消提示；雙擊可切換。
+- [ ] 建立投票頁的「顯示投票比例」與「匿名投票」朗讀 checked 狀態且可雙擊切換；選項計數不重複前綴。
 - [ ] 從影片、UP 頁、評論等頁面返回時焦點／viewport 不突然跳頂。
 
 ### iOS 富文字圖片表情必測
@@ -302,14 +309,14 @@ stable-2026-09-accessibility
 目前正式穩定點：
 
 ```text
-ca2c24181fe2482f0ecb7be65c8622e3d32ac07b
+a30dbbe67c37553e89c3d9e05eda97640df1819a
 ```
 
 日常只保留 `main`。實驗、archive 與已合併的 `upstream-sync/*` 分支完成驗收後刪除；Git commit 歷史與穩定 tag 已足夠回溯，避免未知用途分支被誤當成基準。
 
 ## 給 Hermes／未來維護者的短版指令
 
-> 同步 PiliPlus 上游時，先從 Accessibilibili `main` 建立獨立 `upstream-sync` 分支，再合入 `bggRGjQaUbCoE/PiliPlus:main`。不要直接覆蓋本 fork 的無障礙檔案。發生 conflict 時保留上游新功能，同時重新套回 VoiceOver semantics、焦點／viewport 同步、低延遲三指翻頁、iOS `pageScrolled`、日期朗讀、評論／樓中樓，以及原生 `UITextView + NSTextAttachment` 富文字基準。評論還要保留 Read All 跨頁、普通左右滑、外層與樓中樓 direct-touch 發表按鈕、浮層語意隔離，以及 iOS VoiceOver 的樓中樓排序列隨內容捲走。圖片表情必須維持一張一個 UTF-16 slot、Character rotor 可朗讀 `[doge]` 等名稱、表情面板後可恢復鍵盤、有貼圖時可雙擊跳頭尾、一次 Backspace 刪一張且刪除旁白穩定。編譯後必須跑本文件與 `docs/IOS_RICH_TEXT_VOICEOVER_BASELINE.md` 的 VoiceOver 實機清單，全部通過才合回 `main`。
+> 同步 PiliPlus 上游時，先從 Accessibilibili `main` 建立獨立 `upstream-sync` 分支，再合入 `bggRGjQaUbCoE/PiliPlus:main`。不要直接覆蓋本 fork 的無障礙檔案。發生 conflict 時保留上游新功能，同時重新套回 VoiceOver semantics、焦點／viewport 同步、低延遲三指翻頁、iOS `pageScrolled`、日期朗讀、評論／樓中樓，以及原生 `UITextView + NSTextAttachment` 富文字基準。評論還要保留 Read All 跨頁、普通左右滑、外層與樓中樓 direct-touch 發表按鈕、浮層語意隔離，以及 iOS VoiceOver 的樓中樓排序列隨內容捲走。動態投票必須保留選項／圖片投票的單一 Semantics 節點、selected/checked 狀態、百分比值與共用選取 callback。iOS 播放器必須保留 App-owned AVAudioSession、前景 mixWithOthers、背景 primary playback、`audiounit-skip-session-management=yes`、被動音量觀察與 `MediaAction.playPause`；詳見 `docs/IOS_BACKGROUND_AUDIO.md`。圖片表情必須維持一張一個 UTF-16 slot、Character rotor 可朗讀 `[doge]` 等名稱、表情面板後可恢復鍵盤、有貼圖時可雙擊跳頭尾、一次 Backspace 刪一張且刪除旁白穩定。編譯後必須跑本文件與 `docs/IOS_RICH_TEXT_VOICEOVER_BASELINE.md` 的 VoiceOver 實機清單，全部通過才合回 `main`。
 
 ---
 
