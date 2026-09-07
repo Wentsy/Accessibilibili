@@ -1,5 +1,27 @@
 # iOS 背景音訊：音量插件覆寫 session
 
+## 後續實機確認與背景 Magic Tap
+
+使用者已確認套用 `6097c50` 與依賴解析修正 `0f23684` 後，回主畫面及鎖屏
+皆可持續播放。這兩筆修正是背景音訊成功基準，後續應保留。
+
+背景雙指雙擊另有獨立問題：AudioService 的 systemActions 原本只有 seek。
+鎖定 audio_service 原生實作在 activateCommandCenter 註冊 togglePlayPause，
+但隨後 updateControl 根據 controls/systemActions 的 actionBits 更新 enabled；
+漏報 MediaAction.playPause 就會禁用 togglePlayPauseCommand。
+
+本次補上 playPause，讓每次狀態更新與暫停後都保有系統切換指令。
+背景 media click 在一般影片播放時直接走 togglePlaybackAccessible，以播放器
+實際狀態決定暫停／播放，與 App 內 Magic Tap 一致；保留聽影片頁的專用
+onPlay/onPause callbacks 及其他媒體按鈕處理。不新增 debounce、計時器或
+額外等待，也不改音訊 session 與已成功的背景播放設定。
+
+待實機驗證：播放中回主畫面／鎖屏，雙指雙擊暫停，再雙指雙擊恢復；等待
+數次播放進度更新後重試；檢查控制中心獨立播放／暫停及 App 內手勢正常。
+手勢辨識時間與媒體控制權由 iOS 管理，不能保證其他 App 自訂 Magic Tap、
+通話或另一個媒體 App 接管時仍控制 Accessibilibili。此環境無 Flutter/Xcode，
+尚未做本次編譯或手勢延遲實測。
+
 ## 調查基準與已確認的程式路徑
 
 本次以 main `3e612e8ac404ab90ace464475e0cd69f3db9d7fb` 為起點。

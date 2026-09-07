@@ -43,6 +43,23 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
   Future<void>? Function(Duration position)? onSeek;
 
   @override
+  Future<void> click([MediaButton button = MediaButton.media]) {
+    // iOS togglePlayPauseCommand (including VoiceOver Magic Tap outside the
+    // app) arrives as a media-button click. Use the player's current state,
+    // not the Now Playing snapshot which can lag during buffering. Preserve
+    // the dedicated audio page's play/pause callbacks and other media buttons.
+    final controller = PlPlayerController.instance;
+    if (Platform.isIOS &&
+        button == MediaButton.media &&
+        onPlay == null &&
+        onPause == null &&
+        controller != null) {
+      return controller.togglePlaybackAccessible();
+    }
+    return super.click(button);
+  }
+
+  @override
   Future<void> play() {
     return onPlay?.call() ??
         PlPlayerController.playIfExists() ??
@@ -134,6 +151,10 @@ class VideoPlayerServiceHandler extends BaseAudioHandler with SeekHandler {
         playing: playing,
         systemActions: const {
           MediaAction.seek,
+          // audio_service rebuilds native command.enabled from this set and
+          // controls. Without playPause it disables togglePlayPauseCommand on
+          // every state update, even though separate play/pause buttons work.
+          MediaAction.playPause,
         },
       ),
     );
