@@ -4,19 +4,28 @@ import 'package:audio_session/audio_session.dart';
 
 class AudioSessionHandler {
   late AudioSession session;
+  late final Future<void> _ready;
   bool _playInterrupted = false;
 
-  Future<bool> setActive(bool active) {
-    return session.setActive(active);
+  Future<bool> setActive(bool active) async {
+    await _ready;
+    return session.setActive(
+      active,
+      avAudioSessionSetActiveOptions: active
+          ? AVAudioSessionSetActiveOptions.none
+          : AVAudioSessionSetActiveOptions.notifyOthersOnDeactivation,
+    );
   }
 
   AudioSessionHandler() {
-    initSession();
+    _ready = initSession();
+    // The first playback request still observes initialization failures.
+    _ready.ignore();
   }
 
   Future<void> initSession() async {
     session = await AudioSession.instance;
-    session.configure(const AudioSessionConfiguration.music());
+    await session.configure(const AudioSessionConfiguration.music());
 
     session.interruptionEventStream.listen((event) {
       final playerStatus = PlPlayerController.getPlayerStatusIfExists();

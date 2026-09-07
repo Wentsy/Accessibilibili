@@ -1,4 +1,4 @@
-import 'dart:async' show StreamSubscription, Timer;
+import 'dart:async' show StreamSubscription, Timer, unawaited;
 import 'dart:convert' show ascii, utf8;
 import 'dart:io' show Platform;
 import 'dart:math' show max, min;
@@ -30,6 +30,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
+import 'package:PiliPlus/services/audio_transition_queue.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
@@ -1164,9 +1165,17 @@ class PlPlayerController with BlockConfigMixin {
     }
   }
 
+  // Shared across controller lifetimes: an old player's delayed cleanup must
+  // finish before a new player activates the app-wide audio session.
+  static final _audioTransitions = AudioTransitionQueue();
+  int _playbackRequest = 0;
+
   /// 播放视频
   Future<void> play({bool repeat = false, bool hideControls = true}) async {
     if (_playerCount == 0) return;
+    final request = ++_playbackRequest;
+    final player = _videoPlayerController;
+    if (player == null) return;
     // 播放时自动隐藏控制条
     controls = !hideControls;
     // repeat为true，将从头播放
@@ -1175,23 +1184,45 @@ class PlPlayerController with BlockConfigMixin {
       await seekTo(Duration.zero, isSeek: false);
     }
 
-    await _videoPlayerController?.play();
-
-    audioSessionHandler?.setActive(true);
-
-    playerStatus.value = PlayerStatus.playing;
+    await _audioTransitions.run(() async {
+      bool isCurrent() =>
+          request == _playbackRequest &&
+          _playerCount > 0 &&
+          identical(player, _videoPlayerController);
+      if (!isCurrent()) return;
+      final active = await audioSessionHandler?.setActive(true) ?? true;
+      if (!isCurrent()) {
+        if (active) await audioSessionHandler?.setActive(false);
+        return;
+      }
+      if (!active) {
+        playerStatus.value = PlayerStatus.paused;
+        return;
+      }
+      try {
+        await player.play();
+        if (isCurrent()) playerStatus.value = PlayerStatus.playing;
+      } catch (_) {
+        await audioSessionHandler?.setActive(false);
+        rethrow;
+      }
+    });
     // screenManager.setOverlays(false);
   }
 
   /// 暂停播放
   Future<void> pause({bool notify = true, bool isInterrupt = false}) async {
-    await _videoPlayerController?.pause();
-    playerStatus.value = PlayerStatus.paused;
-
-    // 主动暂停时让出音频焦点
-    if (!isInterrupt) {
-      audioSessionHandler?.setActive(false);
-    }
+    final request = ++_playbackRequest;
+    final player = _videoPlayerController;
+    if (player == null) return;
+    await _audioTransitions.run(() async {
+      await player.pause();
+      if (request == _playbackRequest) {
+        playerStatus.value = PlayerStatus.paused;
+      }
+      // Release only after the media has stopped producing audio.
+      if (!isInterrupt) await audioSessionHandler?.setActive(false);
+    });
   }
 
   bool tripling = false;
@@ -1592,6 +1623,7 @@ class PlPlayerController with BlockConfigMixin {
   }
 
   void dispose() {
+    if (_playerCount == 0 && _videoPlayerController == null) return;
     // 每次减1，最后销毁
     resetScreenRotation();
     cancelLongPressTimer();
@@ -1645,7 +1677,23 @@ class PlPlayerController with BlockConfigMixin {
     if (kDebugMode) {
       debugPrint('dispose player');
     }
-    _videoPlayerController?.dispose();
+    ++_playbackRequest;
+    final player = _videoPlayerController;
+    unawaited(
+      _audioTransitions.run(() async {
+        try {
+          await player?.pause();
+        } finally {
+          try {
+            await player?.dispose();
+          } finally {
+            await audioSessionHandler?.setActive(false);
+          }
+        }
+      }).catchError((Object error, StackTrace stack) {
+        if (kDebugMode) debugPrint('Audio teardown failed: $error');
+      }),
+    );
     _videoPlayerController = null;
     _videoController = null;
     _instance = null;
@@ -1760,9 +1808,8 @@ class PlPlayerController with BlockConfigMixin {
 
   void onPopInvokedWithResult(bool didPop, Object? result) {
     if (didPop) {
-      if (playerStatus.isPlaying) {
-        pause();
-      }
+      // Also cancel a pending activation that has not started sounding yet.
+      pause();
 
       setPlayCallBack(null);
 
