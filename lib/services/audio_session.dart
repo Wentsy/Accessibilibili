@@ -11,6 +11,43 @@ class AudioSessionHandler with WidgetsBindingObserver {
   late AudioSession session;
   late final Future<void> _ready;
   bool _playInterrupted = false;
+  int _iosSessionModeRequest = 0;
+
+  AudioSessionConfiguration _iosPlaybackConfiguration({
+    required bool mixWithVoiceOver,
+  }) {
+    return AudioSessionConfiguration(
+      avAudioSessionCategory: AVAudioSessionCategory.playback,
+      avAudioSessionCategoryOptions: mixWithVoiceOver
+          ? AVAudioSessionCategoryOptions.mixWithOthers
+          : AVAudioSessionCategoryOptions.none,
+      avAudioSessionMode: AVAudioSessionMode.defaultMode,
+      androidAudioAttributes: const AndroidAudioAttributes(
+        contentType: AndroidAudioContentType.music,
+        usage: AndroidAudioUsage.media,
+      ),
+      androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+    );
+  }
+
+  Future<void> _setIosPlaybackRole({required bool foreground}) async {
+    final request = ++_iosSessionModeRequest;
+    await _ready;
+    if (request != _iosSessionModeRequest) return;
+
+    // A mixing session lets video audio coexist with VoiceOver, but iOS treats
+    // it as secondary audio and does not route the system Magic Tap to its
+    // MPRemoteCommandCenter. Become the primary Now Playing session only while
+    // actually backgrounded. Restore mixing before foreground interaction.
+    await session.configure(
+      _iosPlaybackConfiguration(mixWithVoiceOver: foreground),
+    );
+    if (request != _iosSessionModeRequest) return;
+    await session.setActive(
+      true,
+      avAudioSessionSetActiveOptions: AVAudioSessionSetActiveOptions.none,
+    );
+  }
 
   bool get _keepIosBackgroundPlayback {
     if (!Platform.isIOS || !Pref.continuePlayInBackground) return false;
@@ -74,6 +111,11 @@ class AudioSessionHandler with WidgetsBindingObserver {
 
     switch (state) {
       case AppLifecycleState.inactive:
+        // `inactive` also covers temporary overlays and transitions. Retain
+        // VoiceOver mixing until Flutter confirms the app is backgrounded.
+        setActive(true).ignore();
+        player.setProperty('video-sync', 'audio');
+        break;
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
         // display-resample is tied to display vsync. iOS stops presenting
@@ -81,11 +123,11 @@ class AudioSessionHandler with WidgetsBindingObserver {
         // clock and therefore its audio too. Use audio as the master clock
         // while the screen is unavailable, and keep the app-owned mixable
         // AVAudioSession asserted without ever deactivating it.
-        setActive(true).ignore();
+        _setIosPlaybackRole(foreground: false).ignore();
         player.setProperty('video-sync', 'audio');
         break;
       case AppLifecycleState.resumed:
-        setActive(true).ignore();
+        _setIosPlaybackRole(foreground: true).ignore();
         player.setProperty('video-sync', Pref.videoSync);
         break;
       case AppLifecycleState.detached:
@@ -96,21 +138,7 @@ class AudioSessionHandler with WidgetsBindingObserver {
   Future<void> initSession() async {
     session = await AudioSession.instance;
     await session.configure(
-      const AudioSessionConfiguration(
-        // `playback` is non-mixable on iOS by default. Activating such a
-        // session can cut off VoiceOver speech that is already in progress.
-        // Keep the playback category, but explicitly allow simultaneous audio
-        // so video audio and accessibility speech can coexist.
-        avAudioSessionCategory: AVAudioSessionCategory.playback,
-        avAudioSessionCategoryOptions:
-            AVAudioSessionCategoryOptions.mixWithOthers,
-        avAudioSessionMode: AVAudioSessionMode.defaultMode,
-        androidAudioAttributes: AndroidAudioAttributes(
-          contentType: AndroidAudioContentType.music,
-          usage: AndroidAudioUsage.media,
-        ),
-        androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
-      ),
+      _iosPlaybackConfiguration(mixWithVoiceOver: true),
     );
 
     // Warm the mixable iOS session before VoiceOver starts interacting with

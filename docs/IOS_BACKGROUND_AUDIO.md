@@ -22,6 +22,25 @@ onPlay/onPause callbacks 及其他媒體按鈕處理。不新增 debounce、計�
 通話或另一個媒體 App 接管時仍控制 Accessibilibili。此環境無 Flutter/Xcode，
 尚未做本次編譯或手勢延遲實測。
 
+### 第二次實機結果與 session 角色切換
+
+`6a80028` 補齊 playPause 後，使用者確認桌面與鎖屏 Magic Tap 仍完全無效。
+原生 target 與 Dart handler 已存在，失效點在更前面：持續使用
+playback + mixWithOthers 會讓 iOS 將 App 視為次要混音來源，Now Playing 與
+全系統 Magic Tap 不會選中它。單純增加 command action 無法改變 session 身分。
+
+新的處理依 lifecycle 切換同一個 App-owned AVAudioSession：
+
+- resumed / inactive：playback + mixWithOthers，維持前景 VoiceOver 共存。
+- hidden / paused 且背景播放開啟：非混音 playback，使 App 成為可接收
+  MPRemoteCommandCenter 與 Magic Tap 的主要播放來源。
+- resumed 時先恢復 mixWithOthers；request generation 防止快速進出前背景時
+  較舊的非同步 configure 最後覆寫新狀態。
+
+不改 libmpv skip-session-management、AudioUnit、背景 video-sync 或播放器
+pause/dispose 行為。此方案需實機同時回歸：背景 Magic Tap、回前景朗讀、
+進出背景瞬間的 VoiceOver 語音完整性，以及其他媒體 App 已在播放時的行為。
+
 ## 調查基準與已確認的程式路徑
 
 本次以 main `3e612e8ac404ab90ace464475e0cd69f3db9d7fb` 為起點。
