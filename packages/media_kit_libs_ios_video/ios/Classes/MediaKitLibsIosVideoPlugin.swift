@@ -80,6 +80,9 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
     guard force || Self.backgroundPlaybackEnabled else { return }
 
     let session = AVAudioSession.sharedInstance()
+    let categoryOptions: AVAudioSession.CategoryOptions = background
+      ? []
+      : [.mixWithOthers]
     do {
       // Flutter lifecycle callbacks are asynchronous and a paused player has no
       // active AudioUnit keeping the process alive. Perform this tiny category
@@ -89,7 +92,7 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
       try session.setCategory(
         .playback,
         mode: .default,
-        options: background ? [] : [.mixWithOthers]
+        options: categoryOptions
       )
       try session.setActive(true, options: [])
     } catch {
