@@ -737,7 +737,9 @@ class PlPlayerController with BlockConfigMixin {
     assert(_videoPlayerController == null);
     final opt = {
       'video-sync': Pref.videoSync,
-      if (Platform.isAndroid) 'ao': Pref.audioOutput,
+      if (Platform.isAndroid || Platform.isIOS)
+        'ao': Platform.isIOS ? 'audiounit' : Pref.audioOutput,
+      if (Platform.isIOS) 'audiounit-skip-session-management': 'yes',
       'stream-lavf-o': 'reconnect=1',
       'volume':
           (PlatformUtils.isMobile ? Pref.playerVolume : volume.value * 100)
