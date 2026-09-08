@@ -149,10 +149,10 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
       let player = AVAudioPlayerNode()
       engine.attach(player)
 
-      guard let format = AVAudioFormat(
-        standardFormatWithSampleRate: 8_000,
-        channels: 1
-      ) else {
+      // Match the active output/mixer format rather than asking Core Audio to
+      // convert an arbitrary low sample rate during a lifecycle transition.
+      let format = engine.mainMixerNode.outputFormat(forBus: 0)
+      guard format.sampleRate > 0, format.channelCount > 0 else {
         engine.detach(player)
         return
       }
@@ -190,7 +190,7 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
       // remove the bridge immediately. This timer exists only while paused-first
       // background playback needs the bridge.
       pausedKeepAliveMonitor = Timer.scheduledTimer(
-        withTimeInterval: 0.25,
+        withTimeInterval: 0.5,
         repeats: true
       ) { [weak self] _ in
         guard let self else { return }
