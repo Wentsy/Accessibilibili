@@ -483,6 +483,7 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var accessibilityChannel: FlutterMethodChannel?
+  private var videoPhotoExporter: VideoPhotoExporter?
 
   override func application(
     _ application: UIApplication,
@@ -494,6 +495,7 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    videoPhotoExporter = VideoPhotoExporter(messenger: engineBridge.applicationRegistrar.messenger())
 
     if let registrar = engineBridge.pluginRegistry.registrar(
       forPlugin: "AccessibilibiliRichTextEditor"

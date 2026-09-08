@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/common/account_type.dart';
@@ -39,6 +41,9 @@ abstract final class DownloadHttp {
       },
     );
     if (res case Success(:final response)) {
+      if (entry.saveToPhotos && response.acceptDesc?.contains('试看') == true) {
+        throw StateError('目前帳號只能取得試看片段，無法保存完整影片');
+      }
       final dash = response.dash;
       if (dash != null) {
         final videoList = dash.video!;
@@ -68,6 +73,8 @@ abstract final class DownloadHttp {
         );
 
         entry
+          ..mediaType = 2
+          ..hasDashAudio = false
           ..typeTag = targetVideoQa.toString()
           ..videoQuality = targetVideoQa
           ..preferedVideoQuality = targetVideoQa
@@ -82,8 +89,15 @@ abstract final class DownloadHttp {
 
         /// 取出符合当前解码格式的videoItem
         final videoDash = videosList.firstWhere(
-          (e) => currentDecodeFormats.codes.any(e.codecs!.startsWith),
-          orElse: () => videosList.first,
+          (e) => Platform.isIOS && entry.saveToPhotos
+              ? e.codecs?.startsWith('avc1') == true
+              : currentDecodeFormats.codes.any(e.codecs!.startsWith),
+          orElse: () => Platform.isIOS && entry.saveToPhotos
+              ? videosList.firstWhere(
+                  (e) => e.codecs?.startsWith('hev1') == true || e.codecs?.startsWith('hvc1') == true,
+                  orElse: () => videosList.first,
+                )
+              : videosList.first,
         );
 
         final videoUrl = VideoUtils.getCdnUrl(videoDash.playUrls);
@@ -149,18 +163,18 @@ abstract final class DownloadHttp {
           userAgent: userAgent,
         );
       } else {
-        final first = response.durl!.first;
         final List<Type1Segment> segmentList = [
-          Type1Segment(
-            backupUrls: [],
-            bytes: first.size!,
-            duration: first.length!,
-            md5: '',
-            metaUrl: '',
-            order: first.order!,
-            url: VideoUtils.getCdnUrl(first.playUrls),
-          ),
-        ];
+          for (final segment in response.durl!)
+            Type1Segment(
+              backupUrls: [],
+              bytes: segment.size!,
+              duration: segment.length!,
+              md5: '',
+              metaUrl: '',
+              order: segment.order!,
+              url: VideoUtils.getCdnUrl(segment.playUrls),
+            ),
+        ]..sort((a, b) => a.order.compareTo(b.order));
         final FormatItem? formatItem = response.supportFormats
             ?.firstWhereOrNull((e) => e.quality == response.quality);
         final String description =
@@ -170,6 +184,7 @@ abstract final class DownloadHttp {
 
         entry
           ..mediaType = 1
+          ..hasDashAudio = false
           ..typeTag = targetVideoQa.toString()
           ..videoQuality = targetVideoQa
           ..preferedVideoQuality = targetVideoQa

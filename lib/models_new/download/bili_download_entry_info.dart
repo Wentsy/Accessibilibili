@@ -4,6 +4,7 @@ import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/pages/common/multi_select/base.dart'
     show MultiSelectData;
 import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:PiliPlus/services/download/photo_export.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/route_manager.dart';
@@ -13,6 +14,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
   int mediaType;
   bool hasDashAudio;
   bool isCompleted;
+  bool saveToPhotos;
   int totalBytes;
   int downloadedBytes;
   final String title;
@@ -62,6 +64,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
     width: 29,
     height: 29,
     child: PopupMenuButton(
+      tooltip: '快取影片選項',
       padding: EdgeInsets.zero,
       position: PopupMenuPosition.under,
       icon: Icon(
@@ -70,6 +73,15 @@ class BiliDownloadEntryInfo with MultiSelectData {
         size: 18,
       ),
       itemBuilder: (_) => [
+        if (Platform.isIOS && isCompleted)
+          PopupMenuItem(
+            child: const Text('保存到相簿'),
+            onTap: () async {
+              if (await PhotoExport.requestPermission()) {
+                await PhotoExport.save(this);
+              }
+            },
+          ),
         PopupMenuItem(
           height: 38,
           child: const Text('查看详情页', style: TextStyle(fontSize: 13)),
@@ -138,6 +150,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
     this.mediaType = 1,
     this.hasDashAudio = false,
     required this.isCompleted,
+    this.saveToPhotos = false,
     required this.totalBytes,
     required this.downloadedBytes,
     required this.title,
@@ -169,6 +182,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
         mediaType: json['media_type'] as int,
         hasDashAudio: json['has_dash_audio'] as bool,
         isCompleted: json['is_completed'] as bool,
+        saveToPhotos: json['save_to_photos'] as bool? ?? false,
         totalBytes: json['total_bytes'] as int,
         downloadedBytes: json['downloaded_bytes'] as int,
         title: json['title'] as String,
@@ -206,6 +220,7 @@ class BiliDownloadEntryInfo with MultiSelectData {
     'media_type': mediaType,
     'has_dash_audio': hasDashAudio,
     'is_completed': isCompleted,
+    'save_to_photos': saveToPhotos,
     'total_bytes': totalBytes,
     'downloaded_bytes': downloadedBytes,
     'title': title,
@@ -412,6 +427,7 @@ enum DownloadStatus {
   audioDownloading('正在下载音频'),
   getDanmaku('获取弹幕'),
   getPlayUrl('获取播放地址'),
+  merging('正在合成影片'),
   //
   completed('下载完成'),
   failDownload('下载失败'),
@@ -425,5 +441,5 @@ enum DownloadStatus {
   final String message;
   const DownloadStatus(this.message);
 
-  bool get isDownloading => index <= 3;
+  bool get isDownloading => index <= DownloadStatus.merging.index;
 }

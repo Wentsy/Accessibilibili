@@ -29,6 +29,7 @@ import 'package:PiliPlus/models/video/play/url.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
 import 'package:PiliPlus/models_new/media_list/media_list.dart';
 import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
+import 'package:PiliPlus/models_new/pgc/pgc_info_model/episode.dart' as pgc;
 import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
@@ -52,6 +53,7 @@ import 'package:PiliPlus/plugin/pl_player/models/data_source.dart';
 import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
+import 'package:PiliPlus/services/download/photo_export.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
@@ -1421,7 +1423,43 @@ class VideoDetailController extends GetxController
     );
   }
 
-  Future<void> onDownload(BuildContext context) async {
+  bool _requestingPhotoExport = false;
+
+  Future<void> onSaveToPhotos(BuildContext context) async {
+    if (_requestingPhotoExport) return;
+    _requestingPhotoExport = true;
+    final requestedCid = seasonCid ?? cid.value;
+    try {
+      if (!await PhotoExport.requestPermission()) return;
+      if (requestedCid != (seasonCid ?? cid.value)) {
+        PhotoExport.report('影片已切換，請重新選擇要保存的影片。');
+        return;
+      }
+      final service = Get.find<DownloadService>();
+      await service.waitForInitialization;
+      if (isFileSource) {
+        await service.requestPhotoExport(entry);
+        return;
+      }
+      final currentCid = seasonCid ?? cid.value;
+      for (final cached in service.downloadList.followedBy(service.waitDownloadQueue)) {
+        if (cached.cid == currentCid) {
+          await service.requestPhotoExport(cached);
+          return;
+        }
+      }
+      if (context.mounted) await onDownload(context, saveCurrentToPhotos: true);
+    } catch (e) {
+      PhotoExport.report('無法保存影片：$e');
+    } finally {
+      _requestingPhotoExport = false;
+    }
+  }
+
+  Future<void> onDownload(
+    BuildContext context, {
+    bool saveCurrentToPhotos = false,
+  }) async {
     VideoDetailData? videoDetail;
     List<ugc.BaseEpisodeItem>? episodes;
     UgcIntroController? ugcIntroController;
@@ -1469,6 +1507,39 @@ class VideoDetailController extends GetxController
         (e) => e.cid == (seasonCid ?? cid.value),
       );
 
+      if (saveCurrentToPhotos) {
+        final targetCid = seasonCid ?? cid.value;
+        final quality = VideoQuality.fromCode(Pref.defaultVideoQa);
+        BiliDownloadEntryInfo? target;
+        for (int i = 0; i < episodes.length; i++) {
+          final episode = episodes[i];
+          if (episode is Part && episode.cid == targetCid) {
+            target = await downloadService.downloadVideo(
+              episode, videoDetail, null, quality, saveToPhotos: true,
+            );
+          } else if (episode is ugc.EpisodeItem) {
+            for (final part in episode.pages ?? <Part>[]) {
+              if (part.cid == targetCid) {
+                target = await downloadService.downloadVideo(
+                  part, null, episode, quality, saveToPhotos: true,
+                );
+                break;
+              }
+            }
+          } else if (episode is pgc.EpisodeItem &&
+              episode.cid == targetCid && pgcItem != null) {
+            target = await downloadService.downloadBangumi(
+              i, pgcItem, episode, quality, saveToPhotos: true,
+            );
+          }
+          if (target != null) break;
+        }
+        if (target == null) {
+          PhotoExport.report('找不到目前分 P，請等待影片資料載入後再試。');
+        }
+        return;
+      }
+
       showModalBottomSheet(
         context: context,
         useSafeArea: true,
@@ -1502,6 +1573,8 @@ class VideoDetailController extends GetxController
           );
         },
       );
+    } else {
+      PhotoExport.report('影片資料尚未載入，請稍候再試下載。');
     }
   }
 

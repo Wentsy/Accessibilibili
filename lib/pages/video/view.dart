@@ -53,6 +53,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/plugin/pl_player/view/view.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/services/download/photo_export.dart';
 import 'package:PiliPlus/services/shutdown_timer_service.dart'
     show shutdownTimerService;
 import 'package:PiliPlus/utils/accounts.dart';
@@ -688,10 +689,15 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                           style: const ButtonStyle(
                             padding: WidgetStatePropertyAll(EdgeInsets.zero),
                           ),
-                          onPressed: () =>
-                              (videoDetailController.headerCtrKey.currentState
-                                      as HeaderControlState?)
-                                  ?.showSettingSheet(),
+                          onPressed: () {
+                            final header = videoDetailController
+                                .headerCtrKey.currentState as HeaderControlState?;
+                            if (header != null) {
+                              header.showSettingSheet();
+                            } else {
+                              _showFallbackVideoMenu();
+                            }
+                          },
                           icon: Icon(
                             Icons.more_vert_outlined,
                             size: 19,
@@ -1148,14 +1154,45 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     return const SizedBox.shrink();
   });
 
-  Widget _moreBtn(Color color, {List<Shadow>? shadows}) => PopupMenuButton(
-    icon: Icon(
+  void _showFallbackVideoMenu() {
+    showMenu(
+      context: context,
+      position: const RelativeRect.fromLTRB(16, kToolbarHeight, 16, 0),
+      items: _videoMenuItems(context),
+    );
+  }
+
+  Widget _moreBtn(
+    Color color, {
+    List<Shadow>? shadows,
+    bool showLabel = false,
+  }) => PopupMenuButton(
+    tooltip: '更多選項',
+    icon: showLabel ? null : Icon(
       size: 22,
       Icons.more_vert,
       color: color,
       shadows: shadows,
     ),
-    itemBuilder: (BuildContext context) => <PopupMenuEntry>[
+    child: showLabel
+        ? const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            child: Text('更多選項'),
+          )
+        : null,
+    itemBuilder: _videoMenuItems,
+  );
+
+  List<PopupMenuEntry> _videoMenuItems(BuildContext context) => [
+      if (Platform.isIOS)
+        PopupMenuItem(
+          onTap: () => videoDetailController.onSaveToPhotos(this.context),
+          child: const Text('保存到相簿'),
+        ),
+      PopupMenuItem(
+        onTap: () => Get.toNamed('/download'),
+        child: const Text('查看快取'),
+      ),
       PopupMenuItem(
         onTap: introController.viewLater,
         child: const Text('稍后再看'),
@@ -1191,8 +1228,7 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
         },
         child: const Text('举报'),
       ),
-    ],
-  );
+    ];
 
   Widget plPlayer({
     required double width,
@@ -1366,80 +1402,111 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
       );
     }
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: theme.dividerColor.withValues(alpha: 0.1),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: theme.dividerColor.withValues(alpha: 0.1),
+              ),
+            ),
+          ),
+          child: SizedBox(
+            height: 45,
+            child: Row(
+              children: [
+                if (tabs.isEmpty)
+                  const Spacer()
+                else
+                  Expanded(
+                    child: Align(
+                      alignment: .centerLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: 96.0 * tabs.length),
+                        child: tabBar(),
+                      ),
+                    ),
+                  ),
+                SizedBox(
+                  height: 32,
+                  child: TextButton(
+                    style: const ButtonStyle(
+                      padding: WidgetStatePropertyAll(.zero),
+                    ),
+                    onPressed: videoDetailController.showShootDanmakuSheet,
+                    child: Text(
+                      '发弹幕',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox.square(
+                  dimension: 38,
+                  child: Obx(
+                    () {
+                      final ctr = videoDetailController.plPlayerController;
+                      final enableShowDanmaku = ctr.enableShowDanmaku.value;
+                      void toggleDanmaku() {
+                        final newVal = !enableShowDanmaku;
+                        ctr.enableShowDanmaku.value = newVal;
+                        if (!ctr.tempPlayerConf) {
+                          GStorage.setting.put(
+                            SettingBoxKey.enableShowDanmaku,
+                            newVal,
+                          );
+                        }
+                      }
+                      return Semantics(
+                        label: '顯示彈幕',
+                        toggled: enableShowDanmaku,
+                        onTap: toggleDanmaku,
+                        child: ExcludeSemantics(
+                          child: IconButton(
+                            tooltip: enableShowDanmaku ? '關閉彈幕' : '開啟彈幕',
+                            onPressed: toggleDanmaku,
+                            icon: Icon(
+                              size: 22,
+                              enableShowDanmaku
+                                  ? CustomIcons.dm_on
+                                  : CustomIcons.dm_off,
+                              color: enableShowDanmaku
+                                  ? colorScheme.secondary
+                                  : colorScheme.outline,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 14),
+              ],
+            ),
           ),
         ),
-      ),
-      child: SizedBox(
-        height: 45,
-        child: Row(
-          children: [
-            if (tabs.isEmpty)
-              const Spacer()
-            else
-              Expanded(
-                child: Align(
-                  alignment: .centerLeft,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: 96.0 * tabs.length),
-                    child: tabBar(),
-                  ),
+        if (showIntro && !isFullScreen) ...[
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 8,
+            children: [
+              if (Platform.isIOS)
+                TextButton.icon(
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('保存到相簿'),
+                  onPressed: () => videoDetailController.onSaveToPhotos(context),
                 ),
-              ),
-            SizedBox(
-              height: 32,
-              child: TextButton(
-                style: const ButtonStyle(
-                  padding: WidgetStatePropertyAll(.zero),
-                ),
-                onPressed: videoDetailController.showShootDanmakuSheet,
-                child: Text(
-                  '发弹幕',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ),
-            SizedBox.square(
-              dimension: 38,
-              child: Obx(
-                () {
-                  final ctr = videoDetailController.plPlayerController;
-                  final enableShowDanmaku = ctr.enableShowDanmaku.value;
-                  return IconButton(
-                    onPressed: () {
-                      final newVal = !enableShowDanmaku;
-                      ctr.enableShowDanmaku.value = newVal;
-                      if (!ctr.tempPlayerConf) {
-                        GStorage.setting.put(
-                          SettingBoxKey.enableShowDanmaku,
-                          newVal,
-                        );
-                      }
-                    },
-                    icon: Icon(
-                      size: 22,
-                      enableShowDanmaku
-                          ? CustomIcons.dm_on
-                          : CustomIcons.dm_off,
-                      color: enableShowDanmaku
-                          ? colorScheme.secondary
-                          : colorScheme.outline,
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(width: 14),
-          ],
-        ),
-      ),
+              _moreBtn(colorScheme.onSurface, showLabel: true),
+            ],
+          ),
+          if (Platform.isIOS) const PhotoExportStatus(),
+        ],
+      ],
     );
   }
 

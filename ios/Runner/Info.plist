@@ -71,7 +71,9 @@
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>请允许APP保存图片到相册</string>
+		<string>允許保存圖片及影片到照片圖庫</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>將您選擇的影片及圖片保存到照片圖庫</string>
 		<key>NSCameraUsageDescription</key>
 		<string>App需要您的同意,才能访问相册</string>
 		<key>NSAppleMusicUsageDescription</key>

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert' show jsonDecode, jsonEncode;
-import 'dart:io' show Directory, File;
+import 'dart:io' show Directory, File, Platform;
 
 import 'package:PiliPlus/grpc/dm.dart';
 import 'package:PiliPlus/http/download.dart';
@@ -16,6 +16,7 @@ import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
 import 'package:PiliPlus/pages/danmaku/controller.dart';
 import 'package:PiliPlus/services/download/download_manager.dart';
+import 'package:PiliPlus/services/download/photo_export.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/extension/file_ext.dart';
 import 'package:PiliPlus/utils/extension/string_ext.dart';
@@ -34,6 +35,9 @@ class DownloadService extends GetxService {
   static const _indexFile = 'index.json';
 
   final _lock = Lock();
+  final _creationLock = Lock();
+  final _entryWriteLock = Lock();
+  int _generation = 0;
 
   final flagNotifier = SetNotifier();
   final waitDownloadQueue = RxList<BiliDownloadEntryInfo>();
@@ -47,6 +51,13 @@ class DownloadService extends GetxService {
       curDownload
         ..value!.status = status
         ..refresh();
+      final entry = curDownload.value!;
+      if (entry.saveToPhotos && status.isDownloading) {
+        PhotoExport.status.value = '${status.message}：${entry.showTitle}';
+      }
+      if (entry.saveToPhotos && !status.isDownloading && status != DownloadStatus.completed) {
+        PhotoExport.report('${entry.showTitle}：${status.message}，可再次按保存到相簿重試。');
+      }
     }
   }
 
@@ -108,18 +119,20 @@ class DownloadService extends GetxService {
     return result;
   }
 
-  void downloadVideo(
+  Future<BiliDownloadEntryInfo> downloadVideo(
     Part page,
     VideoDetailData? videoDetail,
     ugc.EpisodeItem? videoArc,
-    VideoQuality videoQuality,
-  ) {
+    VideoQuality videoQuality, {
+    bool saveToPhotos = false,
+  }) async {
     final cid = page.cid!;
-    if (downloadList.indexWhere((e) => e.cid == cid) != -1) {
-      return;
-    }
-    if (waitDownloadQueue.indexWhere((e) => e.cid == cid) != -1) {
-      return;
+    await waitForInitialization;
+    for (final existing in downloadList.followedBy(waitDownloadQueue)) {
+      if (existing.cid == cid) {
+        if (saveToPhotos) await requestPhotoExport(existing);
+        return existing;
+      }
     }
     final pageData = PageInfo(
       cid: cid,
@@ -140,6 +153,7 @@ class DownloadService extends GetxService {
       mediaType: 2,
       hasDashAudio: false,
       isCompleted: false,
+      saveToPhotos: saveToPhotos,
       totalBytes: 0,
       downloadedBytes: 0,
       title: videoDetail?.title ?? videoArc!.title!,
@@ -165,21 +179,27 @@ class DownloadService extends GetxService {
       ownerName: videoDetail?.owner?.name ?? videoArc?.arc?.author?.name,
       pageData: pageData,
     );
-    _createDownload(entry);
+    final created = await _createDownload(entry);
+    if (saveToPhotos && !created.isCompleted) {
+      PhotoExport.report('正在下載：${created.showTitle}。完成後會保存到相簿，請保持 App 在前景。');
+    }
+    return created;
   }
 
-  void downloadBangumi(
+  Future<BiliDownloadEntryInfo> downloadBangumi(
     int index,
     PgcInfoModel pgcItem,
     pgc.EpisodeItem episode,
-    VideoQuality quality,
-  ) {
+    VideoQuality quality, {
+    bool saveToPhotos = false,
+  }) async {
     final cid = episode.cid!;
-    if (downloadList.indexWhere((e) => e.cid == cid) != -1) {
-      return;
-    }
-    if (waitDownloadQueue.indexWhere((e) => e.cid == cid) != -1) {
-      return;
+    await waitForInitialization;
+    for (final existing in downloadList.followedBy(waitDownloadQueue)) {
+      if (existing.cid == cid) {
+        if (saveToPhotos) await requestPhotoExport(existing);
+        return existing;
+      }
     }
     final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final source = SourceInfo(
@@ -208,6 +228,7 @@ class DownloadService extends GetxService {
       mediaType: 2,
       hasDashAudio: false,
       isCompleted: false,
+      saveToPhotos: saveToPhotos,
       totalBytes: 0,
       downloadedBytes: 0,
       title: pgcItem.seasonTitle ?? pgcItem.title ?? '',
@@ -234,22 +255,34 @@ class DownloadService extends GetxService {
       ownerName: pgcItem.upInfo?.uname,
       pageData: null,
     );
-    _createDownload(entry);
+    final created = await _createDownload(entry);
+    if (saveToPhotos && !created.isCompleted) {
+      PhotoExport.report('正在下載：${created.showTitle}。完成後會保存到相簿，請保持 App 在前景。');
+    }
+    return created;
   }
 
-  Future<void> _createDownload(BiliDownloadEntryInfo entry) async {
-    final entryDir = await _getDownloadEntryDir(entry);
-    final entryJsonFile = File(path.join(entryDir.path, _entryFile));
-    await entryJsonFile.writeAsString(jsonEncode(entry.toJson()));
-    entry
-      ..pageDirPath = entryDir.parent.path
-      ..entryDirPath = entryDir.path
-      ..status = DownloadStatus.wait;
-    waitDownloadQueue.add(entry);
-    if (curDownload.value?.status.isDownloading != true) {
-      startDownload(entry);
-    }
-  }
+  Future<BiliDownloadEntryInfo> _createDownload(BiliDownloadEntryInfo entry) =>
+      _creationLock.synchronized(() async {
+        for (final existing in downloadList.followedBy(waitDownloadQueue)) {
+          if (existing.cid == entry.cid) {
+            if (entry.saveToPhotos) await requestPhotoExport(existing);
+            return existing;
+          }
+        }
+        final entryDir = await _getDownloadEntryDir(entry);
+        final entryJsonFile = File(path.join(entryDir.path, _entryFile));
+        await entryJsonFile.writeAsString(jsonEncode(entry.toJson()));
+        entry
+          ..pageDirPath = entryDir.parent.path
+          ..entryDirPath = entryDir.path
+          ..status = DownloadStatus.wait;
+        waitDownloadQueue.add(entry);
+        if (curDownload.value?.status.isDownloading != true) {
+          startDownload(entry);
+        }
+        return entry;
+      });
 
   Future<Directory> _getDownloadEntryDir(BiliDownloadEntryInfo entry) async {
     late final String dirName;
@@ -280,6 +313,8 @@ class DownloadService extends GetxService {
 
   Future<void> startDownload(BiliDownloadEntryInfo entry) {
     return _lock.synchronized(() async {
+      if (entry.isCompleted) return;
+      ++_generation;
       await _downloadManager?.cancel(isDelete: false);
       await _audioDownloadManager?.cancel(isDelete: false);
       _downloadManager = null;
@@ -365,11 +400,13 @@ class DownloadService extends GetxService {
   }
 
   Future<void> _startDownload(BiliDownloadEntryInfo entry) async {
+    final generation = _generation;
     try {
-      if (!await downloadDanmaku(entry: entry)) {
+      if (!entry.saveToPhotos && !await downloadDanmaku(entry: entry)) {
         return;
       }
 
+      if (generation != _generation) return;
       _updateCurStatus(DownloadStatus.getPlayUrl);
 
       final mediaFileInfo = await DownloadHttp.getVideoUrl(
@@ -379,6 +416,7 @@ class DownloadService extends GetxService {
         pageData: entry.pageData,
       );
 
+      if (generation != _generation) return;
       final videoDir = Directory(path.join(entry.entryDirPath, entry.typeTag));
       if (!videoDir.existsSync()) {
         await videoDir.create(recursive: true);
@@ -390,34 +428,51 @@ class DownloadService extends GetxService {
         _downloadCover(entry: entry),
       ]);
 
-      if (curDownload.value?.cid != entry.cid) {
+      if (generation != _generation || curDownload.value?.cid != entry.cid) {
         return;
       }
 
       switch (mediaFileInfo) {
         case Type1 mediaFileInfo:
+          if (mediaFileInfo.segmentList.length > 1) {
+            unawaited(_downloadSegments(entry, mediaFileInfo, videoDir, generation));
+            return;
+          }
           final first = mediaFileInfo.segmentList.first;
           _downloadManager = DownloadManager(
             url: first.url,
+            headers: mediaFileInfo.httpHeader,
             path: path.join(videoDir.path, PathUtils.videoNameType1),
-            onReceiveProgress: _onReceive,
-            onDone: _onDone,
+            onReceiveProgress: (received, total) {
+              if (generation == _generation) _onReceive(received, total);
+            },
+            onDone: ([error]) {
+              if (generation == _generation) _onDone(error);
+            },
           );
           break;
         case Type2 mediaFileInfo:
           _downloadManager = DownloadManager(
             url: mediaFileInfo.video.first.baseUrl,
+            headers: mediaFileInfo.httpHeader,
             path: path.join(videoDir.path, PathUtils.videoNameType2),
-            onReceiveProgress: _onReceive,
-            onDone: _onDone,
+            onReceiveProgress: (received, total) {
+              if (generation == _generation) _onReceive(received, total);
+            },
+            onDone: ([error]) {
+              if (generation == _generation) _onDone(error);
+            },
           );
           final audio = mediaFileInfo.audio;
           if (audio != null && audio.isNotEmpty) {
             _audioDownloadManager = DownloadManager(
               url: audio.first.baseUrl,
+              headers: mediaFileInfo.httpHeader,
               path: path.join(videoDir.path, PathUtils.audioNameType2),
               onReceiveProgress: null,
-              onDone: _onAudioDone,
+              onDone: ([error]) {
+                if (generation == _generation) _onAudioDone(error);
+              },
             );
           }
           late final first = mediaFileInfo.video.first;
@@ -433,27 +488,92 @@ class DownloadService extends GetxService {
           break;
       }
     } catch (e) {
+      if (generation != _generation) return;
       _updateCurStatus(DownloadStatus.failPlayUrl);
+      if (entry.saveToPhotos) PhotoExport.report('無法下載影片：$e');
       if (kDebugMode) {
         debugPrint('get download url error: $e');
       }
     }
   }
 
-  Future<void> _updateBiliDownloadEntryJson(BiliDownloadEntryInfo entry) {
-    final entryJsonFile = File(path.join(entry.entryDirPath, _entryFile));
-    return entryJsonFile.writeAsString(jsonEncode(entry.toJson()));
+  Future<void> _downloadSegments(BiliDownloadEntryInfo entry, Type1 media,
+      Directory dir, int generation) async {
+    String? output;
+    try {
+      if (!Platform.isIOS) {
+        throw UnsupportedError('此平台尚不支援分段影片合成');
+      }
+      final videos = <String>[];
+      final total = media.segmentList.fold<int>(0, (sum, s) => sum + s.bytes);
+      int finished = 0;
+      for (int i = 0; i < media.segmentList.length; i++) {
+        if (generation != _generation) return;
+        final segment = media.segmentList[i];
+        final file = path.join(dir.path, 'segment_$i.mp4');
+        videos.add(file);
+        final manager = DownloadManager(
+          url: segment.url,
+          path: file,
+          headers: media.httpHeader,
+          onReceiveProgress: (received, _) {
+            if (generation != _generation) return;
+            entry.totalBytes = total;
+            _onReceive(finished + received, total);
+          },
+          onDone: ([error]) {},
+        );
+        _downloadManager = manager;
+        await manager.task;
+        if (generation != _generation) return;
+        if (manager.status != DownloadStatus.completed) {
+          throw StateError('第 ${i + 1} 段下載失敗');
+        }
+        finished += await File(file).length();
+      }
+      _updateCurStatus(DownloadStatus.merging);
+      output = await PhotoExport.prepareMovie(
+        videos: videos,
+        durationMs: media.segmentList.fold<int>(0, (sum, s) => sum + s.duration),
+      );
+      if (generation != _generation) return;
+      await File(output).copy(path.join(dir.path, PathUtils.videoNameType1));
+      if (generation != _generation) return;
+      await _completeDownload();
+      for (final file in videos) {
+        try { await File(file).delete(); } catch (_) {}
+      }
+    } catch (e) {
+      if (generation == _generation) {
+        _updateCurStatus(DownloadStatus.failDownload);
+        PhotoExport.report('分段影片下載或合成失敗：$e');
+      }
+    } finally {
+      if (output != null) {
+        try { await File(output).delete(); } catch (_) {}
+      }
+    }
   }
+
+  Future<void> _updateBiliDownloadEntryJson(BiliDownloadEntryInfo entry) =>
+      _entryWriteLock.synchronized(() async {
+        final entryJsonFile = File(path.join(entry.entryDirPath, _entryFile));
+        await entryJsonFile.writeAsString(jsonEncode(entry.toJson()));
+      });
 
   void _onReceive(int progress, int total) {
     if (curDownload.value case final entry?) {
-      if (progress == 0 && total != 0) {
+      if (total > 0 && entry.totalBytes != total) {
         _updateBiliDownloadEntryJson(entry..totalBytes = total);
       }
       entry
         ..downloadedBytes = progress
         ..status = DownloadStatus.downloading;
       curDownload.refresh();
+      if (entry.saveToPhotos) {
+        final percent = total > 0 ? '${(progress * 100 / total).floor()}%' : '';
+        PhotoExport.status.value = '正在下載 $percent：${entry.showTitle}。完成後會保存到相簿。';
+      }
     }
   }
 
@@ -497,21 +617,43 @@ class DownloadService extends GetxService {
 
   Future<void> _completeDownload() async {
     final entry = curDownload.value;
-    if (entry == null) {
+    if (entry == null || entry.isCompleted) {
       return;
     }
+    final shouldSave = entry.saveToPhotos;
     entry
+      ..saveToPhotos = false
       ..downloadedBytes = entry.totalBytes
       ..isCompleted = true;
+    // Claim the export synchronously before publishing completed state to other
+    // routes, so a repeated tap cannot race the automatic completion callback.
+    final photoExportTask = shouldSave ? PhotoExport.save(entry) : null;
     await _updateBiliDownloadEntryJson(entry);
     waitDownloadQueue.remove(entry);
     downloadList.insert(0, entry);
     flagNotifier.refresh();
-    _curCid = null;
-    curDownload.value = null;
-    _downloadManager = null;
-    _audioDownloadManager = null;
-    nextDownload();
+    if (identical(curDownload.value, entry)) {
+      _curCid = null;
+      curDownload.value = null;
+      _downloadManager = null;
+      _audioDownloadManager = null;
+      nextDownload();
+    }
+    if (photoExportTask != null) await photoExportTask;
+  }
+
+  Future<void> requestPhotoExport(BiliDownloadEntryInfo entry) async {
+    if (entry.isCompleted) {
+      await PhotoExport.save(entry);
+    } else {
+      entry.saveToPhotos = true;
+      await _updateBiliDownloadEntryJson(entry);
+      if (entry.isCompleted) return;
+      PhotoExport.report('已加入保存佇列：${entry.showTitle}。下載完成後會保存到相簿，請保持 App 在前景。');
+      if (curDownload.value?.status.isDownloading != true) {
+        await startDownload(entry);
+      }
+    }
   }
 
   void nextDownload() {
@@ -570,6 +712,7 @@ class DownloadService extends GetxService {
     required bool isDelete,
     bool downloadNext = true,
   }) async {
+    ++_generation;
     await _downloadManager?.cancel(isDelete: isDelete);
     await _audioDownloadManager?.cancel(isDelete: isDelete);
     _downloadManager = null;

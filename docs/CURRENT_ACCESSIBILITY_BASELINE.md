@@ -280,3 +280,7 @@ a31ac99b488eaf6bf4e76c5d17f02e9a09ff68d1  fix(a11y): expose coin controls to Voi
 - [ ] 回前景後 VoiceOver 正常。
 
 任何一項失敗，都應視為上游同步 regression，而不是直接覆蓋目前無障礙實作。
+
+## 新增候選功能（尚未納入穩定基準）
+
+2026-09-08 新增影片頁「更多選項」可達性、彈幕開關名稱與 iPhone「保存到相簿」。實作及待測項目見 `VIDEO_PHOTO_EXPORT.md`；在 iPhone 實機確認前，不提升上面的已驗證基準 commit。
