@@ -91,6 +91,9 @@ class _PayCoinsPageState extends State<PayCoinsPage>
 
   final num? _coins = GlobalData().coins;
 
+  String get _coinStatusText =>
+      '${_coins != null ? '硬币余额：${max(0.0, _coins.toDouble().toPrecision(1))}' : ''}${widget.hasCoin ? '${_coins != null ? '，' : ''}已投1枚硬币' : ''}';
+
   bool _canPay(int index) {
     if (index == 1 && widget.hasCoin) {
       return false;
@@ -242,30 +245,41 @@ class _PayCoinsPageState extends State<PayCoinsPage>
     final index = _pageIndex.value;
     final canPay = _canPay(index);
     final payImg = _getPayImage(index, canPay);
-    return GestureDetector(
+    return Semantics(
+      container: true,
+      button: true,
+      enabled: canPay,
+      label: '投币',
+      value: '${index + 1}枚硬币',
+      hint: canPay ? '双击确认投币' : '硬币余额不足',
       onTap: canPay ? _onPayCoin : null,
-      onVerticalDragStart: canPay
-          ? (e) {
-              _isHorizontal = false;
-              _onDragDown(e);
-            }
-          : null,
-      onVerticalDragUpdate: canPay ? _onDragUpdate : null,
-      onVerticalDragEnd: canPay ? _onDragEnd : null,
-      onVerticalDragCancel: canPay ? _onDragEnd : null,
-      behavior: HitTestBehavior.opaque,
-      child: ScaleTransition(
-        scale: _scale22Controller,
-        child: SlideTransition(
-          position: _slide22Anim,
-          child: SizedBox(
-            width: 110,
-            height: 155,
-            child: Image.asset(
-              payImg,
-              width: 110,
-              height: 155,
-              cacheWidth: 110.cacheSize(context),
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          onTap: canPay ? _onPayCoin : null,
+          onVerticalDragStart: canPay
+              ? (e) {
+                  _isHorizontal = false;
+                  _onDragDown(e);
+                }
+              : null,
+          onVerticalDragUpdate: canPay ? _onDragUpdate : null,
+          onVerticalDragEnd: canPay ? _onDragEnd : null,
+          onVerticalDragCancel: canPay ? _onDragEnd : null,
+          behavior: HitTestBehavior.opaque,
+          child: ScaleTransition(
+            scale: _scale22Controller,
+            child: SlideTransition(
+              position: _slide22Anim,
+              child: SizedBox(
+                width: 110,
+                height: 155,
+                child: Image.asset(
+                  payImg,
+                  width: 110,
+                  height: 155,
+                  cacheWidth: 110.cacheSize(context),
+                ),
+              ),
             ),
           ),
         ),
@@ -397,6 +411,7 @@ class _PayCoinsPageState extends State<PayCoinsPage>
                 const SizedBox(height: 10),
               if (_hasCopyright)
                 GestureDetector(
+                  excludeFromSemantics: true,
                   behavior: HitTestBehavior.opaque,
                   onHorizontalDragStart: (e) {
                     _isHorizontal = true;
@@ -412,9 +427,18 @@ class _PayCoinsPageState extends State<PayCoinsPage>
               if (_coins != null || widget.hasCoin) ...[
                 const SizedBox(height: 10),
                 Center(
-                  child: Text(
-                    '${_coins != null ? '硬币余额：${max(0.0, _coins.toDouble().toPrecision(1))}' : ''}${widget.hasCoin ? '${_coins != null ? '，' : ''}已投1枚硬币' : ''}',
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                  child: Semantics(
+                    container: true,
+                    label: _coinStatusText,
+                    child: ExcludeSemantics(
+                      child: Text(
+                        _coinStatusText,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -423,45 +447,67 @@ class _PayCoinsPageState extends State<PayCoinsPage>
                 clipBehavior: Clip.none,
                 alignment: Alignment.centerLeft,
                 children: [
-                  GestureDetector(
-                    onTap: () {
-                      final newVal = !_coinWithLike.value;
+                  Obx(() {
+                    final selected = _coinWithLike.value;
+
+                    void toggleLike() {
+                      final newVal = !selected;
                       _coinWithLike.value = newVal;
                       GStorage.setting.put(SettingBoxKey.coinWithLike, newVal);
-                    },
-                    behavior: HitTestBehavior.opaque,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(width: 12),
-                        Obx(
-                          () => Icon(
-                            _coinWithLike.value
-                                ? Icons.check_box_outlined
-                                : Icons.check_box_outline_blank,
-                            size: 20,
-                            color: Colors.white,
+                    }
+
+                    return Semantics(
+                      container: true,
+                      checked: selected,
+                      enabled: true,
+                      label: '同时点赞',
+                      hint: '双击切换',
+                      onTap: toggleLike,
+                      child: ExcludeSemantics(
+                        child: GestureDetector(
+                          onTap: toggleLike,
+                          behavior: HitTestBehavior.opaque,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(width: 12),
+                              Icon(
+                                selected
+                                    ? Icons.check_box_outlined
+                                    : Icons.check_box_outline_blank,
+                                size: 20,
+                                color: Colors.white,
+                              ),
+                              const Text(
+                                ' 同时点赞',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                            ],
                           ),
                         ),
-                        const Text(
-                          ' 同时点赞',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  }),
                   Center(
-                    child: GestureDetector(
+                    child: Semantics(
+                      container: true,
+                      button: true,
+                      label: '关闭投币',
                       onTap: Get.back,
-                      behavior: HitTestBehavior.opaque,
-                      child: SizedBox(
-                        width: 30,
-                        height: 30,
-                        child: Image.asset(
-                          Assets.panelClose,
-                          width: 30,
-                          height: 30,
-                          cacheWidth: 30.cacheSize(context),
+                      child: ExcludeSemantics(
+                        child: GestureDetector(
+                          onTap: Get.back,
+                          behavior: HitTestBehavior.opaque,
+                          child: SizedBox(
+                            width: 30,
+                            height: 30,
+                            child: Image.asset(
+                              Assets.panelClose,
+                              width: 30,
+                              height: 30,
+                              cacheWidth: 30.cacheSize(context),
+                            ),
+                          ),
                         ),
                       ),
                     ),
