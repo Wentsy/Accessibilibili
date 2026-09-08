@@ -1167,7 +1167,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
     List<Shadow>? shadows,
     bool showLabel = false,
   }) => PopupMenuButton(
-    tooltip: '更多選項',
+    // The visible text already supplies the label; a tooltip would repeat it.
+    tooltip: showLabel ? '' : '更多選項',
     icon: showLabel ? null : Icon(
       size: 22,
       Icons.more_vert,
@@ -1464,7 +1465,8 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
                       }
                       return Semantics(
                         label: '顯示彈幕',
-                        toggled: enableShowDanmaku,
+                        enabled: true,
+                        value: enableShowDanmaku ? '已開啟' : '已關閉',
                         onTap: toggleDanmaku,
                         child: ExcludeSemantics(
                           child: IconButton(
