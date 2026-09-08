@@ -104,6 +104,16 @@ class _PayCoinsPageState extends State<PayCoinsPage>
     return false;
   }
 
+  String _coinPayHint(int index) {
+    if (_canPay(index)) {
+      return '双击投出${index + 1}枚硬币';
+    }
+    if (index == 1 && widget.hasCoin) {
+      return '这个视频已经投过1枚硬币，最多只能再投1枚';
+    }
+    return '硬币余额不足';
+  }
+
   String _getPayImage(int index, bool canPay) {
     if (!canPay) {
       return Assets.notEnough;
@@ -191,6 +201,17 @@ class _PayCoinsPageState extends State<PayCoinsPage>
     _scale();
   }
 
+  void _payCoinAmount(int index) {
+    if (_isPaying || !_canPay(index)) {
+      return;
+    }
+    if (_pageIndex.value != index) {
+      _pageIndex.value = index;
+      _controller?.jumpToPage(index);
+    }
+    _onPayCoin();
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
@@ -241,10 +262,57 @@ class _PayCoinsPageState extends State<PayCoinsPage>
     );
   }
 
-  Widget _build22() {
+  Widget _buildAccessibleCoinAction(int index, double factor) {
+    final canPay = _canPay(index);
+    return Semantics(
+      container: true,
+      button: true,
+      enabled: canPay,
+      label: '投${index + 1}枚硬币',
+      hint: _coinPayHint(index),
+      onTap: canPay ? () => _payCoinAmount(index) : null,
+      child: ExcludeSemantics(
+        child: _buildCoinWidget(index, factor),
+      ),
+    );
+  }
+
+  Widget _build22({bool exposeSemantics = true}) {
     final index = _pageIndex.value;
     final canPay = _canPay(index);
     final payImg = _getPayImage(index, canPay);
+    final visualControl = GestureDetector(
+      onTap: canPay ? _onPayCoin : null,
+      onVerticalDragStart: canPay
+          ? (e) {
+              _isHorizontal = false;
+              _onDragDown(e);
+            }
+          : null,
+      onVerticalDragUpdate: canPay ? _onDragUpdate : null,
+      onVerticalDragEnd: canPay ? _onDragEnd : null,
+      onVerticalDragCancel: canPay ? _onDragEnd : null,
+      behavior: HitTestBehavior.opaque,
+      child: ScaleTransition(
+        scale: _scale22Controller,
+        child: SlideTransition(
+          position: _slide22Anim,
+          child: SizedBox(
+            width: 110,
+            height: 155,
+            child: Image.asset(
+              payImg,
+              width: 110,
+              height: 155,
+              cacheWidth: 110.cacheSize(context),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (!exposeSemantics) {
+      return ExcludeSemantics(child: visualControl);
+    }
     return Semantics(
       container: true,
       button: true,
@@ -253,37 +321,7 @@ class _PayCoinsPageState extends State<PayCoinsPage>
       value: '${index + 1}枚硬币',
       hint: canPay ? '双击确认投币' : '硬币余额不足',
       onTap: canPay ? _onPayCoin : null,
-      child: ExcludeSemantics(
-        child: GestureDetector(
-          onTap: canPay ? _onPayCoin : null,
-          onVerticalDragStart: canPay
-              ? (e) {
-                  _isHorizontal = false;
-                  _onDragDown(e);
-                }
-              : null,
-          onVerticalDragUpdate: canPay ? _onDragUpdate : null,
-          onVerticalDragEnd: canPay ? _onDragEnd : null,
-          onVerticalDragCancel: canPay ? _onDragEnd : null,
-          behavior: HitTestBehavior.opaque,
-          child: ScaleTransition(
-            scale: _scale22Controller,
-            child: SlideTransition(
-              position: _slide22Anim,
-              child: SizedBox(
-                width: 110,
-                height: 155,
-                child: Image.asset(
-                  payImg,
-                  width: 110,
-                  height: 155,
-                  cacheWidth: 110.cacheSize(context),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+      child: ExcludeSemantics(child: visualControl),
     );
   }
 
@@ -343,7 +381,10 @@ class _PayCoinsPageState extends State<PayCoinsPage>
                                           _isPaying) {
                                         return const SizedBox.shrink();
                                       }
-                                      return _buildCoinWidget(index, factor);
+                                      return _buildAccessibleCoinAction(
+                                        index,
+                                        factor,
+                                      );
                                     },
                                   );
                                 },
@@ -362,6 +403,7 @@ class _PayCoinsPageState extends State<PayCoinsPage>
                             return const SizedBox.shrink();
                           }
                           return GestureDetector(
+                            excludeFromSemantics: true,
                             onTap: index == 0 ? null : () => _onScroll(0),
                             behavior: HitTestBehavior.opaque,
                             child: Padding(
@@ -385,6 +427,7 @@ class _PayCoinsPageState extends State<PayCoinsPage>
                           return const SizedBox.shrink();
                         }
                         return GestureDetector(
+                          excludeFromSemantics: true,
                           behavior: HitTestBehavior.opaque,
                           onTap: index == 1 ? null : () => _onScroll(1),
                           child: Padding(
@@ -420,7 +463,9 @@ class _PayCoinsPageState extends State<PayCoinsPage>
                   onHorizontalDragUpdate: _onDragUpdate,
                   onHorizontalDragEnd: _onDragEnd,
                   onHorizontalDragCancel: _onDragEnd,
-                  child: Center(child: Obx(_build22)),
+                  child: Center(
+                    child: Obx(() => _build22(exposeSemantics: false)),
+                  ),
                 )
               else
                 Center(child: _build22()),
