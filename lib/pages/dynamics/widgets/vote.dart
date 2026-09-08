@@ -299,6 +299,7 @@ class _VotePanelState extends State<VotePanel> {
       Semantics(
         container: true,
         checked: _showPercentage,
+        enabled: true,
         label: '显示投票比例',
         hint: '双击切换',
         onTap: () {
@@ -321,6 +322,7 @@ class _VotePanelState extends State<VotePanel> {
       Semantics(
         container: true,
         checked: anonymous,
+        enabled: true,
         label: '匿名投票',
         hint: '双击切换',
         onTap: () {
