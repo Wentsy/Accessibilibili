@@ -8,14 +8,15 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
   private var lifecycleObservers: [NSObjectProtocol] = []
 
   // audio_service forwards remote Play back to Dart. When media is already
-  // paused before the app backgrounds, iOS can suspend the Flutter engine
-  // because mpv no longer has an active AudioUnit. Keep a zero-volume native
-  // render graph alive only for that paused-first path so Magic Tap can wake
-  // Dart and resume the real player.
+  // paused before the app backgrounds, iOS may not retain the same Now Playing
+  // ownership that is naturally established by the already-working
+  // playing -> background -> pause path. Briefly render zero-volume audio after
+  // entering the background to prime that ownership, then stop completely so a
+  // long pause does not keep the audio hardware and Flutter process awake.
   private var pausedKeepAliveEngine: AVAudioEngine?
   private var pausedKeepAlivePlayer: AVAudioPlayerNode?
   private var pausedKeepAliveBuffer: AVAudioPCMBuffer?
-  private var pausedKeepAliveMonitor: Timer?
+  private var pausedKeepAliveExpiry: Timer?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let instance = MediaKitLibsIosVideoPlugin()
@@ -186,18 +187,15 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
       pausedKeepAlivePlayer = player
       pausedKeepAliveBuffer = buffer
 
-      // When Magic Tap reaches Flutter and the real player becomes active,
-      // remove the bridge immediately. This timer exists only while paused-first
-      // background playback needs the bridge.
-      pausedKeepAliveMonitor = Timer.scheduledTimer(
-        withTimeInterval: 0.5,
-        repeats: true
+      // A continuously looping silent track fixes paused-first resume but wastes
+      // energy. Two seconds is long enough to cross the scene transition and
+      // establish the same background media ownership as real playback, after
+      // which the app can suspend normally while retaining Now Playing state.
+      pausedKeepAliveExpiry = Timer.scheduledTimer(
+        withTimeInterval: 2.0,
+        repeats: false
       ) { [weak self] _ in
-        guard let self else { return }
-        if #available(iOS 13.0, *),
-           MPNowPlayingInfoCenter.default().playbackState == .playing {
-          self.stopPausedKeepAlive()
-        }
+        self?.stopPausedKeepAlive()
       }
     } catch {
       stopPausedKeepAlive()
@@ -205,8 +203,8 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
   }
 
   private func stopPausedKeepAlive() {
-    pausedKeepAliveMonitor?.invalidate()
-    pausedKeepAliveMonitor = nil
+    pausedKeepAliveExpiry?.invalidate()
+    pausedKeepAliveExpiry = nil
 
     pausedKeepAlivePlayer?.stop()
     pausedKeepAliveEngine?.stop()
