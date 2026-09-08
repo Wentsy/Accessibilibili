@@ -6,10 +6,10 @@
 
 - 日期：2026-09-08
 - 分支：`main`
-- **已驗證 App 程式碼基準 commit：`0cd4b40f7982e4ccc2f87841e9c16a56bb2b52f2`**
-- Commit：`fix(ios): prime paused background media without continuous silent audio`
+- **已驗證 App 程式碼基準 commit：`a31ac99b488eaf6bf4e76c5d17f02e9a09ff68d1`**
+- Commit：`fix(a11y): expose coin controls to VoiceOver`
 
-本文件之後可能會有純文件 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `0cd4b40` 的程式碼狀態為本輪穩定基準。
+本文件之後可能會有純文件 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `a31ac99` 的程式碼狀態為本輪穩定基準。
 
 除非後續版本完成新一輪 VoiceOver 實機驗證，否則遇到回歸應優先與此基準比較。
 
@@ -24,6 +24,9 @@
 - 省電版 paused-first 背景方案已實測：退背景後等待 **10 秒**與 **1 分鐘**，仍可繼續播放。
 - 回到 App 後 VoiceOver 可以正常朗讀，沒有因背景播放修正造成旁白被切斷。
 - 動態投票選項可由 VoiceOver 正確辨識、朗讀選取狀態並操作。
+- 投票建立頁的「顯示投票比例」與「匿名投票」可朗讀勾選狀態，且不再被 VoiceOver 誤報為「已變暗」。
+- 影片收藏面板中，每個收藏夾只形成一個 VoiceOver 操作節點；名稱、內容數量、公開／私密資訊與勾選狀態會合併朗讀，雙擊整列即可切換。
+- 影片投幣面板中，硬幣餘額可正常朗讀；「同時點讚」會朗讀已勾選／未勾選；1 枚／2 枚投幣控制可被 VoiceOver 找到並正常送出。
 - 動態的 VoiceOver「造訪使用者」：普通已關注 UP 直接進會員頁；訂閱 UGC 合集的特殊動態也能進入真正 UP 主頁。
 - 評論／回覆、連續閱讀、首頁分頁、底部導航、影視卡片與既有富文字無障礙規則仍應維持各專項基準文件中的實機成功行為。
 
@@ -53,7 +56,7 @@ ios/Runner/Info.plist
 前景播放 → 前景暫停 → 退背景／鎖屏 → Magic Tap 播放
 ```
 
-連續零音量 native audio bridge 可以解決，但長時間播放靜音音訊會增加耗電，因此目前穩定基準 `0cd4b40` 改為：
+連續零音量 native audio bridge 可以解決，但長時間播放靜音音訊會增加耗電，因此背景播放子系統自 `0cd4b40` 起採用、並完整保留到目前穩定基準 `a31ac99` 的方案為：
 
 - 只有「已暫停後進背景」的必要情況才啟動 native `AVAudioEngine + AVAudioPlayerNode`。
 - 使用真實硬體 mixer format 建立零音量 PCM buffer。
@@ -130,9 +133,50 @@ c05910dde5ae0900f65789b1247a4a41719adb95  perf(a11y): reuse UGC season owner cac
 
 不能把圖片、勾選圖示、比例進度條、百分比 badge 與文字拆成一串重複焦點。
 
-投票建立頁的「顯示投票比例」與「匿名投票」也必須各自是可切換且會朗讀狀態的控制項。
+投票建立頁的「顯示投票比例」與「匿名投票」也必須各自是可切換且會朗讀狀態的控制項；外層 semantics 必須維持啟用狀態，不能再讓 VoiceOver 額外朗讀「已變暗」。
 
-同步上游時，保留外層 `Semantics`、`selected/checked`、共用 `onTap` 與內層 `ExcludeSemantics` 的組合。
+同步上游時，保留外層 `Semantics`、`enabled: true`、`selected/checked`、共用 `onTap` 與內層 `ExcludeSemantics` 的組合。
+
+## 影片收藏面板穩定基準
+
+重點檔案：
+
+```text
+lib/pages/fav_panel/view.dart
+```
+
+每個收藏夾的整列與右側 Checkbox **不能拆成兩個 VoiceOver 按鈕／焦點**。
+
+目前基準做法：
+
+- 外層 `Semantics` 把整個收藏夾合併成單一節點。
+- `label` 朗讀收藏夾名稱。
+- `value` 朗讀內容數量與公開／私密資訊。
+- `checked` 提供已勾選／未勾選狀態。
+- `onTap` 與視覺上的整列點擊共用同一切換邏輯。
+- 內層 `ListTile`、圖示與 Checkbox 使用 `ExcludeSemantics`，避免重複焦點。
+
+後續同步上游若收藏面板 UI 改版，仍要維持「一個收藏夾 = 一個 VoiceOver 操作節點」。
+
+## 影片投幣面板穩定基準
+
+重點檔案：
+
+```text
+lib/pages/video/pay_coins/view.dart
+```
+
+原版視覺上的投幣角色圖片實際承擔送出動作，但沒有按鈕語義，因此 VoiceOver 使用者可能完全找不到投幣控制。
+
+目前基準必須維持：
+
+- 1 枚／2 枚投幣入口是明確的 VoiceOver `button`。
+- 朗讀內容能分辨「投幣，1枚硬幣」與「投幣，2枚硬幣」。
+- 可投幣時雙擊直接執行原本 `_onPayCoin()`；餘額不足時才呈現停用狀態。
+- 硬幣餘額／已投硬幣資訊有獨立且清楚的 semantics，不依賴圖片猜測。
+- 「同時點讚」是單一 checkbox semantics，會朗讀已勾選／未勾選且可雙擊切換。
+- 關閉投幣面板的圖片也必須有明確的「關閉投幣」按鈕語義。
+- 視覺動畫、橫向選 1／2 枚與原本拖曳行為不可因無障礙包裝而失效。
 
 ## 首頁與底部導航基準
 
@@ -190,7 +234,7 @@ docs/PLAYBACK_AUDIO_HANDOFF.md
 
 ## 本輪重要 commits
 
-以下重要修正都包含在 `0cd4b40` 的 ancestry 中：
+以下重要修正都包含在目前已驗證 App 基準 `a31ac99` 的 ancestry 中：
 
 ```text
 f2ae922820e20ef8864afba60e451a4fa7c78505  fix(ios): preserve VoiceOver speech during playback
@@ -202,6 +246,9 @@ a30dbbe67c37553e89c3d9e05eda97640df1819a  fix(ios): promote background playback 
 1379558fc289fd14163a9710cb4e41c7370fc316  fix(ios): keep paused media resumable in background
 b7392297bd52aecd3f7ce80382a15ddee9312208  fix(ios): use hardware audio format for pause bridge
 0cd4b40f7982e4ccc2f87841e9c16a56bb2b52f2  fix(ios): prime paused background media without continuous silent audio
+7a6fa83e1d3639057adf65339a269cfb1f56324f  fix(a11y): keep vote toggles enabled for VoiceOver
+26c746bcbe0ee229bb81fd05d5e8c96ac502d3f5  fix(a11y): merge favorite folder controls
+a31ac99b488eaf6bf4e76c5d17f02e9a09ff68d1  fix(a11y): expose coin controls to VoiceOver
 ```
 
 ## 同步 Pili Plus 上游時的最低驗收
@@ -213,8 +260,12 @@ b7392297bd52aecd3f7ce80382a15ddee9312208  fix(ios): use hardware audio format fo
 - [ ] 評論與回覆可找到、可操作。
 - [ ] 連續閱讀沒有卡死或異常跳焦點。
 - [ ] 動態投票可朗讀狀態並投票。
+- [ ] 投票建立頁「顯示投票比例」與「匿名投票」會朗讀勾選狀態，且不會朗讀「已變暗」。
 - [ ] 普通動態「造訪使用者」直接進正確 UP 主頁。
 - [ ] UGC 合集動態「造訪使用者」能進真正 UP 主頁。
+- [ ] 影片收藏面板每個收藏夾只停一次焦點，能朗讀勾選狀態並雙擊切換。
+- [ ] 投幣面板能朗讀硬幣餘額與「同時點讚」狀態。
+- [ ] 投幣面板能找到並操作 1 枚／2 枚投幣控制。
 - [ ] 播放影片不切斷 VoiceOver。
 - [ ] 播放中退背景仍可播放／暫停／恢復。
 - [ ] 前景暫停後退背景，Magic Tap 仍可恢復。
