@@ -62,22 +62,33 @@ class _FavPanelState extends State<FavPanel> {
                     (context as Element).markNeedsBuild();
                   }
 
-                  return ListTile(
+                  final subtitle =
+                      '${item.mediaCount}个内容，${BiliUtils.isPublicFavText(item.attr)}';
+                  return Semantics(
+                    container: true,
+                    checked: isChecked,
+                    enabled: true,
+                    label: item.title,
+                    value: subtitle,
+                    hint: isChecked ? '双击取消选择' : '双击选择',
                     onTap: onTap,
-                    dense: true,
-                    leading: BiliUtils.isPublicFav(item.attr)
-                        ? const Icon(Icons.folder_outlined)
-                        : const Icon(Icons.lock_outline),
-                    minLeadingWidth: 0,
-                    title: Text(item.title),
-                    subtitle: Text(
-                      '${item.mediaCount}个内容 . ${BiliUtils.isPublicFavText(item.attr)}',
-                    ),
-                    trailing: Transform.scale(
-                      scale: 0.9,
-                      child: Checkbox(
-                        value: isChecked,
-                        onChanged: (bool? checkValue) => onTap(),
+                    child: ExcludeSemantics(
+                      child: ListTile(
+                        onTap: onTap,
+                        dense: true,
+                        leading: BiliUtils.isPublicFav(item.attr)
+                            ? const Icon(Icons.folder_outlined)
+                            : const Icon(Icons.lock_outline),
+                        minLeadingWidth: 0,
+                        title: Text(item.title),
+                        subtitle: Text(subtitle),
+                        trailing: Transform.scale(
+                          scale: 0.9,
+                          child: Checkbox(
+                            value: isChecked,
+                            onChanged: (bool? checkValue) => onTap(),
+                          ),
+                        ),
                       ),
                     ),
                   );
