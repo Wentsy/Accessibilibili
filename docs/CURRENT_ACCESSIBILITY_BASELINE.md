@@ -6,10 +6,10 @@
 
 - 日期：2026-09-08
 - 分支：`main`
-- **已驗證 App 程式碼基準 commit：`a31ac99b488eaf6bf4e76c5d17f02e9a09ff68d1`**
-- Commit：`fix(a11y): expose coin controls to VoiceOver`
+- **已驗證 App 程式碼基準 commit：`3fc0d658b5f247c8dd919089cfa4efdea4a70e5d`**
+- Commit：`fix(a11y): expose direct one and two coin actions`
 
-本文件之後可能會有純文件 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `a31ac99` 的程式碼狀態為本輪穩定基準。
+本文件之後可能會有純文件 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `3fc0d65` 的程式碼狀態為本輪穩定基準。
 
 除非後續版本完成新一輪 VoiceOver 實機驗證，否則遇到回歸應優先與此基準比較。
 
@@ -26,7 +26,9 @@
 - 動態投票選項可由 VoiceOver 正確辨識、朗讀選取狀態並操作。
 - 投票建立頁的「顯示投票比例」與「匿名投票」可朗讀勾選狀態，且不再被 VoiceOver 誤報為「已變暗」。
 - 影片收藏面板中，每個收藏夾只形成一個 VoiceOver 操作節點；名稱、內容數量、公開／私密資訊與勾選狀態會合併朗讀，雙擊整列即可切換。
-- 影片投幣面板中，硬幣餘額可正常朗讀；「同時點讚」會朗讀已勾選／未勾選；1 枚／2 枚投幣控制可被 VoiceOver 找到並正常送出。
+- 影片投幣面板中，硬幣餘額可正常朗讀；「同時點讚」會朗讀已勾選／未勾選。
+- 原創影片可由 VoiceOver 直接找到「投1枚硬幣」與「投2枚硬幣」兩個按鈕；已實機確認雙擊「投2枚硬幣」可一次正常投出 2 枚。
+- 轉載／非原創影片維持 Bilibili 原有限制，只提供最多 1 枚硬幣的投幣額度。
 - 動態的 VoiceOver「造訪使用者」：普通已關注 UP 直接進會員頁；訂閱 UGC 合集的特殊動態也能進入真正 UP 主頁。
 - 評論／回覆、連續閱讀、首頁分頁、底部導航、影視卡片與既有富文字無障礙規則仍應維持各專項基準文件中的實機成功行為。
 
@@ -56,7 +58,7 @@ ios/Runner/Info.plist
 前景播放 → 前景暫停 → 退背景／鎖屏 → Magic Tap 播放
 ```
 
-連續零音量 native audio bridge 可以解決，但長時間播放靜音音訊會增加耗電，因此背景播放子系統自 `0cd4b40` 起採用、並完整保留到目前穩定基準 `a31ac99` 的方案為：
+連續零音量 native audio bridge 可以解決，但長時間播放靜音音訊會增加耗電，因此背景播放子系統自 `0cd4b40` 起採用、並完整保留到目前穩定基準 `3fc0d65` 的方案為：
 
 - 只有「已暫停後進背景」的必要情況才啟動 native `AVAudioEngine + AVAudioPlayerNode`。
 - 使用真實硬體 mixer format 建立零音量 PCM buffer。
@@ -166,17 +168,20 @@ lib/pages/fav_panel/view.dart
 lib/pages/video/pay_coins/view.dart
 ```
 
-原版視覺上的投幣角色圖片實際承擔送出動作，但沒有按鈕語義，因此 VoiceOver 使用者可能完全找不到投幣控制。
+原版視覺上的投幣角色圖片實際承擔送出動作，但沒有按鈕語義，而且原創影片的 1／2 枚選擇依賴 PageView 橫向滑動，VoiceOver 使用者無法可靠知道或切換到 2 枚。
 
 目前基準必須維持：
 
-- 1 枚／2 枚投幣入口是明確的 VoiceOver `button`。
-- 朗讀內容能分辨「投幣，1枚硬幣」與「投幣，2枚硬幣」。
-- 可投幣時雙擊直接執行原本 `_onPayCoin()`；餘額不足時才呈現停用狀態。
+- 原創且尚有完整投幣額度的影片，VoiceOver 可直接左右滑找到兩個獨立按鈕：「投1枚硬幣」與「投2枚硬幣」。
+- 雙擊「投1枚硬幣」直接投出 1 枚；雙擊「投2枚硬幣」直接投出 2 枚，不需要先操作視覺 PageView 或再找第二個確認按鈕。
+- **「投2枚硬幣」已由 iPhone VoiceOver 實機驗證，可一次正常送出 2 枚硬幣。**
+- 若影片已經投過 1 枚，剩餘額度只能再投 1 枚；2 枚選項不可誤導成仍可投 2 枚。
+- 轉載／非原創影片依 Bilibili 原有限制最多只能投 1 枚，不應為了無障礙強行提供 2 枚操作。
+- 餘額不足的投幣項目必須正確呈現停用狀態與提示。
 - 硬幣餘額／已投硬幣資訊有獨立且清楚的 semantics，不依賴圖片猜測。
 - 「同時點讚」是單一 checkbox semantics，會朗讀已勾選／未勾選且可雙擊切換。
 - 關閉投幣面板的圖片也必須有明確的「關閉投幣」按鈕語義。
-- 視覺動畫、橫向選 1／2 枚與原本拖曳行為不可因無障礙包裝而失效。
+- 視覺使用者原本的 PageView、左右箭頭、橫向選 1／2 枚、投幣動畫與拖曳行為仍要保留；這些視覺控制不應額外形成重複的 VoiceOver 焦點。
 
 ## 首頁與底部導航基準
 
@@ -234,7 +239,7 @@ docs/PLAYBACK_AUDIO_HANDOFF.md
 
 ## 本輪重要 commits
 
-以下重要修正都包含在目前已驗證 App 基準 `a31ac99` 的 ancestry 中：
+以下重要修正都包含在目前已驗證 App 基準 `3fc0d65` 的 ancestry 中：
 
 ```text
 f2ae922820e20ef8864afba60e451a4fa7c78505  fix(ios): preserve VoiceOver speech during playback
@@ -249,6 +254,7 @@ b7392297bd52aecd3f7ce80382a15ddee9312208  fix(ios): use hardware audio format fo
 7a6fa83e1d3639057adf65339a269cfb1f56324f  fix(a11y): keep vote toggles enabled for VoiceOver
 26c746bcbe0ee229bb81fd05d5e8c96ac502d3f5  fix(a11y): merge favorite folder controls
 a31ac99b488eaf6bf4e76c5d17f02e9a09ff68d1  fix(a11y): expose coin controls to VoiceOver
+3fc0d658b5f247c8dd919089cfa4efdea4a70e5d  fix(a11y): expose direct one and two coin actions
 ```
 
 ## 同步 Pili Plus 上游時的最低驗收
@@ -265,7 +271,9 @@ a31ac99b488eaf6bf4e76c5d17f02e9a09ff68d1  fix(a11y): expose coin controls to Voi
 - [ ] UGC 合集動態「造訪使用者」能進真正 UP 主頁。
 - [ ] 影片收藏面板每個收藏夾只停一次焦點，能朗讀勾選狀態並雙擊切換。
 - [ ] 投幣面板能朗讀硬幣餘額與「同時點讚」狀態。
-- [ ] 投幣面板能找到並操作 1 枚／2 枚投幣控制。
+- [ ] 原創且可投 2 枚的影片能直接找到「投1枚硬幣」與「投2枚硬幣」兩個 VoiceOver 按鈕。
+- [ ] 雙擊「投2枚硬幣」可一次正常投出 2 枚。
+- [ ] 轉載／非原創影片不會錯誤提供超過 1 枚的可用投幣額度。
 - [ ] 播放影片不切斷 VoiceOver。
 - [ ] 播放中退背景仍可播放／暫停／恢復。
 - [ ] 前景暫停後退背景，Magic Tap 仍可恢復。
