@@ -1,184 +1,223 @@
-# Accessibilibili 目前無障礙基準
+# Accessibilibili 目前無障礙穩定基準
 
-這份文件記錄目前已由 VoiceOver 實機驗證通過、可作為後續開發與上游同步回歸判定的基準點。
+這份文件記錄目前已由 iPhone VoiceOver 實機驗證通過、可作為後續開發與同步 Pili Plus 上游版本時的回歸判定基準。
 
-## 目前基準
+## 目前穩定點
 
 - 日期：2026-09-08
 - 分支：`main`
-- 已驗證基準 commit：`a30dbbe67c37553e89c3d9e05eda97640df1819a`
-- Commit：`fix(ios): promote background playback for Magic Tap`
+- **已驗證 App 程式碼基準 commit：`0cd4b40f7982e4ccc2f87841e9c16a56bb2b52f2`**
+- Commit：`fix(ios): prime paused background media without continuous silent audio`
 
-只要後續版本沒有明確完成新一輪 VoiceOver 實機驗證，就應把這個 commit 視為目前可回退的無障礙穩定點。
+本文件之後可能會有純文件 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `0cd4b40` 的程式碼狀態為本輪穩定基準。
 
-這個基準包含此前已驗證的無障礙能力、首頁導航與影視卡片行為、動態投票語義，以及本輪實機確認的 iOS 影片音訊行為：開始播放不截斷 VoiceOver、背景播放、桌面／鎖屏 VoiceOver Magic Tap 播放暫停、回到 App 後 VoiceOver 正常朗讀。
+除非後續版本完成新一輪 VoiceOver 實機驗證，否則遇到回歸應優先與此基準比較。
 
-## iOS 影片音訊穩定基準
+## 本輪實機確認通過
 
-播放影片時，VoiceOver 正在朗讀的內容不能被影片音訊中途切斷；背景播放設定開啟後，回主畫面與鎖屏也必須持續播放。系統將背景播放當作 Now Playing 時，桌面與鎖屏的 VoiceOver 雙指雙擊必須可以暫停與恢復，回到 App 後仍可正常閱讀。
+以下行為都屬於「不可因同步上游或重構而退步」的基準：
 
-這組行為由下列邊界共同維持：
+- 影片開始播放時，**不能中途截斷 VoiceOver 正在朗讀的語音**；影片聲音與旁白可以同時存在。
+- 背景播放開啟時，播放中的影片退到主畫面或鎖屏後仍可播放。
+- 播放中退背景後，可在背景暫停並再次播放。
+- **前景先暫停，再退到主畫面／鎖屏，也能用 VoiceOver Magic Tap（雙指雙擊）重新播放。**
+- 省電版 paused-first 背景方案已實測：退背景後等待 **10 秒**與 **1 分鐘**，仍可繼續播放。
+- 回到 App 後 VoiceOver 可以正常朗讀，沒有因背景播放修正造成旁白被切斷。
+- 動態投票選項可由 VoiceOver 正確辨識、朗讀選取狀態並操作。
+- 動態的 VoiceOver「造訪使用者」：普通已關注 UP 直接進會員頁；訂閱 UGC 合集的特殊動態也能進入真正 UP 主頁。
+- 評論／回覆、連續閱讀、首頁分頁、底部導航、影視卡片與既有富文字無障礙規則仍應維持各專項基準文件中的實機成功行為。
 
-- `lib/services/audio_session.dart`：前景使用 `playback + mixWithOthers`，讓 VoiceOver 與影片共存；`hidden/paused` 才改為主要 playback session，使系統把 Magic Tap 路由給 Accessibilibili；`resumed` 先恢復混音。
-- `lib/plugin/pl_player/controller.dart`：iOS 使用 `audiounit`，並保留 `audiounit-skip-session-management=yes`，由 App 管理 shared AVAudioSession；不要讓 libmpv 再自行 activate/deactivate session。
-- `packages/flutter_volume_controller`：音量觀察只讀取／觀察 output volume，不能改寫 category、activation，也不能在取消監聽時停用 shared session。
-- `lib/services/audio_handler.dart`：保留 `MediaAction.playPause` 與背景 media click 對影片播放器的即時 toggle；否則音訊仍可播放，但系統的切換指令可能失效。
+## iOS 影片音訊與背景播放基準
 
-不要把這些檔案各自還原成上游預設實作。它們的互動關係是這項實機基準的一部分；完整排查記錄見 `docs/IOS_BACKGROUND_AUDIO.md`。
+播放相關修改必須同時保住兩件事：
+
+1. **VoiceOver 與影片音訊共存。** 前景播放不能搶走或掐斷 VoiceOver 語音。
+2. **系統背景媒體控制可用。** 主畫面、鎖屏與 VoiceOver Magic Tap 必須能控制目前影片。
+
+相關核心檔案包括：
+
+```text
+lib/services/audio_session.dart
+lib/services/audio_handler.dart
+lib/plugin/pl_player/controller.dart
+packages/flutter_volume_controller/
+packages/media_kit_libs_ios_video/ios/Classes/MediaKitLibsIosVideoPlugin.swift
+ios/Runner/Info.plist
+```
+
+### paused-first 背景恢復的目前方案
+
+早期已確認「影片正在播放後退背景」本來就能建立有效的系統媒體狀態；真正困難的是：
+
+```text
+前景播放 → 前景暫停 → 退背景／鎖屏 → Magic Tap 播放
+```
+
+連續零音量 native audio bridge 可以解決，但長時間播放靜音音訊會增加耗電，因此目前穩定基準 `0cd4b40` 改為：
+
+- 只有「已暫停後進背景」的必要情況才啟動 native `AVAudioEngine + AVAudioPlayerNode`。
+- 使用真實硬體 mixer format 建立零音量 PCM buffer。
+- 只在背景轉場時播放約 **2 秒**，用來建立／維持 Now Playing 媒體所有權。
+- 2 秒後完整停止 engine，不在整段背景暫停期間持續播放靜音音訊。
+- 已實測 10 秒及 1 分鐘後仍可 Magic Tap 恢復。
+
+後續更新若改動這段，至少要重新測：
+
+- [ ] 前景播放 → 直接退背景 → 暫停 → 再播放。
+- [ ] 前景播放 → 前景暫停 → 退主畫面 → 等 10 秒 → Magic Tap 播放。
+- [ ] 前景播放 → 前景暫停 → 鎖屏 → 等 1 分鐘 → Magic Tap 播放。
+- [ ] 背景播放期間鎖屏控制正常。
+- [ ] 回到 App 後 VoiceOver 正常。
+- [ ] 開始／恢復影片時不截斷 VoiceOver 正在說的句子。
+
+完整背景音訊排查記錄另見 `docs/IOS_BACKGROUND_AUDIO.md` 與 `docs/PLAYBACK_AUDIO_HANDOFF.md`。
+
+## 動態「造訪使用者」基準
+
+重點檔案：
+
+```text
+lib/pages/dynamics/widgets/dynamic_panel.dart
+```
+
+### 普通已關注 UP
+
+`AUTHOR_TYPE_NORMAL` 必須維持最簡單、最快的原路徑：
+
+```text
+module_author.mid → /member?mid=<UID>
+```
+
+不要為普通已關注 UP 加入額外 API 查詢或快取層。
+
+### 訂閱 UGC 合集的特殊動態
+
+Bilibili 的 `AUTHOR_TYPE_UGC_SEASON` 動態中，`module_author.mid` 可能是影片 aid，而不是 UP 主 UID，因此不能直接當會員 UID 使用。
+
+目前穩定基準採用已實機驗證成功的方式：
+
+```text
+UGC season aid
+→ VideoHttp.videoIntro
+→ response.owner.mid
+→ /member?mid=<真正 UP 主 UID>
+```
+
+這條路徑可能比普通已關注 UP 稍慢，但已確認能正確進入發佈者頁面。
+
+### 已撤回的合集快取實驗
+
+下列三個 commit 曾嘗試使用 `seasonId → ownerMid` 持久化快取，以及優先呼叫訂閱合集 API：
+
+```text
+caf67d4dee23992bec1c5874b0267580c35c20ef  perf(a11y): cache subscribed UGC season owners
+c05910dde5ae0900f65789b1247a4a41719adb95  perf(a11y): reuse UGC season owner cache
+1dc1ab306a39b2b03b37e11fb110a55bf5563ae0  perf(a11y): prefer UGC season owner shortcut
+```
+
+實機使用感受沒有比既有路徑明顯更快，因此**這三個 commit 已從 `main` 撤回，不屬於目前穩定基準**。日後不要因看到這些歷史 commit 就自動重新套用。
 
 ## 動態投票穩定基準
 
-`lib/pages/dynamics/widgets/vote.dart` 的每個投票選項、圖片投票與百分比選項都必須是單一可操作的 VoiceOver 節點。朗讀內容是選項文字、已選取狀態、百分比（顯示比例時）及「雙擊選擇／取消選擇」提示；不能把圖片、勾選圖示、比例進度條、百分比 badge 與文字拆成一串重複焦點。
+`lib/pages/dynamics/widgets/vote.dart` 的每個投票選項、圖片投票與百分比選項都必須是單一可操作的 VoiceOver 節點。
 
-投票建立頁的「顯示投票比例」和「匿名投票」也必須各自朗讀為已勾選／未勾選的可切換控制。可選項數必須朗讀成「N 項，最多可選擇 M 項」，不重複加上「已選擇」或「投票選項」等無資訊前綴。
+朗讀內容應包含：
 
-同步上游時保留外層 `Semantics`、`selected/checked`、共用 `onTap` 以及內層 `ExcludeSemantics`；這些是投票能可靠操作且不冗讀的必要組合。
+- 選項文字。
+- 已選取／未選取狀態。
+- 顯示比例時的百分比。
+- 適當的「雙擊選擇／取消選擇」操作提示。
 
-## 本輪新增且不可回退的行為
+不能把圖片、勾選圖示、比例進度條、百分比 badge 與文字拆成一串重複焦點。
 
-### 1. 底部導航不要產生無作用的「導覽列」焦點
+投票建立頁的「顯示投票比例」與「匿名投票」也必須各自是可切換且會朗讀狀態的控制項。
 
-`lib/pages/main/view.dart` 的底部導航可以保留實際分頁按鈕，例如首頁、動態、我的，但不能額外建立一個只會朗讀「導覽列」且沒有作用的 VoiceOver 焦點。
+同步上游時，保留外層 `Semantics`、`selected/checked`、共用 `onTap` 與內層 `ExcludeSemantics` 的組合。
 
-不要重新加入只為外層容器設定的：
+## 首頁與底部導航基準
 
-```dart
-label: '導覽列'
-```
+### 底部導航
 
-實機驗證結果：移除這個冗餘 label 後，觸摸瀏覽底部區域可直接遇到真正有作用的分頁按鈕。
+`lib/pages/main/view.dart` 不要重新加入只有朗讀「導覽列」但沒有實際作用的外層焦點。VoiceOver 觸摸瀏覽底部時，應直接遇到真正可操作的首頁、動態、我的等分頁按鈕。
 
-### 2. 首頁頂部分頁在 VoiceOver 模式使用直接 semantics action
+### 首頁頂部分頁
 
-重點檔案：
+`lib/pages/home/view.dart` 在 VoiceOver／accessible navigation 模式下：
 
-```text
-lib/pages/home/view.dart
-```
+- 每個頂部分頁是獨立可操作的 semantics 節點。
+- 能朗讀分頁名稱與 selected 狀態。
+- `Semantics.onTap` 必須直接依該分頁 index 切換。
+- VoiceOver 模式使用直接 index／`IndexedStack` 行為，不把 `TabBarView` 的非同步 page warp 當作切頁核心。
+- 非無障礙模式仍可維持 Pili Plus 原本的滑動分頁體驗。
 
-首頁的「直播、推薦、熱門、分區、番劇、影視」在 VoiceOver／accessible navigation 啟用時，不應只依賴 Flutter `TabBar` 內部的 `InkWell` activation。
+若修改首頁分頁，至少壓測推薦 ↔ 直播、番劇 ↔ 影視，以及直播 ↔ 影視等跨多頁切換，不能出現雙擊無反應或落到相鄰頁。
 
-目前基準使用獨立 `SemanticsRole.tab` 節點，每個分頁都有自己的 `onTap`，並直接依指定 index 切換。
+## 影視卡片基準
 
-VoiceOver 分頁必須保留：
-
-- 每個分頁都是獨立焦點。
-- VoiceOver 能朗讀分頁名稱。
-- 目前選中的分頁有 `selected` 狀態。
-- 雙擊目標分頁時，切換目標必須由該 semantics node 的 index 明確決定。
-- 點目前已選分頁仍可沿用原本回到頂部的行為。
-
-### 3. VoiceOver 模式不可使用 `TabBarView` 的非同步 warp 作為首頁分頁切換核心
-
-這是本輪最重要的技術結論。
-
-實機曾出現：
-
-- 直播與推薦之間雙擊有機率不切換。
-- 番劇與影視之間有機率切換失敗。
-- 從直播跨頁點影視時，有機率最後落到番劇。
-
-只修改 `TabBar` 是否可捲動、擴大命中區域，或只補 `Semantics.onTap`，都不足以完全消除問題。
-
-根因方向是 Flutter `TabBarView`／`PageView` 對非相鄰 tab 切換使用非同步 page warp。VoiceOver 快速或重複 activation 時，這個 warp 流程可能與 controller 狀態同步競態，造成失敗或落到相鄰頁。
-
-目前成功基準：
-
-- VoiceOver 模式切頁使用 `controller.index = index`，不跑 tab 切換動畫。
-- VoiceOver 模式內容使用 `IndexedStack`，由 `controller.index` 直接決定可見頁。
-- VoiceOver 模式不讓首頁內容走 `TabBarView`／PageView warp。
-- 非無障礙模式仍可維持 PiliPlus 原本的 `TabBar + TabBarView` 行為。
-
-後續若要重新導入 VoiceOver 模式的動畫或 `TabBarView`，必須先在 iPhone VoiceOver 實機證明以下壓力測試全部穩定，否則視為 regression。
-
-### 4. 影視作品卡必須先念主要資訊，角標最後
-
-重點檔案：
+`lib/pages/pgc_index/widgets/pgc_card_v_pgc_index.dart` 的 VoiceOver 資訊順序應維持：
 
 ```text
-lib/pages/pgc_index/widgets/pgc_card_v_pgc_index.dart
+片名 → 集數／狀態 → 追劇數 → 出品／獨家等角標 → 按鈕
 ```
 
-原本視覺上的 `Stack` 會讓 VoiceOver 先讀封面上的「出品／獨家」和追劇數，再讀片名，造成資訊主次顛倒。
+整張作品卡以主要單一可操作節點呈現，雙擊開啟作品與既有長按行為不可被語義整理破壞。
 
-目前基準把整張作品卡整理成單一可操作語義節點，旁白順序固定為：
+## 既有無障礙專項規格
 
-```text
-片名 → 集數／狀態 → 追劇數 → 出品／獨家 → 按鈕
-```
-
-例如應接近：
-
-```text
-2021最美的夜 bilibili晚会，全3集，621.4万追剧，出品，按鈕
-```
-
-不能退回：
-
-```text
-出品，621.4万追剧，2021最美的夜 bilibili晚会，全3集
-```
-
-雙擊進入作品詳情與既有長按行為必須保留。
-
-## 首頁頂部分頁必測壓力案例
-
-任何修改 `lib/pages/home/view.dart`、`HomeController.tabController`、`TabBar`、`TabBarView`、PageView、首頁 semantics 或首頁版面結構後，至少用 iPhone VoiceOver 實機跑：
-
-- [ ] 推薦 → 直播，連續來回切換至少 10 次。
-- [ ] 直播 → 推薦，連續來回切換至少 10 次。
-- [ ] 番劇 → 影視，連續來回切換至少 10 次。
-- [ ] 影視 → 番劇，連續來回切換至少 10 次。
-- [ ] 直播 → 影視，跨多頁切換至少 10 次。
-- [ ] 影視 → 直播，跨多頁切換至少 10 次。
-- [ ] 每次雙擊後，頂部 selected 狀態與實際內容頁一致。
-- [ ] 不出現「點影視卻進番劇」等相鄰頁偏移。
-- [ ] 不出現 VoiceOver 已觸發按鈕但內容完全沒有切換。
-- [ ] 點目前已選分頁仍能正常執行既有回頂行為。
-
-以上任何一項失敗，都不能把新實作視為等價替代。
-
-## 影視卡片必測
-
-- [ ] 一張作品卡只形成一個主要 VoiceOver 焦點。
-- [ ] 先朗讀片名。
-- [ ] 接著朗讀集數／狀態。
-- [ ] 再朗讀追劇數。
-- [ ] 「出品／獨家」等角標最後才出現。
-- [ ] 雙擊可正常開啟作品。
-- [ ] 既有長按／次要操作沒有被語義合併破壞。
-
-## 本輪相關 commits
-
-以下 commit 已包含在目前基準 ancestry 中：
-
-```text
-ae3fe2b7bcc054853e00ee3cb2b0ee93f0aea007  fix(a11y): remove redundant bottom navigation label
-83adeb1da54b7f0cf97d58445f1ce460d879ee8d  fix(a11y): stabilize home tab activation with screen readers
-17cf590a98d15dd61aa720b6f5423c7ebf1c610e  fix(a11y): reorder cinema card semantics
-8606097a1abb6d828bea2348226bfe65c5b216e7  fix(a11y): use direct semantics actions for home tabs
-b0021bc735bd1808f13e9f07d352e62848af36ce  fix(a11y): add missing dart:ui SemanticsRole import for home tabs
-1ba8aacad7b2fa3720cb00f7c30a75dc7fe72d49  fix(a11y): bypass TabBarView warp for home tabs
-f2ae922820e20ef8864afba60e451a4fa7c78505  fix(ios): preserve VoiceOver speech during playback
-334d747e088f6b43712f46b9ac6d68750397cb2b  fix(a11y): expose poll selection state
-cc667db9c824dc422bb3a34b47f1999e5d5b7a26  fix(a11y): trim redundant poll labels
-6097c507ffcfda8ab4bac8b2c8cf2d19cc5224cd  fix(ios): preserve playback session during volume observation
-0f23684bdf06d6eb14471b1f1700f4559ee19a79  fix(ios): resolve patched volume plugin override
-6a800285dcd67619ab4cb2567ace11e51d43df3f  fix(ios): enable background VoiceOver playback toggle
-a30dbbe67c37553e89c3d9e05eda97640df1819a  fix(ios): promote background playback for Magic Tap
-```
-
-## 與其他基準文件的關係
-
-這份文件是目前整體穩定點的最新指標。其他專項規格仍應同時遵守：
+本文件是「目前整體穩定點」的最高層指標；下列專項文件中的既有規則仍然有效：
 
 ```text
 docs/ACCESSIBILITY_MAINTENANCE.md
 docs/VOICEOVER_SEMANTICS_BASELINE.md
 docs/IOS_RICH_TEXT_VOICEOVER_BASELINE.md
 docs/LIVE_ACCESSIBILITY_BASELINE.md
+docs/VOICEOVER_CONTINUOUS_READING.md
+docs/COMPOSER_DOCK.md
+docs/COMPOSER_TOUCH_PRIORITY.md
+docs/VIDEO_BUFFERING.md
+docs/IOS_BACKGROUND_AUDIO.md
+docs/PLAYBACK_AUDIO_HANDOFF.md
 ```
 
-尤其 iOS 富文字圖片表情、評論／樓中樓、三指翻頁、焦點／viewport 同步等既有規則，不因本次首頁導航基準更新而失效。
+尤其不要因更新 Pili Plus 上游而退回：
 
-若其他文件中的「目前基準 commit」仍指向較早版本，以本文件記錄的最新已實機驗證 commit 為準；待下次維護文件整理時再同步舊指標。
+- iOS 富文字圖片／表情在 VoiceOver 的正確朗讀與逐字瀏覽。
+- 評論／樓中樓、發表評論與發表回覆控制項的可達性。
+- 三指翻頁、VoiceOver 焦點與 viewport 同步。
+- VoiceOver 連續閱讀。
+- 播放緩衝優化。
+- 首頁與動態等頁面的既有語義整理。
+
+## 本輪重要 commits
+
+以下重要修正都包含在 `0cd4b40` 的 ancestry 中：
+
+```text
+f2ae922820e20ef8864afba60e451a4fa7c78505  fix(ios): preserve VoiceOver speech during playback
+334d747e088f6b43712f46b9ac6d68750397cb2b  fix(a11y): expose poll selection state
+cc667db9c824dc422bb3a34b47f1999e5d5b7a26  fix(a11y): trim redundant poll labels
+6097c507ffcfda8ab4bac8b2c8cf2d19cc5224cd  fix(ios): preserve playback session during volume observation
+a30dbbe67c37553e89c3d9e05eda97640df1819a  fix(ios): promote background playback for Magic Tap
+3bc7523d5579a65719d5900c4edee6945e2db16d  Fix VoiceOver visit user for subscribed UGC seasons
+1379558fc289fd14163a9710cb4e41c7370fc316  fix(ios): keep paused media resumable in background
+b7392297bd52aecd3f7ce80382a15ddee9312208  fix(ios): use hardware audio format for pause bridge
+0cd4b40f7982e4ccc2f87841e9c16a56bb2b52f2  fix(ios): prime paused background media without continuous silent audio
+```
+
+## 同步 Pili Plus 上游時的最低驗收
+
+每次更新官方版本後，在把新版視為 Accessibilibili 新基準前，至少用 iPhone VoiceOver 確認：
+
+- [ ] 首頁／動態／我的等主要頁面左右滑與觸摸瀏覽正常。
+- [ ] 首頁頂部分頁切換穩定。
+- [ ] 評論與回覆可找到、可操作。
+- [ ] 連續閱讀沒有卡死或異常跳焦點。
+- [ ] 動態投票可朗讀狀態並投票。
+- [ ] 普通動態「造訪使用者」直接進正確 UP 主頁。
+- [ ] UGC 合集動態「造訪使用者」能進真正 UP 主頁。
+- [ ] 播放影片不切斷 VoiceOver。
+- [ ] 播放中退背景仍可播放／暫停／恢復。
+- [ ] 前景暫停後退背景，Magic Tap 仍可恢復。
+- [ ] 回前景後 VoiceOver 正常。
+
+任何一項失敗，都應視為上游同步 regression，而不是直接覆蓋目前無障礙實作。
