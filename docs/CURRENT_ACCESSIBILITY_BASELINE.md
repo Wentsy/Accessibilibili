@@ -4,12 +4,12 @@
 
 ## 目前穩定點
 
-- 日期：2026-09-08
+- 日期：2026-09-09
 - 分支：`main`
-- **已驗證 App 程式碼基準 commit：`17007d6c59d8caad3df87da8bce53b49287c5048`**
-- Commit：`fix(a11y): expose direct one and two coin actions`
+- **已驗證 App 程式碼基準 commit：`533d86b027bfe5f896c6e27dbeb0c93c37e55136`**
+- Commit：`fix(a11y): name the clear danmaku text button`
 
-本文件之後可能會有純文件 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `3fc0d65` 的程式碼狀態為本輪穩定基準。
+本文件之後可能會有純文件 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `533d86b` 的程式碼狀態為本輪穩定基準。
 
 除非後續版本完成新一輪 VoiceOver 實機驗證，否則遇到回歸應優先與此基準比較。
 
@@ -34,7 +34,40 @@
 - 影片頁的「顯示彈幕」會讀成「顯示彈幕，已開啟」或「顯示彈幕，已關閉」，不再讀出「變暗」或多餘的切換按鈕描述。
 - 影片頁的「更多選項」只朗讀一次，雙擊可開啟包含快取等較少使用功能的選單。
 - 影片頁的「保存到相簿」可找到並操作；實機已確認保存後影片時長完整且有聲音。
+- 發表彈幕的預設顏色與 VIP 彩色彈幕可由 VoiceOver 朗讀名稱及選取狀態；自訂顏色可朗讀色碼並操作。
+- 發表彈幕的清除輸入按鈕會朗讀「清除彈幕文字」，不再誤讀為「關閉按鈕」；發送按鈕維持可朗讀。
+- 動態頁單指滑動可跨過後續資料批次，不會在末端偶爾無法翻頁、跳回頂端或漏掉內容。
+- 含附圖的評論或樓中樓長按選單提供「分享評論圖片」；單張直接分享，多張可選擇圖片，分享內容只包含原始附圖。
 
+## 彈幕、動態與評論附圖分享基準
+
+重點檔案：
+
+```text
+lib/pages/video/send_danmaku/view.dart
+lib/pages/dynamics_tab/view.dart
+lib/pages/video/reply/widgets/reply_item_grpc.dart
+lib/utils/image_utils.dart
+```
+
+### 發表彈幕
+
+- 每個色塊必須是單一、可操作的 VoiceOver 按鈕，朗讀顏色名稱及「已選取／未選取」。
+- 自訂顏色入口朗讀「自訂彈幕顏色」；自訂色值會朗讀 6 位色碼；VIP 的透明色塊必須朗讀「彩色彈幕」。
+- 清除鍵固定朗讀「清除彈幕文字」，不得沿用素材圖示的「關閉」語義；送出鍵仍朗讀「發送」。
+
+### 動態翻頁
+
+- 動態清單預先建立後續內容並在接近尾端時載入下一批，VoiceOver 單指滑動不可因 lazy layout 而停在最後一則。
+- 新增資料、刪除動態或切換分類後，項目以動態 ID 保持節點身份，焦點與畫面不得跳回頂端。
+- 清單與瀑布流都必須保留此行為。
+
+### 原始評論附圖分享
+
+- 只有 `content.pictures` 非空的評論／樓中樓長按選單顯示「分享評論圖片」。
+- 單張直接開啟系統分享；多張先以「第 n 張圖片」選擇，取消不可分享任何檔案。
+- 分享檔案必須是 `imgSrc` 的原始附圖，不能是含有評論文字、頭像或 QR code 的評論截圖。
+- 既有「保存評論」保留；下載或使用者取消分享後，loading 遮罩必須關閉。
 ## iOS 影片音訊與背景播放基準
 
 播放相關修改必須同時保住兩件事：
@@ -78,7 +111,8 @@ ios/Runner/Info.plist
 - [ ] 回到 App 後 VoiceOver 正常。
 - [ ] 開始／恢復影片時不截斷 VoiceOver 正在說的句子。
 
-完整背景音訊排查記錄另見 `docs/IOS_BACKGROUND_AUDIO.md` 與 `docs/PLAYBACK_AUDIO_HANDOFF.md`。
+完整背景音訊排查記錄另見 `docs/IOS_BACKGROUND_AUDIO.md` 與 `docs/PLAYBACK_AUDIO_HANDOFF.md
+docs/DANMAKU_DYNAMIC_IMAGE_A11Y.md`。
 
 ## 動態「造訪使用者」基準
 
