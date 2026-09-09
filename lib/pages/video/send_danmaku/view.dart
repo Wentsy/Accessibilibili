@@ -434,6 +434,7 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
           Obx(
             () => enablePublish.value
                 ? iconButton(
+                    tooltip: '清除彈幕文字',
                     iconSize: 22,
                     iconColor: themeData.colorScheme.onSurfaceVariant,
                     onPressed: () {
