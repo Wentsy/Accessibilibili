@@ -1301,17 +1301,18 @@ class ReplyItemGrpc extends StatelessWidget {
                   if (pictures.length == 1) {
                     url = pictures.first.imgSrc;
                   } else {
-                    url = await Get.dialog<String>(
-                      SimpleDialog(
+                    url = await showDialog<String>(
+                      context: context,
+                      builder: (context) => SimpleDialog(
                         title: const Text('選擇要分享的評論圖片'),
                         children: [
                           for (var index = 0; index < pictures.length; index++)
                             SimpleDialogOption(
-                              onPressed: () => Get.back(result: pictures[index].imgSrc),
+                              onPressed: () => Navigator.of(context).pop(pictures[index].imgSrc),
                               child: Text('第 ${index + 1} 張圖片（共 ${pictures.length} 張）'),
                             ),
                           SimpleDialogOption(
-                            onPressed: () => Get.back(),
+                            onPressed: () => Navigator.of(context).pop(),
                             child: const Text('取消'),
                           ),
                         ],
