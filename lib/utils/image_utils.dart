@@ -34,10 +34,13 @@ abstract final class ImageUtils {
   static Future<void> onShareImg(String url) async {
     try {
       SmartDialog.showLoading();
-      final res = await CacheManager.manager.getSingleFile(
-        url.http2https,
-      );
-      SmartDialog.dismiss();
+      final File res;
+      try {
+        res = await CacheManager.manager.getSingleFile(url.http2https);
+      } finally {
+        // A failed download must not leave a blocking loading overlay behind.
+        SmartDialog.dismiss(status: SmartStatus.loading);
+      }
       await SharePlus.instance.share(
         ShareParams(
           files: [XFile(res.path)],

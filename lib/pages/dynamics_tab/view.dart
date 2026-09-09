@@ -55,16 +55,18 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
       onRefresh: onRefresh,
       child: VoiceOverPagedScroll(
         controller: controller.scrollController,
+        onScrollForwardAtEnd: controller.onLoadMore,
         child: CustomScrollView(
+          cacheExtent: MediaQuery.sizeOf(context).height * 2,
           physics: const AlwaysScrollableScrollPhysics(),
           controller: controller.scrollController,
-        slivers: [
-          SliverPadding(
-            padding: const EdgeInsets.only(bottom: 100),
-            sliver: buildPage(
-              Obx(() => _buildBody(controller.loadingState.value)),
+          slivers: [
+            SliverPadding(
+              padding: const EdgeInsets.only(bottom: 100),
+              sliver: buildPage(
+                Obx(() => _buildBody(controller.loadingState.value)),
+              ),
             ),
-          ),
           ],
         ),
       ),
@@ -81,10 +83,14 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
                       gridDelegate: dynGridDelegate,
                       delegate: SliverChildBuilderDelegate(
                         (_, index) => _itemBuilder(response, index),
+                        findChildIndexCallback: (key) =>
+                            _findItemIndex(response, key),
                         childCount: response.length,
                       ),
                     )
                   : SliverList.builder(
+                      findChildIndexCallback: (key) =>
+                            _findItemIndex(response, key),
                       itemBuilder: (context, index) =>
                           _itemBuilder(response, index),
                       itemCount: response.length,
@@ -97,12 +103,23 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
     };
   }
 
+  int? _findItemIndex(List<DynamicItemModel> list, Key key) {
+    if (key is! ValueKey<String>) return null;
+    final index = list.indexWhere((item) => item.idStr.toString() == key.value);
+    return index < 0 ? null : index;
+  }
+
   Widget _itemBuilder(List<DynamicItemModel> list, int index) {
-    if (index == list.length - 1) {
-      controller.onLoadMore();
+    if (index >= list.length - 5) {
+      // Prefetch before VoiceOver reaches the last available semantic node.
+      // Run after build, retaining the controller's loading/end guards.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) controller.onLoadMore();
+      });
     }
     final item = list[index];
     return DynamicPanel(
+      key: ValueKey<String>(item.idStr.toString()),
       item: item,
       onRemove: (idStr) => controller.onRemove(index, idStr),
       onBlock: () => controller.onBlock(index),

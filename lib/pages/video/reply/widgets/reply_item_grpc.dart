@@ -1066,242 +1066,276 @@ class ReplyItemGrpc extends StatelessWidget {
     final errorColor = colorScheme.error;
     final style = theme.textTheme.titleSmall!;
 
-    return Padding(
-      padding: .only(
-        bottom: MediaQuery.viewPaddingOf(context).bottom + 20,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          InkWell(
-            onTap: Get.back,
-            borderRadius: Style.bottomSheetRadius,
-            child: SizedBox(
-              height: 35,
-              child: Center(
-                child: Container(
-                  width: 32,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: colorScheme.outline,
-                    borderRadius: const BorderRadius.all(Radius.circular(3)),
+    return SingleChildScrollView(
+      child: Padding(
+        padding: .only(
+          bottom: MediaQuery.viewPaddingOf(context).bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              onTap: Get.back,
+              borderRadius: Style.bottomSheetRadius,
+              child: SizedBox(
+                height: 35,
+                child: Center(
+                  child: Container(
+                    width: 32,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: colorScheme.outline,
+                      borderRadius: const BorderRadius.all(Radius.circular(3)),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          if (kDebugMode && GStorage.reply != null) ...[
-            ListTile(
-              onTap: () {
-                Get.back();
-                GStorage.reply!.put(
-                  item.id.toString(),
-                  (item.deepCopy()
-                        ..unknownFields.clear()
-                        ..replies.clear()
-                        ..clearTrackInfo())
-                      .writeToBuffer(),
-                );
-              },
-              title: Text(
-                'save to local',
-                style: style.copyWith(color: colorScheme.primary),
-              ),
-            ),
-            ListTile(
-              onTap: () {
-                Get.back();
-                onDelete();
-                GStorage.reply!.delete(item.id.toString());
-              },
-              title: Text(
-                'remove from local',
-                style: style.copyWith(color: colorScheme.primary),
-              ),
-            ),
-            ListTile(
-              onTap: () {
-                Get.back();
-                final oid = item.oid.toInt();
-                final data =
+            if (kDebugMode && GStorage.reply != null) ...[
+              ListTile(
+                onTap: () {
+                  Get.back();
+                  GStorage.reply!.put(
+                    item.id.toString(),
                     (item.deepCopy()
                           ..unknownFields.clear()
                           ..replies.clear()
                           ..clearTrackInfo())
-                        .writeToBuffer();
-                GStorage.reply!.putAll({
-                  for (var i = oid; i < oid + 1000; i++) i.toString(): data,
-                });
-              },
-              title: Text(
-                'save to local (x1000)',
-                style: style.copyWith(color: colorScheme.primary),
+                        .writeToBuffer(),
+                  );
+                },
+                title: Text(
+                  'save to local',
+                  style: style.copyWith(color: colorScheme.primary),
+                ),
               ),
-            ),
-          ],
-          if (ownerMid == upMid || ownerMid == item.member.mid)
-            ListTile(
-              onTap: () async {
-                Get.back();
-                bool? isDelete = await showDialog<bool>(
-                  context: context,
-                  builder: (context) {
-                    final colorScheme = ColorScheme.of(context);
-                    return AlertDialog(
-                      title: const Text('删除评论'),
-                      content: Text.rich(
-                        TextSpan(
-                          children: [
-                            const TextSpan(text: '确定删除这条评论吗？\n\n'),
-                            if (ownerMid != item.member.mid.toInt()) ...[
-                              TextSpan(
-                                text: '@${item.member.name}',
-                                style: TextStyle(
-                                  color: colorScheme.primary,
+              ListTile(
+                onTap: () {
+                  Get.back();
+                  onDelete();
+                  GStorage.reply!.delete(item.id.toString());
+                },
+                title: Text(
+                  'remove from local',
+                  style: style.copyWith(color: colorScheme.primary),
+                ),
+              ),
+              ListTile(
+                onTap: () {
+                  Get.back();
+                  final oid = item.oid.toInt();
+                  final data =
+                      (item.deepCopy()
+                            ..unknownFields.clear()
+                            ..replies.clear()
+                            ..clearTrackInfo())
+                          .writeToBuffer();
+                  GStorage.reply!.putAll({
+                    for (var i = oid; i < oid + 1000; i++) i.toString(): data,
+                  });
+                },
+                title: Text(
+                  'save to local (x1000)',
+                  style: style.copyWith(color: colorScheme.primary),
+                ),
+              ),
+            ],
+            if (ownerMid == upMid || ownerMid == item.member.mid)
+              ListTile(
+                onTap: () async {
+                  Get.back();
+                  bool? isDelete = await showDialog<bool>(
+                    context: context,
+                    builder: (context) {
+                      final colorScheme = ColorScheme.of(context);
+                      return AlertDialog(
+                        title: const Text('删除评论'),
+                        content: Text.rich(
+                          TextSpan(
+                            children: [
+                              const TextSpan(text: '确定删除这条评论吗？\n\n'),
+                              if (ownerMid != item.member.mid.toInt()) ...[
+                                TextSpan(
+                                  text: '@${item.member.name}',
+                                  style: TextStyle(
+                                    color: colorScheme.primary,
+                                  ),
                                 ),
-                              ),
-                              const TextSpan(text: ':\n'),
+                                const TextSpan(text: ':\n'),
+                              ],
+                              TextSpan(text: message),
                             ],
-                            TextSpan(text: message),
-                          ],
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Get.back(result: false),
-                          child: Text(
-                            '取消',
-                            style: TextStyle(
-                              color: colorScheme.outline,
-                            ),
                           ),
                         ),
-                        TextButton(
-                          onPressed: () => Get.back(result: true),
-                          child: const Text('确定'),
-                        ),
-                      ],
-                    );
-                  },
-                );
-                if (isDelete == null || !isDelete) {
-                  return;
-                }
-                SmartDialog.showLoading(msg: '删除中...');
-                final res = await VideoHttp.replyDel(
-                  type: item.type.toInt(),
-                  oid: item.oid.toInt(),
-                  rpid: item.id.toInt(),
-                );
-                SmartDialog.dismiss();
-                if (res.isSuccess) {
-                  SmartDialog.showToast('删除成功');
-                  onDelete();
-                } else {
-                  SmartDialog.showToast('删除失败, $res');
-                }
-              },
-              minLeadingWidth: 0,
-              leading: Icon(Icons.delete_outlined, color: errorColor, size: 19),
-              title: Text('删除', style: style.copyWith(color: errorColor)),
-            ),
-          if (ownerMid != Int64.ZERO)
+                        actions: [
+                          TextButton(
+                            onPressed: () => Get.back(result: false),
+                            child: Text(
+                              '取消',
+                              style: TextStyle(
+                                color: colorScheme.outline,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => Get.back(result: true),
+                            child: const Text('确定'),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                  if (isDelete == null || !isDelete) {
+                    return;
+                  }
+                  SmartDialog.showLoading(msg: '删除中...');
+                  final res = await VideoHttp.replyDel(
+                    type: item.type.toInt(),
+                    oid: item.oid.toInt(),
+                    rpid: item.id.toInt(),
+                  );
+                  SmartDialog.dismiss();
+                  if (res.isSuccess) {
+                    SmartDialog.showToast('删除成功');
+                    onDelete();
+                  } else {
+                    SmartDialog.showToast('删除失败, $res');
+                  }
+                },
+                minLeadingWidth: 0,
+                leading: Icon(Icons.delete_outlined, color: errorColor, size: 19),
+                title: Text('删除', style: style.copyWith(color: errorColor)),
+              ),
+            if (ownerMid != Int64.ZERO)
+              ListTile(
+                onTap: () {
+                  Get.back();
+
+                  final oid = item.oid;
+                  final rpid = item.id;
+
+                  autoWrapReportDialog(
+                    context,
+                    ReportOptions.commentReport,
+                    withContent: ReportOptions.withContentReply,
+                    contentRequired: ReportOptions.contentRequiredReply,
+                    reportUrl:
+                        'https://www.bilibili.com/h5/comment/report?oid=$oid&pageType=${item.type}&rpid=$rpid&platform=android&build=8430300&${ThemeUtils.themeUrl(colorScheme.isDark)}',
+                    (reasonType, reasonDesc, banUid) async {
+                      final res = await ReplyHttp.report(
+                        rpid: rpid,
+                        oid: oid,
+                        reasonType: reasonType,
+                        reasonDesc: reasonDesc,
+                        banUid: banUid,
+                      );
+                      if (res.isSuccess) {
+                        onDelete();
+                      }
+                      return res;
+                    },
+                  );
+                },
+                minLeadingWidth: 0,
+                leading: Icon(Icons.error_outline, color: errorColor, size: 19),
+                title: Text('举报', style: style.copyWith(color: errorColor)),
+              ),
+            if (replyLevel == 1 && !isSubReply && ownerMid == upMid)
+              ListTile(
+                onTap: () {
+                  Get.back();
+                  onToggleTop?.call(item);
+                },
+                minLeadingWidth: 0,
+                leading: const Icon(Icons.vertical_align_top, size: 19),
+                title: Text(
+                  '${replyItem.replyControl.isUpTop ? '取消' : ''}置顶',
+                  style: style,
+                ),
+              ),
             ListTile(
               onTap: () {
                 Get.back();
-
-                final oid = item.oid;
-                final rpid = item.id;
-
-                autoWrapReportDialog(
-                  context,
-                  ReportOptions.commentReport,
-                  withContent: ReportOptions.withContentReply,
-                  contentRequired: ReportOptions.contentRequiredReply,
-                  reportUrl:
-                      'https://www.bilibili.com/h5/comment/report?oid=$oid&pageType=${item.type}&rpid=$rpid&platform=android&build=8430300&${ThemeUtils.themeUrl(colorScheme.isDark)}',
-                  (reasonType, reasonDesc, banUid) async {
-                    final res = await ReplyHttp.report(
-                      rpid: rpid,
-                      oid: oid,
-                      reasonType: reasonType,
-                      reasonDesc: reasonDesc,
-                      banUid: banUid,
-                    );
-                    if (res.isSuccess) {
-                      onDelete();
-                    }
-                    return res;
-                  },
-                );
+                Get.toNamed('/member?mid=${item.member.mid}');
               },
               minLeadingWidth: 0,
-              leading: Icon(Icons.error_outline, color: errorColor, size: 19),
-              title: Text('举报', style: style.copyWith(color: errorColor)),
-            ),
-          if (replyLevel == 1 && !isSubReply && ownerMid == upMid)
-            ListTile(
-              onTap: () {
-                Get.back();
-                onToggleTop?.call(item);
-              },
-              minLeadingWidth: 0,
-              leading: const Icon(Icons.vertical_align_top, size: 19),
+              leading: const Icon(Icons.account_circle_outlined, size: 19),
               title: Text(
-                '${replyItem.replyControl.isUpTop ? '取消' : ''}置顶',
+                '造訪這位評論者（${item.member.name}）',
                 style: style,
               ),
             ),
-          ListTile(
-            onTap: () {
-              Get.back();
-              Get.toNamed('/member?mid=${item.member.mid}');
-            },
-            minLeadingWidth: 0,
-            leading: const Icon(Icons.account_circle_outlined, size: 19),
-            title: Text(
-              '造訪這位評論者（${item.member.name}）',
-              style: style,
-            ),
-          ),
-          ListTile(
-            onTap: () {
-              Get.back();
-              Utils.copyText(message);
-            },
-            minLeadingWidth: 0,
-            leading: const Icon(Icons.copy_all_outlined, size: 19),
-            title: Text('复制全部', style: style),
-          ),
-          ListTile(
-            onTap: () {
-              Get.back();
-              showReplyCopyDialog(context, message, item.content.emotes);
-            },
-            minLeadingWidth: 0,
-            leading: const Icon(Icons.copy_outlined, size: 19),
-            title: Text('自由复制', style: style),
-          ),
-          ListTile(
-            onTap: () {
-              Get.back();
-              SavePanel.toSavePanel(upMid: upMid, item: item);
-            },
-            minLeadingWidth: 0,
-            leading: const Icon(Icons.save_alt, size: 19),
-            title: Text('保存评论', style: style),
-          ),
-          if (kDebugMode || item.mid == ownerMid)
             ListTile(
               onTap: () {
                 Get.back();
-                onCheckReply?.call(item);
+                Utils.copyText(message);
               },
               minLeadingWidth: 0,
-              leading: const Icon(CustomIcons.shield_reply, size: 19),
-              title: Text('检查评论', style: style),
+              leading: const Icon(Icons.copy_all_outlined, size: 19),
+              title: Text('复制全部', style: style),
             ),
-        ],
+            ListTile(
+              onTap: () {
+                Get.back();
+                showReplyCopyDialog(context, message, item.content.emotes);
+              },
+              minLeadingWidth: 0,
+              leading: const Icon(Icons.copy_outlined, size: 19),
+              title: Text('自由复制', style: style),
+            ),
+            ListTile(
+              onTap: () {
+                Get.back();
+                SavePanel.toSavePanel(upMid: upMid, item: item);
+              },
+              minLeadingWidth: 0,
+              leading: const Icon(Icons.save_alt, size: 19),
+              title: Text('保存评论', style: style),
+            ),
+            if (item.content.pictures.isNotEmpty)
+              ListTile(
+                onTap: () async {
+                  final pictures = item.content.pictures.toList();
+                  Get.back();
+                  final String? url;
+                  if (pictures.length == 1) {
+                    url = pictures.first.imgSrc;
+                  } else {
+                    url = await Get.dialog<String>(
+                      SimpleDialog(
+                        title: const Text('選擇要分享的評論圖片'),
+                        children: [
+                          for (var index = 0; index < pictures.length; index++)
+                            SimpleDialogOption(
+                              onPressed: () => Get.back(result: pictures[index].imgSrc),
+                              child: Text('第 ${index + 1} 張圖片（共 ${pictures.length} 張）'),
+                            ),
+                          SimpleDialogOption(
+                            onPressed: () => Get.back(),
+                            child: const Text('取消'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                  if (url != null) await ImageUtils.onShareImg(url);
+                },
+                minLeadingWidth: 0,
+                leading: const Icon(Icons.share_outlined, size: 19),
+                title: Text('分享評論圖片', style: style),
+              ),
+            if (kDebugMode || item.mid == ownerMid)
+              ListTile(
+                onTap: () {
+                  Get.back();
+                  onCheckReply?.call(item);
+                },
+                minLeadingWidth: 0,
+                leading: const Icon(CustomIcons.shield_reply, size: 19),
+                title: Text('检查评论', style: style),
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -106,21 +106,29 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
           itemCount: length,
           itemBuilder: (context, index) {
             if (index == length - 1) {
-              return GestureDetector(
+              return Semantics(
+                label: '自訂彈幕顏色',
+                button: true,
+                enabled: true,
                 onTap: _showColorPicker,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: themeData.colorScheme.secondaryContainer,
-                    borderRadius: const BorderRadius.all(
-                      Radius.circular(8),
+                child: ExcludeSemantics(
+                  child: GestureDetector(
+                    onTap: _showColorPicker,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: themeData.colorScheme.secondaryContainer,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(8),
+                        ),
+                      ),
+                      alignment: Alignment.center,
+                      margin: const EdgeInsets.all(2),
+                      child: Icon(
+                        size: 22,
+                        Icons.edit,
+                        color: themeData.colorScheme.onSecondaryContainer,
+                      ),
                     ),
-                  ),
-                  alignment: Alignment.center,
-                  margin: const EdgeInsets.all(2),
-                  child: Icon(
-                    size: 22,
-                    Icons.edit,
-                    color: themeData.colorScheme.onSecondaryContainer,
                   ),
                 ),
               );
@@ -235,50 +243,77 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
   );
 
   Widget _buildColorItem(Color color) {
-    return GestureDetector(
+    final label = switch (color.toARGB32()) {
+      0xFFFFFFFF => '白色',
+      0xFFFE0302 => '紅色',
+      0xFFFF7204 => '橘色',
+      0xFFFFAA02 => '橙黃色',
+      0xFFFFD302 => '金黃色',
+      0xFFFFFF00 => '黃色',
+      0xFFA0EE00 => '黃綠色',
+      0xFF00CD00 => '綠色',
+      0xFF019899 => '藍綠色',
+      0xFF4266BE => '藍色',
+      0xFF89D5FF => '淺藍色',
+      0xFFCC0273 => '玫紅色',
+      0xFF222222 => '深灰色',
+      0xFF9B9B9B => '灰色',
+      0x00000000 => '彩色彈幕',
+      _ => '自訂顏色，色碼 ${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}',
+    };
+    return Semantics(
+      label: label,
+      button: true,
+      enabled: true,
+      selected: _color.value == color,
       onTap: () => _color.value = color,
-      child: Container(
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          borderRadius: const BorderRadius.all(Radius.circular(8)),
-          border: _color.value != color
-              ? null
-              : Border.all(
-                  width: 2,
-                  color: themeData.colorScheme.primary,
-                ),
-        ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: const BorderRadius.all(Radius.circular(6)),
-          ),
-          child: color == Colors.transparent
-              ? Stack(
-                  clipBehavior: Clip.none,
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      decoration: const BoxDecoration(
-                        borderRadius: BorderRadius.all(Radius.circular(6)),
-                        gradient: LinearGradient(
-                          colors: [
-                            Color(0xFFDD94DA),
-                            Color(0xFF72B2EA),
-                          ],
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          onTap: () => _color.value = color,
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              borderRadius: const BorderRadius.all(Radius.circular(8)),
+              border: _color.value != color
+                  ? null
+                  : Border.all(
+                      width: 2,
+                      color: themeData.colorScheme.primary,
+                    ),
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: const BorderRadius.all(Radius.circular(6)),
+              ),
+              child: color == Colors.transparent
+                  ? Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.center,
+                      children: [
+                        Container(
+                          decoration: const BoxDecoration(
+                            borderRadius: BorderRadius.all(Radius.circular(6)),
+                            gradient: LinearGradient(
+                              colors: [
+                                Color(0xFFDD94DA),
+                                Color(0xFF72B2EA),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    Container(
-                      margin: const EdgeInsets.all(5),
-                      decoration: const BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.all(Radius.circular(4)),
-                      ),
-                    ),
-                  ],
-                )
-              : null,
+                        Container(
+                          margin: const EdgeInsets.all(5),
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.all(Radius.circular(4)),
+                          ),
+                        ),
+                      ],
+                    )
+                  : null,
+            ),
+          ),
         ),
       ),
     );
