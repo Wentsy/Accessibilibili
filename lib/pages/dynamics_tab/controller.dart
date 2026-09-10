@@ -30,6 +30,7 @@ class DynamicsTabController
 
   @override
   Future<void> onRefresh() {
+    if (isLoading) return Future<void>.value();
     if (dynamicsType == .all) {
       mainController.setDynCount();
     }

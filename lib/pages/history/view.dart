@@ -66,6 +66,8 @@ class _HistoryPageState extends State<HistoryPage>
       onRefresh: _historyController.onRefresh,
       child: VoiceOverPagedScroll(
         controller: _historyController.scrollController,
+        onScrollBackwardAtStart: _historyController.onRefresh,
+        onScrollForwardAtEnd: _historyController.onLoadMore,
         child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         controller: _historyController.scrollController,

@@ -44,6 +44,9 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
   }
 
   Future<void> onRefresh() {
+    if (controller.isLoading) {
+      return Future<void>.value();
+    }
     dynamicsController.singleRefresh();
     return controller.onRefresh();
   }
@@ -55,6 +58,7 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
       onRefresh: onRefresh,
       child: VoiceOverPagedScroll(
         controller: controller.scrollController,
+        onScrollBackwardAtStart: onRefresh,
         onScrollForwardAtEnd: controller.onLoadMore,
         child: CustomScrollView(
           cacheExtent: MediaQuery.sizeOf(context).height * 2,

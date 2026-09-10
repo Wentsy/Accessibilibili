@@ -46,6 +46,7 @@ class HistoryController
 
   @override
   Future<void> onRefresh() {
+    if (isLoading) return Future<void>.value();
     max = null;
     viewAt = null;
     return super.onRefresh();

@@ -84,6 +84,7 @@ class DynamicsController
   }
 
   Future<void> singleRefresh() {
+    if (isLoading) return Future<void>.value();
     if (_showAllUp) {
       _page = 1;
       _cacheUpList = null;

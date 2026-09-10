@@ -190,6 +190,7 @@ class RcmdController extends CommonListController {
 
   @override
   Future<void> onRefresh() {
+    if (isLoading) return Future<void>.value();
     page = 0;
     isEnd = false;
     return queryData();
