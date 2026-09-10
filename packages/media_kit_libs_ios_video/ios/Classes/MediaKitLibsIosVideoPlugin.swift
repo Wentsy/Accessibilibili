@@ -54,6 +54,21 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
   private func installLifecycleObservers() {
     let center = NotificationCenter.default
     if #available(iOS 13.0, *) {
+      // System overlays do not enter the background. Hand off before they
+      // receive Magic Tap, and keep this role until the app is active again.
+      lifecycleObservers.append(
+        center.addObserver(
+          forName: UIScene.willDeactivateNotification,
+          object: nil,
+          queue: .main
+        ) { [weak self] _ in
+          guard let self else { return }
+          guard Self.backgroundPlaybackEnabled else { return }
+          UIApplication.shared.beginReceivingRemoteControlEvents()
+          self.applyPlaybackRole(background: true)
+          self.startPausedKeepAliveIfNeeded()
+        }
+      )
       lifecycleObservers.append(
         center.addObserver(
           forName: UIScene.didEnterBackgroundNotification,
@@ -69,7 +84,7 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
       )
       lifecycleObservers.append(
         center.addObserver(
-          forName: UIScene.willEnterForegroundNotification,
+          forName: UIScene.didActivateNotification,
           object: nil,
           queue: .main
         ) { [weak self] _ in
@@ -79,6 +94,21 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
         }
       )
     } else {
+      // System overlays do not enter the background. Hand off before they
+      // receive Magic Tap, and keep this role until the app is active again.
+      lifecycleObservers.append(
+        center.addObserver(
+          forName: UIApplication.willResignActiveNotification,
+          object: nil,
+          queue: .main
+        ) { [weak self] _ in
+          guard let self else { return }
+          guard Self.backgroundPlaybackEnabled else { return }
+          UIApplication.shared.beginReceivingRemoteControlEvents()
+          self.applyPlaybackRole(background: true)
+          self.startPausedKeepAliveIfNeeded()
+        }
+      )
       lifecycleObservers.append(
         center.addObserver(
           forName: UIApplication.didEnterBackgroundNotification,
@@ -94,7 +124,7 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
       )
       lifecycleObservers.append(
         center.addObserver(
-          forName: UIApplication.willEnterForegroundNotification,
+          forName: UIApplication.didBecomeActiveNotification,
           object: nil,
           queue: .main
         ) { [weak self] _ in

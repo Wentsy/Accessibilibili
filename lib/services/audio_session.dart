@@ -56,7 +56,8 @@ class AudioSessionHandler with WidgetsBindingObserver {
     // A mixing session lets video audio coexist with VoiceOver, but iOS treats
     // it as secondary audio and does not route the system Magic Tap to its
     // MPRemoteCommandCenter. Become the primary Now Playing session only while
-    // actually backgrounded. Restore mixing before foreground interaction.
+    // outside active app interaction (including system overlays). Restore mixing
+    // when the app becomes active again.
     await session.configure(
       _iosPlaybackConfiguration(mixWithVoiceOver: foreground),
     );
@@ -137,11 +138,11 @@ class AudioSessionHandler with WidgetsBindingObserver {
 
     switch (state) {
       case AppLifecycleState.inactive:
-        // `inactive` also covers temporary overlays and transitions. Keep the
-        // proven foreground mixWithOthers role here so VoiceOver remains
-        // uninterrupted. The local iOS wrapper performs the non-mixable switch
-        // synchronously at UIScene.didEnterBackground, after this point.
-        setActive(true).ignore();
+        // Control/Notification Center leave the scene inactive without ever
+        // backgrounding it. App-local Magic Tap cannot receive those gestures;
+        // promote the system media session here as well as on home/lock.
+        // The native scene observer performs the synchronous handoff first.
+        _setIosPlaybackRole(foreground: false).ignore();
         player.setProperty('video-sync', 'audio');
         break;
       case AppLifecycleState.hidden:
