@@ -1,7 +1,9 @@
-# 控制中心／通知中心播放交接與進度同步（待實機驗證）
+# 控制中心／通知中心播放交接與進度同步（已實機驗證）
 
-2026-09-10。以 main 59128cae6 為起點；已驗證穩定基準仍是
-CURRENT_ACCESSIBILITY_BASELINE.md 記錄的 533d86b，本次修改尚未列為穩定基準。
+2026-09-10。以 main 59128cae6 為起點，修正 commit 為 3bb3f19，
+合併 main 的已驗證程式碼基準為 9a985211f8f84a3fce207110ad6df81ff20e167c。
+使用者回報本次修改「完全成功」，控制中心／通知中心播放交接與播放頁
+進度同步已納入 CURRENT_ACCESSIBILITY_BASELINE.md 的穩定基準。
 
 ## 原因與修改
 
@@ -23,14 +25,15 @@ CURRENT_ACCESSIBILITY_BASELINE.md 記錄的 533d86b，本次修改尚未列為�
 
 新增 test/player_progress_semantics_test.dart：同一語義節點隨播放更新時間、
 百分比與上下滑目標；快轉仍傳毫秒；總時長和可調整狀態更新。
-本次開發環境沒有 Flutter/Dart SDK 或 Xcode，尚未執行 widget test 或 IPA 編譯。
+開發時的環境沒有 Flutter/Dart SDK 或 Xcode，代理未執行 widget test 或 IPA 編譯。
+後續使用者已回報實機成功；沒有另行取得 widget test 執行結果，不將其記為通過。
 可在 Hermes 編譯環境執行：
 
 ```sh
 flutter test test/player_progress_semantics_test.dart
 ```
 
-實機待測：
+後續修改時的實機回歸清單（本次整體修復已獲使用者確認；未逐項取得所有延伸情境的測試結果）：
 
 - 播放頁直接拉下控制中心、通知中心，雙指雙擊可暫停及繼續。
 - 控制中心媒體按鈕可暫停及繼續。
