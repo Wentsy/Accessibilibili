@@ -439,6 +439,7 @@ class RenderProgressBar extends RenderBox implements MouseTrackerAnnotation {
     _thumbValue = position / barWidth;
     _progress = _currentThumbDuration();
     markNeedsPaint();
+    markNeedsSemanticsUpdate();
   }
 
   /// The play location of the media.
@@ -454,6 +455,9 @@ class RenderProgressBar extends RenderBox implements MouseTrackerAnnotation {
     if (!_userIsDraggingThumb) {
       _progress = clamp;
       _thumbValue = _proportionOfTotal(clamp);
+      // Painting does not invalidate VoiceOver's cached adjustable value.
+      // Refresh it without posting an announcement or moving focus.
+      markNeedsSemanticsUpdate();
     }
     markNeedsPaint();
   }
@@ -471,6 +475,7 @@ class RenderProgressBar extends RenderBox implements MouseTrackerAnnotation {
       _thumbValue = _proportionOfTotal(progress);
     }
     markNeedsPaint();
+    markNeedsSemanticsUpdate();
   }
 
   /// The buffered length of the media when streaming.
@@ -499,6 +504,7 @@ class RenderProgressBar extends RenderBox implements MouseTrackerAnnotation {
       return;
     }
     _onSeek = value;
+    markNeedsSemanticsUpdate();
   }
 
   /// A callback when the thumb starts being dragged.
