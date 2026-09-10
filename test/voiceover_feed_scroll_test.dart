@@ -56,30 +56,30 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('finger down maps to scrollUp: page backward, then refresh at top', (tester) async {
+  testWidgets('scrollDown pages backward, then refreshes at top', (tester) async {
     final semantics = tester.ensureSemantics();
     addTearDown(semantics.dispose);
     await show(tester);
     controller.jumpTo(200);
     await tester.pumpAndSettle();
-    await gesture(tester, SemanticsAction.scrollUp);
+    await gesture(tester, SemanticsAction.scrollDown);
     expect(controller.offset, 0);
     expect(refreshes, 0, reason: 'Reaching the edge is not a refresh');
-    await gesture(tester, SemanticsAction.scrollUp);
+    await gesture(tester, SemanticsAction.scrollDown);
     expect(refreshes, 1);
     expect(loads, 0);
   });
 
-  testWidgets('finger up maps to scrollDown: page forward, then load at bottom', (tester) async {
+  testWidgets('scrollUp pages forward, then loads at bottom', (tester) async {
     final semantics = tester.ensureSemantics();
     addTearDown(semantics.dispose);
     await show(tester);
-    await gesture(tester, SemanticsAction.scrollDown);
+    await gesture(tester, SemanticsAction.scrollUp);
     expect(controller.offset, greaterThan(0));
     expect(loads, 0);
     controller.jumpTo(controller.position.maxScrollExtent);
     await tester.pumpAndSettle();
-    await gesture(tester, SemanticsAction.scrollDown);
+    await gesture(tester, SemanticsAction.scrollUp);
     expect(loads, 1);
     expect(refreshes, 0);
   });

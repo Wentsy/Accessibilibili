@@ -64,11 +64,12 @@ class VoiceOverPagedScroll extends StatelessWidget {
       identifier: nativeFeedScroll ? 'a11y-feed-scroll|viewport' : null,
       container: true,
       explicitChildNodes: true,
-      // Semantic directions describe the content position, not finger motion:
-      // iOS three-finger down -> scrollUp -> toward minScrollExtent.
-      // Keep legacy mapping unchanged outside the explicitly opted-in feeds.
-      onScrollUp: () => _page(context, forward: !nativeFeedScroll),
-      onScrollDown: () => _page(context, forward: nativeFeedScroll),
+      // Preserve the app's established gesture mapping for feeds as well:
+      // three-finger down pages backward / refreshes at the start, while
+      // three-finger up pages forward / loads more at the end. The native
+      // feed bridge is routing-only; opting in must not invert the actions.
+      onScrollUp: () => _page(context, forward: true),
+      onScrollDown: () => _page(context, forward: false),
       child: child,
     );
   }

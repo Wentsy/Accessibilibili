@@ -27,12 +27,12 @@
 
 使用者回報初版三頁均無法頂端下滑刷新，初版不得列為穩定基準。
 
-程式檢查發現外層 `VoiceOverPagedScroll` 使用手指方向解讀語意動作，
-但 iOS 下滑會對應 `SemanticsAction.scrollUp`（向 minScrollExtent），
-上滑對應 `scrollDown`。此外內層 `FlutterSemanticsScrollView`／捲動語意
+前一修正曾推斷應反轉 `VoiceOverPagedScroll` 的上下語意對應；
+使用者實機回報反轉後方向相反，該推斷撤回，方向修正見下節。
+內層 `FlutterSemanticsScrollView`／捲動語意
 可能先接收或在邊界拒絕動作，不能假設它會轉交外層 callback。
 
-- 三頁以 `nativeFeedScroll: true` 明確啟用正確方向及
+- 三頁以 `nativeFeedScroll: true` 明確啟用原生橋接及
   `a11y-feed-scroll|viewport` 標記，其他頁面保持原有行為。
 - `VoiceOverFeedScrollBridge` 僅轉交標記下的 iOS `.up`／`.down`，
   經 semantic parent 找到外層後呼叫 Flutter 原有動作分派。
@@ -47,3 +47,14 @@
 除前述清單外，驗收需確認：一般上下翻頁方向正常；頂端額外下滑會朗讀
 「正在重新整理」並真正請求資料；斷網刷新報失敗後恢復網路可重試；
 空列表仍可刷新；評論 Read All、直播彈幕與播放器控制不受影響。
+
+## 方向回復（待實機確認）
+
+依使用者實機回報，撤回只對三個 feed 啟用的方向反轉，恢復元件原有
+`onScrollUp -> forward: true`、`onScrollDown -> forward: false`。
+`nativeFeedScroll` 現在只負責原生橋接標記，不再改變方向。
+首頁推薦、動態、觀看紀錄都使用這個元件，因此同時修正；其他頁面方向未變。
+
+使用者操作規格：三指下滑往回／往頂端翻，到頂端再下滑重新整理；
+三指上滑往下一頁翻，到底端再上滑載入更多。刷新朗讀及原生橋接保持不變。
+同步調整 Dart 語意動作測試，但語意測試不能代替 iPhone 實際手勢驗證。
