@@ -58,8 +58,12 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
       onRefresh: onRefresh,
       child: VoiceOverPagedScroll(
         controller: controller.scrollController,
-        onScrollBackwardAtStart: onRefresh,
-        onScrollForwardAtEnd: controller.onLoadMore,
+        nativeFeedScroll: true,
+        onScrollBackwardAtStart: () => controller.onA11yRefresh(
+          label: '動態',
+          refresh: onRefresh,
+        ),
+        onScrollForwardAtEnd: controller.onA11yLoadMore,
         child: CustomScrollView(
           cacheExtent: MediaQuery.sizeOf(context).height * 2,
           physics: const AlwaysScrollableScrollPhysics(),

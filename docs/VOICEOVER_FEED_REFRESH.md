@@ -9,7 +9,8 @@
 - 觀看紀錄重新整理目前分類，重設分頁游標；底端再上滑，以游標追加更早紀錄。
 - 空列表或不足一頁也能觸發邊界操作；沒有更多紀錄時遵守既有 isEnd。
 - 請求進行中不重設 page／offset／max／viewAt，避免連續手勢破壞下一頁游標。
-- 不修改共用翻頁、原生橋接、Read All 或評論語意；一般翻頁維持 160ms 動畫及原生回饋。
+- 初版未修改共用翻頁、原生橋接、Read All 或評論語意；後續橋接修正見下節。
+  一般翻頁維持 160ms 動畫及原生回饋。
 
 ## 實機驗收
 
@@ -21,3 +22,28 @@
 6. 左右滑、雙指下滑連續朗讀、三指普通翻頁及底部首頁／動態／我的標籤仍正常。
 
 本次環境未安裝 Flutter／Dart，未執行編譯或實機測試；提交前檢查 diff 與 callback／分頁路徑。
+
+## 後續修正：三頁皆無法觸發刷新（待重新驗證）
+
+使用者回報初版三頁均無法頂端下滑刷新，初版不得列為穩定基準。
+
+程式檢查發現外層 `VoiceOverPagedScroll` 使用手指方向解讀語意動作，
+但 iOS 下滑會對應 `SemanticsAction.scrollUp`（向 minScrollExtent），
+上滑對應 `scrollDown`。此外內層 `FlutterSemanticsScrollView`／捲動語意
+可能先接收或在邊界拒絕動作，不能假設它會轉交外層 callback。
+
+- 三頁以 `nativeFeedScroll: true` 明確啟用正確方向及
+  `a11y-feed-scroll|viewport` 標記，其他頁面保持原有行為。
+- `VoiceOverFeedScrollBridge` 僅轉交標記下的 iOS `.up`／`.down`，
+  經 semantic parent 找到外層後呼叫 Flutter 原有動作分派。
+- 同時處理 `SemanticsObject` 與獨立的 `FlutterSemanticsScrollView`；
+  不修改全域 UIScrollView，也不接管 `.next`／`.previous`、焦點、觸摸或閱讀鏈。
+- 明確的刷新／載入操作朗讀開始、完成、失敗、忙碌、沒有更多內容。
+  自動預載保持安靜；保留舊推薦的網路失敗仍須朗讀失敗。
+- `CommonListController` 以 finally 釋放請求鎖，避免例外後永遠卡住。
+- 新增 `voiceover_feed_scroll_test.dart` 與 `feed_refresh_feedback_test.dart`。
+  此環境仍無 Flutter／Dart／iOS SDK，測試尚未執行，需 Hermes 執行後編譯。
+
+除前述清單外，驗收需確認：一般上下翻頁方向正常；頂端額外下滑會朗讀
+「正在重新整理」並真正請求資料；斷網刷新報失敗後恢復網路可重試；
+空列表仍可刷新；評論 Read All、直播彈幕與播放器控制不受影響。

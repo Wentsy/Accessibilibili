@@ -673,6 +673,89 @@ private enum VoiceOverReplyReadingBridge {
   }
 }
 
+/// Feed-only gesture routing. Flutter's inner scroll semantics can consume a
+/// page gesture (or reject it at an edge) before the outer Dart Semantics node
+/// receives it. Route explicit vertical gestures to the marked feed wrapper,
+/// which owns paging and edge refresh. No focus, traversal or Read All hooks.
+private enum VoiceOverFeedScrollBridge {
+  private typealias ScrollHandler = @convention(c) (
+    AnyObject, Selector, Int
+  ) -> Bool
+
+  static func install() {
+    _ = installOnce
+  }
+
+  private static let installOnce: Void = {
+    // Both paths are needed: Flutter semantic elements and UIKit's separate
+    // FlutterSemanticsScrollView can receive accessibilityScroll directly.
+    for name in [
+      "SemanticsObject",
+      "FlutterScrollableSemanticsObject",
+      "FlutterSemanticsScrollView"
+    ] {
+      if let targetClass = NSClassFromString(name) {
+        installScroll(on: targetClass)
+      }
+    }
+  }()
+
+  private static func installScroll(on targetClass: AnyClass) {
+    let selector = NSSelectorFromString("accessibilityScroll:")
+    guard
+      let method = class_getInstanceMethod(targetClass, selector),
+      let types = method_getTypeEncoding(method)
+    else { return }
+    let original = unsafeBitCast(method_getImplementation(method), to: ScrollHandler.self)
+    let block: @convention(block) (AnyObject, Int) -> Bool = { object, rawDirection in
+      guard
+        UIAccessibility.isVoiceOverRunning,
+        let direction = UIAccessibilityScrollDirection(rawValue: rawDirection),
+        direction == .up || direction == .down,
+        let receiver = object as? NSObject,
+        let target = feedWrapper(from: receiver),
+        target !== receiver,
+        let targetMethod = class_getInstanceMethod(type(of: target), selector)
+      else {
+        return original(object, selector, rawDirection)
+      }
+      let dispatch = unsafeBitCast(
+        method_getImplementation(targetMethod), to: ScrollHandler.self
+      )
+      // The wrapper itself falls through to Flutter's original implementation,
+      // dispatching its always-present scrollUp/scrollDown action to Dart.
+      return dispatch(target, selector, rawDirection)
+    }
+    // Add/replace only on this concrete class; never mutate UIScrollView's
+    // inherited method, which would affect native editors and other controls.
+    class_replaceMethod(targetClass, selector, imp_implementationWithBlock(block), types)
+  }
+
+  private static func feedWrapper(from receiver: NSObject) -> NSObject? {
+    var current = objectValue(receiver, "semanticsObject") as? NSObject ?? receiver
+    var seen = Set<ObjectIdentifier>()
+    for _ in 0..<64 {
+      guard seen.insert(ObjectIdentifier(current)).inserted else { return nil }
+      let native = objectValue(current, "nativeAccessibility") ?? current
+      if let element = native as? UIAccessibilityElement,
+         element.accessibilityIdentifier?.hasPrefix("a11y-feed-scroll|") == true {
+        return current
+      }
+      guard let parent = objectValue(current, "parent") as? NSObject else { return nil }
+      current = parent
+    }
+    return nil
+  }
+
+  private static func objectValue(_ object: NSObject, _ name: String) -> AnyObject? {
+    let selector = NSSelectorFromString(name)
+    guard object.responds(to: selector), let result = object.perform(selector) else {
+      return nil
+    }
+    return result.takeUnretainedValue()
+  }
+}
+
 class SceneDelegate: FlutterSceneDelegate {
   override func scene(
     _ scene: UIScene,
@@ -681,6 +764,7 @@ class SceneDelegate: FlutterSceneDelegate {
   ) {
     VoiceOverComposerTouchBridge.install()
     VoiceOverReplyReadingBridge.install()
+    VoiceOverFeedScrollBridge.install()
     super.scene(
       scene,
       willConnectTo: session,

@@ -37,8 +37,9 @@ class _RcmdPageState extends State<RcmdPage>
         onRefresh: controller.onRefresh,
         child: VoiceOverPagedScroll(
           controller: controller.scrollController,
-          onScrollBackwardAtStart: controller.onRefresh,
-          onScrollForwardAtEnd: controller.onLoadMore,
+          nativeFeedScroll: true,
+          onScrollBackwardAtStart: () => controller.onA11yRefresh(label: '推薦'),
+          onScrollForwardAtEnd: controller.onA11yLoadMore,
           child: CustomScrollView(
           controller: controller.scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
