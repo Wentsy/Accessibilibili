@@ -4,16 +4,25 @@
 
 ## 目前穩定點
 
-- 日期：2026-09-09
+- 日期：2026-09-10
 - 分支：`main`
-- **已驗證 App 程式碼基準 commit：`533d86b027bfe5f896c6e27dbeb0c93c37e55136`**
-- Commit：`fix(a11y): name the clear danmaku text button`
+- **已驗證 App 程式碼基準 commit：`9a985211f8f84a3fce207110ad6df81ff20e167c`**
+- 本輪修正：控制中心／通知中心提前交接播放控制、播放頁進度列同步 VoiceOver 時間值（PR #3，修正 commit `3bb3f19`）。
 
-本文件之後可能會有純文件 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `533d86b` 的程式碼狀態為本輪穩定基準。
+本文件之後可能會有純文件 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `9a98521` 的程式碼狀態為本輪穩定基準。
 
 除非後續版本完成新一輪 VoiceOver 實機驗證，否則遇到回歸應優先與此基準比較。
 
+## 開發與驗證流程
+
+使用者已明確持續授權直接提交及合併至 main，不必逐次詢問；除非有獨立測試需求，不另外建立 PR。開發環境無法執行的編譯與實機測試，由 Hermes 編譯 IPA、使用者在 iPhone 上驗證。只有使用者回報測試通過後，才更新已驗證穩定基準；程式碼提交本身不代表已實測。
+
 ## 本輪實機確認通過
+
+2026-09-10 使用者回報本次修改「完全成功」，確認控制中心／通知中心播放控制與播放頁進度同步修復通過；既有已驗證項目繼續保留，不表示本次重新執行了所有歷史測試。
+
+- 從影片播放頁直接拉下控制中心或通知中心，系統可接管雙指雙擊播放／暫停，控制中心播放／暫停控制可用。
+- 播放頁進度列的 VoiceOver 時間與百分比隨影片進度同步，保留上下滑調整進度。
 
 以下行為都屬於「不可因同步上游或重構而退步」的基準：
 
@@ -86,6 +95,14 @@ packages/media_kit_libs_ios_video/ios/Classes/MediaKitLibsIosVideoPlugin.swift
 ios/Runner/Info.plist
 ```
 
+### 控制中心／通知中心與進度同步
+
+- 不可只等 didEnterBackground 才交接：UIScene.willDeactivateNotification 與 Flutter inactive 都必須涵蓋，舊 iOS 使用 willResignActiveNotification。
+- 回到 didActivate／didBecomeActive／resumed 才恢復前景 mixWithOthers，保留起播旁白共存與背景備援。
+- 共用 `lib/common/widgets/progress_bar/audio_video_progress_bar.dart` 更新 progress、total、onSeek 與拖曳位置時，必須同步標記 semantics 更新；只有 markNeedsPaint 不會刷新 VoiceOver 快取。
+- 不新增每秒主動朗讀或焦點跳轉。
+- 完整修改與後續回歸清單見 `docs/IOS_OVERLAY_PLAYBACK_FIX.md`。
+
 ### paused-first 背景恢復的目前方案
 
 早期已確認「影片正在播放後退背景」本來就能建立有效的系統媒體狀態；真正困難的是：
@@ -94,11 +111,11 @@ ios/Runner/Info.plist
 前景播放 → 前景暫停 → 退背景／鎖屏 → Magic Tap 播放
 ```
 
-連續零音量 native audio bridge 可以解決，但長時間播放靜音音訊會增加耗電，因此背景播放子系統自 `0cd4b40` 起採用、並完整保留到目前穩定基準 `3fc0d65` 的方案為：
+連續零音量 native audio bridge 可以解決，但長時間播放靜音音訊會增加耗電，因此背景播放子系統自 `0cd4b40` 起採用、在 `3fc0d65` 已驗證、並延續到本輪基準 的方案為：
 
-- 只有「已暫停後進背景」的必要情況才啟動 native `AVAudioEngine + AVAudioPlayerNode`。
+- 只有「已暫停後交接至系統角色」的必要情況才啟動 native `AVAudioEngine + AVAudioPlayerNode`。
 - 使用真實硬體 mixer format 建立零音量 PCM buffer。
-- 只在背景轉場時播放約 **2 秒**，用來建立／維持 Now Playing 媒體所有權。
+- 只在系統角色交接轉場時播放約 **2 秒**，用來建立／維持 Now Playing 媒體所有權。
 - 2 秒後完整停止 engine，不在整段背景暫停期間持續播放靜音音訊。
 - 已實測 10 秒及 1 分鐘後仍可 Magic Tap 恢復。
 
@@ -276,7 +293,7 @@ docs/PLAYBACK_AUDIO_HANDOFF.md
 
 ## 本輪重要 commits
 
-以下重要修正都包含在目前已驗證 App 基準 `3fc0d65` 的 ancestry 中：
+以下重要修正都包含在目前已驗證 App 基準 `9a98521` 的 ancestry 中：
 
 ```text
 f2ae922820e20ef8864afba60e451a4fa7c78505  fix(ios): preserve VoiceOver speech during playback
@@ -315,6 +332,8 @@ a31ac99b488eaf6bf4e76c5d17f02e9a09ff68d1  fix(a11y): expose coin controls to Voi
 - [ ] 播放中退背景仍可播放／暫停／恢復。
 - [ ] 前景暫停後退背景，Magic Tap 仍可恢復。
 - [ ] 回前景後 VoiceOver 正常。
+- [ ] 播放頁直接拉下控制中心／通知中心，雙指雙擊可播放／暫停，控制中心按鈕可用。
+- [ ] 播放頁進度列時間及百分比持續同步，上下滑仍可調整進度。
 
 任何一項失敗，都應視為上游同步 regression，而不是直接覆蓋目前無障礙實作。
 
