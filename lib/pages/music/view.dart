@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
@@ -119,7 +120,8 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
         if (isPortrait) {
           child = Padding(
             padding: EdgeInsets.symmetric(horizontal: padding),
-            child: CustomScrollView(
+            child: ReplyScrollView(
+              replyController: controller,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 SliverToBoxWithOffsetAdapter(
@@ -176,7 +178,8 @@ class _MusicDetailPageState extends CommonDynPageState<MusicDetailPage> {
                   child: MiniScaffold(
                     body: refreshIndicator(
                       onRefresh: controller.onRefresh,
-                      child: CustomScrollView(
+                      child: ReplyScrollView(
+                        replyController: controller,
                         physics: const AlwaysScrollableScrollPhysics(),
                         slivers: [
                           buildReplyHeader(),

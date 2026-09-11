@@ -1,7 +1,7 @@
 import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/a11y/reply_semantics.dart';
-import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
+import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -99,8 +99,8 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
           bottomBar: useVoiceOverComposerDock(context)
               ? VoiceOverComposerDock(onPressed: publishComment)
               : null,
-          body: VoiceOverPagedScroll(
-            controller: _videoReplyController.scrollController,
+          body: ReplyPagedScroll(
+            controller: _videoReplyController,
             child: CustomScrollView(
               controller: _videoReplyController.scrollController,
               // Read All can consume Flutter semantic nodes beyond the visible
@@ -227,11 +227,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                   height: 125,
                   alignment: .center,
                   margin: .only(bottom: bottom),
-                  child: Text(
-                    _videoReplyController.isEnd ? '没有更多了' : '加载中...',
-                    textAlign: .center,
-                    style: TextStyle(fontSize: 12, color: colorScheme.outline),
-                  ),
+                  child: ReplyPaginationStatus(controller: _videoReplyController),
                 );
               }
               final item = response[index];
@@ -260,7 +256,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 replyItem: item,
                 onAccessibilityFocus: () {
                   if (index >= response.length - 5) {
-                    _videoReplyController.onLoadMore();
+                    _videoReplyController.retryLoadMore();
                   }
                 },
                 label: _a11yLabel(item),

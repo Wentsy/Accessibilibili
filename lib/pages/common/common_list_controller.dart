@@ -9,6 +9,7 @@ abstract class CommonListController<R, T> extends CommonController<R, T> {
   bool isEnd = false;
   bool? hasFooter;
   bool _lastRequestSucceeded = false;
+  bool get lastRequestSucceeded => _lastRequestSucceeded;
 
   /// Explicit VoiceOver feed actions only. Automatic prefetch remains silent.
   Future<void> onA11yRefresh({

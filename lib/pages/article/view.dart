@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
@@ -78,7 +79,8 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
       return Padding(
         padding: .symmetric(horizontal: padding),
         child: SelectionArea(
-          child: CustomScrollView(
+          child: ReplyScrollView(
+            replyController: controller,
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
               _buildContent(
@@ -142,7 +144,8 @@ class _ArticlePageState extends CommonDynPageState<ArticlePage> {
             child: MiniScaffold(
               body: refreshIndicator(
                 onRefresh: controller.onRefresh,
-                child: CustomScrollView(
+                child: ReplyScrollView(
+                  replyController: controller,
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     buildReplyHeader(),

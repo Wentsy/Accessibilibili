@@ -92,4 +92,39 @@ void main() {
     await tester.pump();
     expect(controller.offset, 0);
   });
+
+  testWidgets('suppressed reply focus resumes without another swipe', (tester) async {
+    await buildList(tester);
+    suppressA11yFocusScroll(const Duration(milliseconds: 500));
+    a11yEnsureVisible(items[3]!, recoverAfterSuppression: true);
+    await tester.pump();
+    expect(controller.offset, 0);
+    // The suppression clock is wall time; explicitly expire it in fake time.
+    suppressA11yFocusScroll(Duration.zero);
+    await tester.pump(const Duration(milliseconds: 501));
+    await tester.pump();
+    expect(controller.offset, greaterThan(0));
+  });
+
+  testWidgets('losing reply focus cancels deferred movement', (tester) async {
+    await buildList(tester);
+    suppressA11yFocusScroll(const Duration(milliseconds: 500));
+    a11yEnsureVisible(items[3]!, recoverAfterSuppression: true);
+    cancelDeferredReplyFocus(items[3]!);
+    suppressA11yFocusScroll(Duration.zero);
+    await tester.pump(const Duration(milliseconds: 501));
+    expect(controller.offset, 0);
+  });
+
+  testWidgets('deferred restored node above viewport cannot jump backwards', (tester) async {
+    await buildList(tester);
+    controller.jumpTo(400);
+    await tester.pumpAndSettle();
+    suppressA11yFocusScroll(const Duration(milliseconds: 500));
+    a11yEnsureVisible(items[1]!, recoverAfterSuppression: true);
+    suppressA11yFocusScroll(Duration.zero);
+    await tester.pump(const Duration(milliseconds: 501));
+    await tester.pump();
+    expect(controller.offset, 400);
+  });
 }

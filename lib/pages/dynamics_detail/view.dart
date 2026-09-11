@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
+import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
@@ -341,12 +341,11 @@ class _DynamicDetailPageState
 
   Widget _buildTabBody([bool isPortrait = true]) {
     final useOwnReplyViewport =
-        isPortrait && MediaQuery.accessibleNavigationOf(context);
+        MediaQuery.accessibleNavigationOf(context);
     final replyScrollController =
         useOwnReplyViewport ? controller.scrollController : null;
-    final reply = VoiceOverPagedScroll(
-      controller: replyScrollController,
-      onScrollForwardAtEnd: () => controller.onLoadMore(),
+    final reply = ReplyPagedScroll(
+      controller: controller,
       child: CustomScrollView(
         controller: replyScrollController,
         primary: useOwnReplyViewport ? false : null,

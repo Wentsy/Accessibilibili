@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, Tar
 import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/a11y/reply_semantics.dart';
-import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
+import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -252,8 +252,8 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
     return refreshIndicator(
       onRefresh: _controller.onRefresh,
       isClampingScrollPhysics: widget.isNested,
-      child: VoiceOverPagedScroll(
-        controller: scrollController,
+      child: ReplyPagedScroll(
+        controller: _controller,
         child: CustomScrollView(
           key: PageStorageKey('reply-thread-${widget.rpid}-${widget.dialog ?? 0}'),
           cacheExtent: MediaQuery.accessibleNavigationOf(context)
@@ -394,7 +394,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                     sortKey: OrdinalSortKey(index + 2.0),
                     onAccessibilityFocus: () {
                       if (index >= response.length - 5) {
-                        _controller.onLoadMore();
+                        _controller.retryLoadMore();
                       }
                     },
                     label: _a11yLabel(item),
@@ -486,11 +486,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              isEnd ? '没有更多了' : '加载中...',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: colorScheme.outline),
-            ),
+            ReplyPaginationStatus(controller: _controller),
             if (isEnd && !isDialogue && !useVoiceOverComposerDock(context)) ...[
               const SizedBox(height: 12),
               FilledButton.icon(

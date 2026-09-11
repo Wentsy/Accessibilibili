@@ -106,8 +106,9 @@ class ReplyA11ySemantics extends StatelessWidget {
         onAccessibilityFocus?.call();
         // Make the next lazy-list nodes available without a scroll animation
         // racing VoiceOver's read-from-current-item traversal.
-        a11yEnsureVisible(context, immediate: true);
+        a11yEnsureVisible(context, immediate: true, recoverAfterSuppression: true);
       },
+      onDidLoseAccessibilityFocus: () => cancelDeferredReplyFocus(context),
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(
           label: action == Int64.ONE ? '取消赞' : '点赞这条评论',

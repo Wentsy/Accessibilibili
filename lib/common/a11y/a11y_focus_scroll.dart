@@ -1,6 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 int _a11yFocusScrollSuppressedUntilMs = 0;
+final _deferredReplyFocus = <BuildContext, Timer>{};
+
+void cancelDeferredReplyFocus(BuildContext context) {
+  _deferredReplyFocus.remove(context)?.cancel();
+}
 
 /// Temporarily suppresses focus-driven scrolling while a paged list rebuilds.
 ///
@@ -21,9 +27,25 @@ void suppressA11yFocusScroll([
 /// automatically scrolling that node into the visible viewport. When that
 /// happens, swipe navigation and touch exploration describe different content.
 /// Call this from Semantics.onDidGainAccessibilityFocus for list items.
-void a11yEnsureVisible(BuildContext context, {bool immediate = true}) {
+void a11yEnsureVisible(BuildContext context, {
+  bool immediate = true,
+  bool recoverAfterSuppression = false,
+  bool forwardRecovery = false,
+}) {
   if (!MediaQuery.accessibleNavigationOf(context)) return;
   if (DateTime.now().millisecondsSinceEpoch < _a11yFocusScrollSuppressedUntilMs) {
+    if (recoverAfterSuppression) {
+      cancelDeferredReplyFocus(context);
+      final delay = _a11yFocusScrollSuppressedUntilMs -
+          DateTime.now().millisecondsSinceEpoch;
+      _deferredReplyFocus[context] = Timer(Duration(milliseconds: delay > 0 ? delay : 1), () {
+        _deferredReplyFocus.remove(context);
+        if (context.mounted) {
+          a11yEnsureVisible(context, immediate: immediate,
+            recoverAfterSuppression: true, forwardRecovery: true);
+        }
+      });
+    }
     return;
   }
 
@@ -68,6 +90,8 @@ void a11yEnsureVisible(BuildContext context, {bool immediate = true}) {
       renderObject.paintBounds,
     );
     final viewportRect = viewportRenderObject.paintBounds;
+    // A restored old/top node must never be replayed as a backwards jump.
+    if (forwardRecovery && itemRect.top < viewportRect.top) return;
 
     // If VoiceOver somehow lands on a semantic node that is already outside
     // the real viewport, bring it back to the middle immediately.

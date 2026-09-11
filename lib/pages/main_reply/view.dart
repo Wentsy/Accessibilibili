@@ -1,4 +1,6 @@
 import 'package:flutter/semantics.dart';
+import 'package:PiliPlus/common/a11y/reply_semantics.dart';
+import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -84,16 +86,9 @@ class _MainReplyPageState extends State<MainReplyPage>
               left: padding.left,
               right: padding.right,
             ),
-            child: CustomScrollView(
+            child: ReplyScrollView(
+              replyController: _controller,
               physics: const AlwaysScrollableScrollPhysics(),
-              // 🔴 無障礙：加大預建範圍，讓 VoiceOver 永遠有「下一條」可跳
-              // 注意：不要在這裡包 Semantics(container)——會把捲動區變成語義孤島，
-              // 吞掉 scroll actions 和外部元素（FAB 被蓋掉的元兇）
-              cacheExtent: 3000,
-              semanticChildCount: switch (_controller.loadingState.value) {
-                Success(:final response) => response?.length ?? 0,
-                _ => null,
-              },
               slivers: [
                 buildReplyHeader(colorScheme),
                 Obx(
@@ -135,9 +130,13 @@ class _MainReplyPageState extends State<MainReplyPage>
       Success(:final response) =>
         response != null && response.isNotEmpty
             ? SliverList.builder(
-                // 🔴 無障礙：固定 key，載入更多時保留元素樹與 VoiceOver 焦點
-                // 🔴 key 含長度：載更多時以增量 diff 更新，保留既有語義節點與焦點
-                key: ValueKey('reply_list_${response?.length ?? 0}'),
+                // Never key the entire list by length: every append would
+                // replace all semantic nodes and discard VoiceOver's position.
+                findChildIndexCallback: (key) {
+                  final index = response.indexWhere(
+                    (item) => ValueKey('reply-${item.id}') == key);
+                  return index < 0 ? null : index;
+                },
                 itemCount: response.length + 1,
                 itemBuilder: (context, index) {
                   // 🔴 無障礙：VoiceOver 逐項滑動很慢，倒數第4個就預載
@@ -145,24 +144,30 @@ class _MainReplyPageState extends State<MainReplyPage>
                     _controller.onLoadMore();
                   }
                   if (index == response.length) {
-                    return Semantics(
-                      container: true,
-                      label: _controller.isEnd ? '没有更多了' : '載入更多評論中，請點右下角按鈕',
-                      child: Container(
+                    return Container(
                       alignment: Alignment.center,
                       margin: EdgeInsets.only(bottom: padding.bottom),
                       height: 125,
-                      child: Text(
-                        _controller.isEnd ? '没有更多了' : '加载中...',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colorScheme.outline,
-                        ),
-                      ),
-                      ),
+                      child: ReplyPaginationStatus(controller: _controller),
                     );
                   } else {
-                    return ReplyItemGrpc(
+                    final item = response[index];
+                    return ReplyA11ySemantics(
+                      key: ValueKey('reply-${item.id}'),
+                      replyItem: item,
+                      label: '${item.member.name} 說：${item.content.message}'
+                          '${item.content.pictures.isNotEmpty ? '，[圖片]' : ''}'
+                          '${item.like > 0 ? '，${item.like} 個讚' : ''}'
+                          '${item.count > 0 ? '，共 ${item.count} 條回覆' : ''}',
+                      onAccessibilityFocus: () {
+                        if (index >= response.length - 5) _controller.retryLoadMore();
+                      },
+                      onTap: item.count.toInt() > 0
+                          ? () => replyReply(context, item, null, colorScheme)
+                          : () => _controller.onReply(item),
+                      onTapHint: item.count.toInt() > 0
+                          ? '點兩下展開回覆' : '點兩下回覆這條評論',
+                      child: ReplyItemGrpc(
                       key: ValueKey(response[index].id),
                       replyItem: response[index],
                       replyLevel: 1,
@@ -181,6 +186,7 @@ class _MainReplyPageState extends State<MainReplyPage>
                         _controller.oid,
                         _controller.replyType,
                       ),
+                    ),
                     );
                   }
                 },

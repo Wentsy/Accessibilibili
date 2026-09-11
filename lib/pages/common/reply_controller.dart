@@ -18,6 +18,49 @@ import 'package:flutter/semantics.dart';
 import 'package:material_ui/material_ui.dart';
 
 abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
+  final RxBool loadMoreFailed = false.obs;
+  Future<void>? _replyLoad;
+  int _paginationGeneration = 0;
+
+  // Join an existing request instead of losing a boundary action while loading.
+  // A failed prefetch gets one retry, then waits for another reading/page
+  // boundary event. No button, unbounded retry loop, or spoken announcement.
+  @override
+  Future<void> onLoadMore() {
+    if (_replyLoad case final pending?) return pending;
+    if (isClosed || isLoading || isEnd || loadMoreFailed.value ||
+        !loadingState.value.isSuccess) {
+      return Future<void>.value();
+    }
+    final generation = _paginationGeneration;
+    return _replyLoad = _loadReplyPage(generation).whenComplete(() {
+      _replyLoad = null;
+    });
+  }
+
+  Future<void> retryLoadMore() {
+    if (isClosed) return Future<void>.value();
+    loadMoreFailed.value = false;
+    return onLoadMore();
+  }
+
+  Future<void> _loadReplyPage(int generation) async {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (isClosed || generation != _paginationGeneration || isEnd) return;
+      try {
+        await super.onLoadMore();
+        if (isClosed || generation != _paginationGeneration) return;
+        if (lastRequestSucceeded) return;
+      } catch (_) {
+        if (isClosed || generation != _paginationGeneration) return;
+      }
+      if (attempt == 0) {
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+      }
+    }
+    loadMoreFailed.value = true;
+  }
+
   final RxInt count = (-1).obs;
 
   late final Rx<ReplySortType> sortType;
@@ -79,6 +122,10 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
 
   @override
   Future<void> onRefresh() {
+    // Do not reset the cursor while a request is using it.
+    if (isLoading) return Future<void>.value();
+    _paginationGeneration++;
+    loadMoreFailed.value = false;
     cursorNext = null;
     subjectControl = null;
     paginationReply = null;
@@ -260,6 +307,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
 
   @override
   void onClose() {
+    _paginationGeneration++;
     savedReplies.clear();
     super.onClose();
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/semantics.dart';
+import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
@@ -185,13 +186,7 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
                   alignment: Alignment.center,
                   margin: EdgeInsets.only(bottom: padding.bottom),
                   height: 125,
-                  child: Text(
-                    controller.isEnd ? '没有更多了' : '加载中...',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
+                  child: ReplyPaginationStatus(controller: controller),
                 );
               } else {
                 final item = response[index];
@@ -226,6 +221,9 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
                 return ReplyA11ySemantics(
                   key: ValueKey('dynamic-reply-${item.id}'),
                   replyItem: item,
+                  onAccessibilityFocus: () {
+                    if (index >= response.length - 5) controller.retryLoadMore();
+                  },
                   label: _replyA11yLabel(item),
                   onTap: item.count.toInt() > 0
                       ? () => replyReply(context, item, null)

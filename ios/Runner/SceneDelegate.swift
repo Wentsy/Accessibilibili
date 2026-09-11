@@ -448,6 +448,16 @@ private enum VoiceOverReplyReadingBridge {
         shouldCauseForwardPageTurn(object),
         let ancestor = verticalScrollAncestor(of: object)
       {
+        if !hasForwardRange(ancestor.scrollView),
+           let wrapper = replyPageWrapper(from: ancestor.semanticObject),
+           let method = class_getInstanceMethod(type(of: wrapper), selector) {
+          // The list is only temporarily at its loaded boundary. Dispatch to
+          // Dart's wrapper, which joins/retries the pending page request and
+          // posts pageScrolled only after new comments have been laid out.
+          let dispatch = unsafeBitCast(method_getImplementation(method), to: ScrollHandler.self)
+          // UIKit down maps to Flutter scrollUp: the wrapper's forward action.
+          return dispatch(wrapper, selector, UIAccessibilityScrollDirection.down.rawValue)
+        }
         // Flutter maps UIAccessibilityScrollDirection.up to
         // SemanticsAction.scrollDown, i.e. forward through a vertical list.
         let didScroll = original(
@@ -556,7 +566,8 @@ private enum VoiceOverReplyReadingBridge {
       let semanticObject = object as? NSObject,
       let group = readingGroup(of: object),
       let ancestor = verticalScrollAncestor(of: object),
-      hasForwardRange(ancestor.scrollView)
+      (hasForwardRange(ancestor.scrollView) ||
+        replyPageWrapper(from: ancestor.semanticObject) != nil)
     else {
       return false
     }
@@ -626,8 +637,7 @@ private enum VoiceOverReplyReadingBridge {
     while let candidate = current {
       if
         let native = nativeAccessibility(of: candidate) as? UIScrollView,
-        NSStringFromClass(type(of: native)).hasSuffix("FlutterSemanticsScrollView"),
-        native.contentSize.height > native.bounds.height + 1
+        NSStringFromClass(type(of: native)).hasSuffix("FlutterSemanticsScrollView")
       {
         return (candidate, native)
       }
@@ -639,6 +649,19 @@ private enum VoiceOverReplyReadingBridge {
   private static func hasForwardRange(_ scrollView: UIScrollView) -> Bool {
     let maxOffset = max(0, scrollView.contentSize.height - scrollView.bounds.height)
     return scrollView.contentOffset.y < maxOffset - 1
+  }
+
+  private static func replyPageWrapper(from object: NSObject) -> NSObject? {
+    var current: NSObject? = object
+    for _ in 0..<64 {
+      guard let candidate = current else { return nil }
+      if let element = nativeAccessibility(of: candidate) as? UIAccessibilityElement,
+         element.accessibilityIdentifier == "a11y-reply-scroll|more" {
+        return candidate
+      }
+      current = semanticParent(of: candidate)
+    }
+    return nil
   }
 
   private static func semanticParent(of object: NSObject) -> NSObject? {

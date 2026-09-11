@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
+import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
@@ -45,7 +46,8 @@ class _MatchInfoPageState extends CommonDynPageState<MatchInfoPage> {
         body: ViewSafeArea(
           child: refreshIndicator(
             onRefresh: controller.onRefresh,
-            child: CustomScrollView(
+            child: ReplyScrollView(
+              replyController: controller,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 Obx(() => _buildInfo(controller.infoState.value)),

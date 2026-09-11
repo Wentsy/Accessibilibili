@@ -12,6 +12,7 @@ class VoiceOverPagedScroll extends StatelessWidget {
     this.onScrollBackwardAtStart,
     this.onScrollForwardAtEnd,
     this.nativeFeedScroll = false,
+    this.replyHasMore,
   });
 
   final ScrollController? controller;
@@ -23,6 +24,8 @@ class VoiceOverPagedScroll extends StatelessWidget {
   /// Opt in only for feeds whose native iOS scroll view must forward vertical
   /// gestures to this node even at an edge. Leave proven reply/live paths alone.
   final bool nativeFeedScroll;
+  /// null leaves non-comment scroll paths unchanged.
+  final bool? replyHasMore;
 
   void _page(BuildContext context, {required bool forward}) {
     final scrollController =
@@ -61,7 +64,9 @@ class VoiceOverPagedScroll extends StatelessWidget {
     }
 
     return Semantics(
-      identifier: nativeFeedScroll ? 'a11y-feed-scroll|viewport' : null,
+      identifier: replyHasMore != null
+          ? 'a11y-reply-scroll|${replyHasMore! ? 'more' : 'end'}'
+          : nativeFeedScroll ? 'a11y-feed-scroll|viewport' : null,
       container: true,
       explicitChildNodes: true,
       // Preserve the app's established gesture mapping for feeds as well:
