@@ -6,7 +6,8 @@
 （`fix/reply-pagination-const`）明確匯入 `OrdinalSortKey` 並去除該行
 const，沒有更動分頁邏輯。原版 `84d046b` 並非可編譯版本；下文
 的語法解析結果不能視為 Dart 編譯驗證。長評論串 VoiceOver 實測
-仍待使用者確認，尚不更新穩定基準。
+已於 2026-09-11 通過；本功能現已納入穩定基準
+`a2f7b6493c55ba61c179384022d16eb36bdb889a`。
 
 ## 本次範圍
 
