@@ -31,6 +31,28 @@ docs/IOS_RICH_TEXT_VOICEOVER_BASELINE.md
 
 ## 最重要的原則
 
+### 開發交付前的編譯檢查（2026-09-11 補充）
+
+- 新增 Dart 檔案須逐一核對所用符號的直接 import／實際 export，不能
+  假設 `flutter/material.dart` 包含所有無障礙型別。使用
+  `OrdinalSortKey` 時明確匯入 `package:flutter/semantics.dart`。
+- 對照專案及 Hermes 使用的 Flutter／Dart SDK，確認建構子、`const`
+  和 API 可用性。不要為了消除一個 const 診斷，未查明符號解析就
+  全面移除其他檔案已驗證的 const。
+- 有相容 SDK 與依賴時，交付 IPA 打包前先跑 `flutter analyze` 和
+  受影響的 `flutter test`，優先攔截缺少 import、型別及常量錯誤。
+- Tree-sitter、括號／語法解析、`git diff --check` 都不檢查 Dart
+  符號解析、型別或常量有效性，不能稱為編譯檢查通過。
+- 缺少 SDK 時仍須人工核對 import 與已用 API，交付明確列出
+  「未執行 analyzer／測試／編譯」，不可把缺少環境當成免審查理由。
+- 接獲 Hermes 編譯修正，核對實際分支差異、保留原修復提交後合回
+  main；編譯成功不等於 VoiceOver 實機通過，穩定基準須另等使用者確認。
+
+本次教訓：`84d046b` 的 `reply_pagination.dart` 遺漏 `OrdinalSortKey`
+匯入，且 const 呼叫報編譯錯誤。Hermes 在 `a2f7b64` 補上 import 並
+去除該 const，使用者轉述 +5669 已編譯成功。兩項修正完整保留，
+不推論所有 SDK 的 OrdinalSortKey 都不支援 const。
+
 **不要把 PiliPlus 官方更新直接覆蓋到 `main`。**
 
 官方更新應先進入獨立測試分支，例如：
