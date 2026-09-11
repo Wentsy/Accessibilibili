@@ -565,18 +565,47 @@ private enum VoiceOverReplyReadingBridge {
       UIAccessibility.isVoiceOverRunning,
       let semanticObject = object as? NSObject,
       let group = readingGroup(of: object),
-      let ancestor = verticalScrollAncestor(of: object),
-      (hasForwardRange(ancestor.scrollView) ||
-        replyPageWrapper(from: ancestor.semanticObject) != nil)
+      let ancestor = verticalScrollAncestor(of: object)
     else {
       return false
     }
 
-    let ordered = readingReplies(
+    // Traits are queried during ordinary swipe navigation too. Do not build
+    // the entire reading chain for every queried element: at a loaded edge
+    // the recovery marker keeps this path active even without scroll range.
+    guard lastReadingReply(
       under: ancestor.semanticObject,
       group: group
-    )
-    return ordered.last === semanticObject
+    ) === semanticObject else {
+      return false
+    }
+    // Only the boundary reply needs the range / more-page ancestor check.
+    return hasForwardRange(ancestor.scrollView) ||
+      replyPageWrapper(from: ancestor.semanticObject) != nil
+  }
+
+  private static func lastReadingReply(
+    under root: NSObject,
+    group: String
+  ) -> NSObject? {
+    // collectReadingReplies uses parent-before-children traversal. Its last
+    // match is therefore the first match in reversed children-before-parent
+    // traversal, including when a reply has nested semantic descendants.
+    for child in semanticChildren(of: root).reversed() {
+      if let match = lastReadingReply(under: child, group: group) {
+        return match
+      }
+    }
+    if
+      let native = nativeAccessibility(of: root),
+      let element = native as? UIAccessibilityElement,
+      let identifier = element.accessibilityIdentifier,
+      identifier.hasPrefix(group),
+      isReadingReply(native)
+    {
+      return root
+    }
+    return nil
   }
 
   private static func isFirstReadingReply(_ object: AnyObject) -> Bool {
