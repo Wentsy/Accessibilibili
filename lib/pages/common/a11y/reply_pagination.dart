@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/a11y/ios_accessibility_actions.dart';
 import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/pages/common/reply_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart' show OrdinalSortKey;
 import 'package:get/get.dart';
 
 /// Only explicit page requests emit pageScrolled, never background prefetch.
@@ -47,7 +48,7 @@ class ReplyPaginationStatus extends StatelessWidget {
     controller.loadingState.value; // Observe append/end changes as well.
     if (controller.isEnd) return const Text('没有更多了');
     return Semantics(
-      sortKey: const OrdinalSortKey(double.maxFinite),
+      sortKey: OrdinalSortKey(double.maxFinite),
       onDidGainAccessibilityFocus: () {
         if (failed) controller.retryLoadMore();
       },
