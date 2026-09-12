@@ -1,0 +1,70 @@
+name: Apply photo export UI fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-photo-export-ui-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Replace global photo status with per-video button state
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('lib/pages/video/view.dart')
+          text = path.read_text(encoding='utf-8')
+          old = '''              if (Platform.isIOS)
+                TextButton.icon(
+                  icon: const Icon(Icons.photo_library_outlined),
+                  label: const Text('保存到相簿'),
+                  onPressed: () => videoDetailController.onSaveToPhotos(context),
+                ),
+              _moreBtn(colorScheme.onSurface, showLabel: true),
+            ],
+          ),
+          if (Platform.isIOS) const PhotoExportStatus(),
+'''
+          new = '''              if (Platform.isIOS)
+                Obx(
+                  () => PhotoExportButton(
+                    cid: videoDetailController.seasonCid ??
+                        videoDetailController.cid.value,
+                    onPressed: () =>
+                        videoDetailController.onSaveToPhotos(context),
+                  ),
+                ),
+              _moreBtn(colorScheme.onSurface, showLabel: true),
+            ],
+          ),
+'''
+          if old not in text:
+              raise SystemExit('target photo export UI block was not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+
+      - name: Commit UI fix
+        shell: bash
+        run: |
+          if git diff --quiet -- lib/pages/video/view.dart; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "Accessibilibili automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add lib/pages/video/view.dart
+          git commit -m "fix(ios): keep photo saved state per current video"
+          git push origin HEAD:main
