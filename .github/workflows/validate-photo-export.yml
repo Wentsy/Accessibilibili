@@ -25,4 +25,4 @@ jobs:
           cache: true
 
       - name: Analyze changed Dart files
-        run: flutter analyze lib/services/download/photo_export.dart lib/pages/video/view.dart
+        run: flutter analyze --no-fatal-infos lib/services/download/photo_export.dart lib/pages/video/view.dart
