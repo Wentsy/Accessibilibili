@@ -4,29 +4,63 @@
 
 ## 目前穩定點
 
-- 日期：2026-09-11
+- 日期：2026-09-13
 - 分支：`main`
-- **已驗證 App 程式碼基準 commit：`fc8a520ce92833c19b43741c387a9cb45e5889ec`**
-- 本輪修正：控制中心／通知中心提前交接播放控制、播放頁進度列同步 VoiceOver 時間值（PR #3，修正 commit `3bb3f19`）。
+- **已驗證 App 程式碼基準 commit：`18e4c35bbe7176029e95bbb784244ce5bc801691`**
+- 本輪新增確認：影片保存狀態按影片分離並可檢查相簿資產是否仍存在；UP 個人頁投稿列表的 VoiceOver 單指左滑回翻不再因巢狀捲動而亂跳或掉入左右撞牆狀態。
 
-本文件之後可能會有純文件 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `fc8a520c` 的程式碼狀態為本輪穩定基準。
+本文件之後可能會有純文件、CI 或工作流程清理 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `18e4c35` 的程式碼狀態為本輪穩定基準。
 
 除非後續版本完成新一輪 VoiceOver 實機驗證，否則遇到回歸應優先與此基準比較。
 
 ## 開發與驗證流程
 
-使用者已明確持續授權直接提交及合併至 main，不必逐次詢問；除非有獨立測試需求，不另外建立 PR。開發環境無法執行的編譯與實機測試，由 Hermes 編譯 IPA、使用者在 iPhone 上驗證。只有使用者回報測試通過後，才更新已驗證穩定基準；程式碼提交本身不代表已實測。
+使用者已明確持續授權直接提交及合併至 `main`，不必逐次詢問；除非有獨立測試需求，不另外建立 PR。開發環境無法執行的編譯與實機測試，由 Hermes 編譯 IPA、使用者在 iPhone 上驗證。只有使用者回報測試通過後，才更新已驗證穩定基準；程式碼提交本身不代表已實測。
 
 ## 本輪實機確認通過
 
-2026-09-11 使用者回報 `fc8a520` 實測通過，確認左右滑評論明顯比 5669 順暢；此版本同時保留大量評論跨頁連續閱讀修復，作為目前評論無障礙穩定基準。
+### 2026-09-13：UP 個人頁回翻穩定
 
-2026-09-11 使用者回報大量評論連續閱讀修復實測通過，確認評論跨頁沒有再出現讀到一半卡住、必須往左退再往右滑的問題；既有已驗證項目繼續保留，不表示本次重新執行了所有歷史測試。
+使用者回報 UP 個人頁投稿列表目前沒有問題，確認先向右滑讀過多筆內容後，再以單指左滑往回讀，不再偶發：
 
-2026-09-10 使用者回報本次修改「完全成功」，確認控制中心／通知中心播放控制與播放頁進度同步修復通過；同日亦實機確認首頁推薦、動態、觀看紀錄的 VoiceOver 三指邊界刷新與載入更多通過；既有已驗證項目繼續保留，不表示本次重新執行了所有歷史測試。
+- 亂跳到不相干的位置。
+- 回翻時突然掉到最早期曾出現的語意邊界。
+- 左右滑都撞牆、焦點無法再移動。
+
+本輪根因是 UP 個人頁使用巢狀捲動：投稿列表位於 `ExtendedNestedScrollView` 內，影片卡片取得 VoiceOver 焦點時若使用 `Scrollable.ensureVisible`，Flutter 可能同時調整內層投稿列表與外層個人頁 viewport。左滑回翻靠近頂端時，外層 header 與內層列表一起移動會讓 VoiceOver 的語意焦點交接失效。
+
+目前基準改為：UP 投稿影片卡片只讓最近的內層 `ScrollPosition` 執行 `ensureVisible`，不再牽動外層個人頁；其他已驗證頁面仍保留既有共用焦點同步行為。
+
+### 2026-09-13：保存到相簿狀態穩定
+
+使用者回報影片保存目前正常。保存狀態必須以目前影片 `cid` 個別管理，不可再使用全域「已保存」狀態污染其他影片。
+
+目前行為基準：
+
+- 未保存的影片顯示「保存到相簿」。
+- 保存成功後，**原本同一顆按鈕**改成「已保存到相簿」，不在下方額外增加第二個狀態按鈕。
+- 切到另一支尚未保存的影片，仍顯示「保存到相簿」。
+- 回到已保存影片，只要對應相簿資產仍存在，就顯示「已保存到相簿」。
+- App 重新進入前景或重新進入影片頁時，會用 PhotoKit `localIdentifier` 檢查該資產是否仍存在；若使用者已從 iPhone 相簿刪除，狀態回復為「保存到相簿」。
+- PhotoKit local identifier 只存於裝置本地快取，不可跟設定匯出到其他裝置。
+- 為了確認資產是否仍存在，iOS Photos 權限使用 `.readWrite`；若讀取權限暫時被撤銷，不應把「無權讀取」誤判成「照片已刪除」。
+
+### 2026-09-11：評論跨頁與手感穩定
+
+使用者回報 `fc8a520` 實測通過，確認左右滑評論明顯比 5669 順暢；同時保留大量評論跨頁連續閱讀修復。
+
+大量評論跨頁沒有再出現讀到一半卡住、必須先往左退再往右滑才能繼續的問題。
+
+### 2026-09-10：控制中心與進度同步穩定
+
+使用者回報控制中心／通知中心播放控制與播放頁進度同步修復通過；首頁推薦、動態、觀看紀錄的 VoiceOver 三指邊界刷新與載入更多也實機通過。
 
 - 從影片播放頁直接拉下控制中心或通知中心，系統可接管雙指雙擊播放／暫停，控制中心播放／暫停控制可用。
 - 播放頁進度列的 VoiceOver 時間與百分比隨影片進度同步，保留上下滑調整進度。
+
+以上只表示本輪相關功能已重新實測；其他歷史已驗證項目沿用既有成功結果，不表示每次都重新完整執行所有舊測試。
+
+## 不可退步的整體基準
 
 以下行為都屬於「不可因同步上游或重構而退步」的基準：
 
@@ -34,7 +68,7 @@
 - 背景播放開啟時，播放中的影片退到主畫面或鎖屏後仍可播放。
 - 播放中退背景後，可在背景暫停並再次播放。
 - **前景先暫停，再退到主畫面／鎖屏，也能用 VoiceOver Magic Tap（雙指雙擊）重新播放。**
-- 省電版 paused-first 背景方案已實測：退背景後等待 **10 秒**與 **1 分鐘**，仍可繼續播放。
+- 省電版 paused-first 背景方案已實測：退背景後等待 **10 秒**與 **1 分鐘**仍可繼續播放。
 - 回到 App 後 VoiceOver 可以正常朗讀，沒有因背景播放修正造成旁白被切斷。
 - 動態投票選項可由 VoiceOver 正確辨識、朗讀選取狀態並操作。
 - 投票建立頁的「顯示投票比例」與「匿名投票」可朗讀勾選狀態，且不再被 VoiceOver 誤報為「已變暗」。
@@ -46,13 +80,76 @@
 - 評論／回覆、連續閱讀、首頁分頁、底部導航、影視卡片與既有富文字無障礙規則仍應維持各專項基準文件中的實機成功行為。
 - 影片頁的「顯示彈幕」會讀成「顯示彈幕，已開啟」或「顯示彈幕，已關閉」，不再讀出「變暗」或多餘的切換按鈕描述。
 - 影片頁的「更多選項」只朗讀一次，雙擊可開啟包含快取等較少使用功能的選單。
-- 影片頁的「保存到相簿」可找到並操作；實機已確認保存後影片時長完整且有聲音。
+- 影片頁「保存到相簿」必須維持本影片個別狀態，不得把上一支影片的「已保存」帶到另一支影片。
 - 發表彈幕的預設顏色與 VIP 彩色彈幕可由 VoiceOver 朗讀名稱及選取狀態；自訂顏色可朗讀色碼並操作。
 - 發表彈幕的清除輸入按鈕會朗讀「清除彈幕文字」，不再誤讀為「關閉按鈕」；發送按鈕維持可朗讀。
 - 首頁推薦、動態、觀看紀錄支援 VoiceOver 三指邊界操作：**三指向下滑是往回翻頁／往列表頂端移動，到達頂端後再次向下滑會重新整理**；**三指向上滑是往下一頁，到達底端後再次向上滑會載入更多**。三個頁面方向一致，不得反轉。
 - 三指觸發重新整理或載入更多時，VoiceOver 會朗讀進行中、完成、失敗或「沒有更多內容」等狀態；一般自動預載不額外插入旁白。
 - 動態頁單指滑動可跨過後續資料批次，不會在末端偶爾無法翻頁、跳回頂端或漏掉內容。
+- UP 個人頁投稿列表向右讀與向左回翻都必須維持穩定；左滑不得牽動外層個人頁而造成焦點亂跳或左右撞牆。
 - 含附圖的評論或樓中樓長按選單提供「分享評論圖片」；單張直接分享，多張可選擇圖片，分享內容只包含原始附圖。
+
+## UP 個人頁投稿列表回翻基準
+
+重點檔案：
+
+```text
+lib/common/a11y/a11y_focus_scroll.dart
+lib/pages/member_video/view.dart
+lib/pages/member_video/widgets/video_card_h_member_video.dart
+lib/pages/member_video/controller.dart
+lib/pages/member/view.dart
+```
+
+### 巢狀捲動規則
+
+UP 投稿頁位於 `ExtendedNestedScrollView` 內。VoiceOver 聚焦影片卡片時：
+
+- 一般共用頁面仍可使用既有 `a11yEnsureVisible` 行為。
+- **UP 投稿影片必須使用 `nearestScrollableOnly: true`。**
+- 此模式使用最近的 `scrollable.position.ensureVisible(...)`，只調整內層投稿列表。
+- 不可改回會沿祖先一路捲動的 `Scrollable.ensureVisible(...)`，否則左滑回翻靠近頂端時可能重新牽動外層 header／個人頁 viewport。
+- 右滑往後讀時，接近列表底部仍須保留既有預捲與提前載入能力。
+- `KeyedSubtree` 的影片穩定 key、分頁時保留同一 list instance、追加資料時的焦點捲動抑制都不可任意移除。
+
+### 回歸驗收
+
+至少測：
+
+- [ ] 從 UP 投稿頁連續右滑數頁後，再連續左滑返回。
+- [ ] 多次跨分頁邊界左滑／右滑交替。
+- [ ] 回翻接近頁面頂端時，焦點不跳到不相干的 header 或舊節點。
+- [ ] 不出現左右滑都撞牆的死焦點。
+- [ ] 右滑往後仍能持續載入，不因本修正而變成只能回翻不能前進。
+
+## 影片頁控制與保存到相簿基準
+
+重點檔案：
+
+```text
+lib/services/download/photo_export.dart
+lib/pages/video/view.dart
+ios/Runner/VideoPhotoExporter.swift
+ios/Runner/Info.plist
+```
+
+### 播放頁控制
+
+- 「顯示彈幕」是單一 VoiceOver 控制項，狀態使用「已開啟／已關閉」值；雙擊可切換。
+- 有文字的「更多選項」不重複朗讀，雙擊可開啟選單；選單內保留快取、稍後再看、筆記、封面及其他原有功能。
+
+### 保存到相簿
+
+- 「保存到相簿」可由播放頁找到；保存目前影片分 P 後，實機已確認影片時長完整且有聲音。
+- 保存成功後直接把同一顆按鈕改成「已保存到相簿」，不再額外顯示獨立 `PhotoExportStatus`。
+- 保存狀態以影片 `cid` 分離，不可使用單一全域 completed 狀態。
+- 原生成功建立 Photos asset 後，保存 `PHObjectPlaceholder.localIdentifier`。
+- 重新進入頁面、切換影片或 App 回到前景時，依 local identifier 查詢資產是否仍存在。
+- 使用者從相簿刪除該資產後，狀態必須回復為「保存到相簿」。
+- local identifier 只存 `GStorage.localCache`，不得放入可匯出／匯入的設定資料。
+- 沒有 Photos read 權限時保留 last-known 狀態，不把權限錯誤誤判成資產不存在。
+- 舊版本已保存、但從未記錄 local identifier 的影片無法可靠反查；這類影片可能先顯示「保存到相簿」，重新用新版保存一次後才建立可追蹤紀錄。
+- 保存流程的快取重用、音畫合成與下載完整性規格見 `docs/VIDEO_PHOTO_EXPORT.md`。
 
 ## 彈幕、動態與評論附圖分享基準
 
@@ -84,6 +181,7 @@ lib/utils/image_utils.dart
 - 單張直接開啟系統分享；多張先以「第 n 張圖片」選擇，取消不可分享任何檔案。
 - 分享檔案必須是 `imgSrc` 的原始附圖，不能是含有評論文字、頭像或 QR code 的評論截圖。
 - 既有「保存評論」保留；下載或使用者取消分享後，loading 遮罩必須關閉。
+
 ## iOS 影片音訊與背景播放基準
 
 播放相關修改必須同時保住兩件事：
@@ -104,21 +202,21 @@ ios/Runner/Info.plist
 
 ### 控制中心／通知中心與進度同步
 
-- 不可只等 didEnterBackground 才交接：UIScene.willDeactivateNotification 與 Flutter inactive 都必須涵蓋，舊 iOS 使用 willResignActiveNotification。
-- 回到 didActivate／didBecomeActive／resumed 才恢復前景 mixWithOthers，保留起播旁白共存與背景備援。
-- 共用 `lib/common/widgets/progress_bar/audio_video_progress_bar.dart` 更新 progress、total、onSeek 與拖曳位置時，必須同步標記 semantics 更新；只有 markNeedsPaint 不會刷新 VoiceOver 快取。
+- 不可只等 `didEnterBackground` 才交接：`UIScene.willDeactivateNotification` 與 Flutter inactive 都必須涵蓋，舊 iOS 使用 `willResignActiveNotification`。
+- 回到 `didActivate`／`didBecomeActive`／resumed 才恢復前景 `mixWithOthers`，保留起播旁白共存與背景備援。
+- 共用 `lib/common/widgets/progress_bar/audio_video_progress_bar.dart` 更新 progress、total、onSeek 與拖曳位置時，必須同步標記 semantics 更新；只有 `markNeedsPaint` 不會刷新 VoiceOver 快取。
 - 不新增每秒主動朗讀或焦點跳轉。
 - 完整修改與後續回歸清單見 `docs/IOS_OVERLAY_PLAYBACK_FIX.md`。
 
 ### paused-first 背景恢復的目前方案
 
-早期已確認「影片正在播放後退背景」本來就能建立有效的系統媒體狀態；真正困難的是：
+真正需要保護的流程：
 
 ```text
 前景播放 → 前景暫停 → 退背景／鎖屏 → Magic Tap 播放
 ```
 
-連續零音量 native audio bridge 可以解決，但長時間播放靜音音訊會增加耗電，因此背景播放子系統自 `0cd4b40` 起採用、在 `3fc0d65` 已驗證、並延續到本輪基準 的方案為：
+目前已驗證方案：
 
 - 只有「已暫停後交接至系統角色」的必要情況才啟動 native `AVAudioEngine + AVAudioPlayerNode`。
 - 使用真實硬體 mixer format 建立零音量 PCM buffer。
@@ -135,8 +233,13 @@ ios/Runner/Info.plist
 - [ ] 回到 App 後 VoiceOver 正常。
 - [ ] 開始／恢復影片時不截斷 VoiceOver 正在說的句子。
 
-完整背景音訊排查記錄另見 `docs/IOS_BACKGROUND_AUDIO.md` 與 `docs/PLAYBACK_AUDIO_HANDOFF.md
-docs/DANMAKU_DYNAMIC_IMAGE_A11Y.md`。
+完整背景音訊排查記錄另見：
+
+```text
+docs/IOS_BACKGROUND_AUDIO.md
+docs/PLAYBACK_AUDIO_HANDOFF.md
+docs/DANMAKU_DYNAMIC_IMAGE_A11Y.md
+```
 
 ## 動態「造訪使用者」基準
 
@@ -160,7 +263,7 @@ module_author.mid → /member?mid=<UID>
 
 Bilibili 的 `AUTHOR_TYPE_UGC_SEASON` 動態中，`module_author.mid` 可能是影片 aid，而不是 UP 主 UID，因此不能直接當會員 UID 使用。
 
-目前穩定基準採用已實機驗證成功的方式：
+目前穩定基準：
 
 ```text
 UGC season aid
@@ -169,19 +272,17 @@ UGC season aid
 → /member?mid=<真正 UP 主 UID>
 ```
 
-這條路徑可能比普通已關注 UP 稍慢，但已確認能正確進入發佈者頁面。
+這條路徑已確認能正確進入發佈者頁面。
 
 ### 已撤回的合集快取實驗
 
-下列三個 commit 曾嘗試使用 `seasonId → ownerMid` 持久化快取，以及優先呼叫訂閱合集 API：
+以下歷史實驗不屬於目前穩定基準，日後不要自動重新套用：
 
 ```text
 caf67d4dee23992bec1c5874b0267580c35c20ef  perf(a11y): cache subscribed UGC season owners
 c05910dde5ae0900f65789b1247a4a41719adb95  perf(a11y): reuse UGC season owner cache
 1dc1ab306a39b2b03b37e11fb110a55bf5563ae0  perf(a11y): prefer UGC season owner shortcut
 ```
-
-實機使用感受沒有比既有路徑明顯更快，因此**這三個 commit 已從 `main` 撤回，不屬於目前穩定基準**。日後不要因看到這些歷史 commit 就自動重新套用。
 
 ## 動態投票穩定基準
 
@@ -229,17 +330,15 @@ lib/pages/fav_panel/view.dart
 lib/pages/video/pay_coins/view.dart
 ```
 
-原版視覺上的投幣角色圖片實際承擔送出動作，但沒有按鈕語義，而且原創影片的 1／2 枚選擇依賴 PageView 橫向滑動，VoiceOver 使用者無法可靠知道或切換到 2 枚。
-
 目前基準必須維持：
 
 - 原創且尚有完整投幣額度的影片，VoiceOver 可直接左右滑找到兩個獨立按鈕：「投1枚硬幣」與「投2枚硬幣」。
 - 雙擊「投1枚硬幣」直接投出 1 枚；雙擊「投2枚硬幣」直接投出 2 枚，不需要先操作視覺 PageView 或再找第二個確認按鈕。
 - **「投2枚硬幣」已由 iPhone VoiceOver 實機驗證，可一次正常送出 2 枚硬幣。**
 - 若影片已經投過 1 枚，剩餘額度只能再投 1 枚；2 枚選項不可誤導成仍可投 2 枚。
-- 轉載／非原創影片依 Bilibili 原有限制最多只能投 1 枚，不應為了無障礙強行提供 2 枚操作。
+- 轉載／非原創影片依 Bilibili 原有限制最多只能投 1 枚。
 - 餘額不足的投幣項目必須正確呈現停用狀態與提示。
-- 硬幣餘額／已投硬幣資訊有獨立且清楚的 semantics，不依賴圖片猜測。
+- 硬幣餘額／已投硬幣資訊有獨立且清楚的 semantics。
 - 「同時點讚」是單一 checkbox semantics，會朗讀已勾選／未勾選且可雙擊切換。
 - 關閉投幣面板的圖片也必須有明確的「關閉投幣」按鈕語義。
 - 視覺使用者原本的 PageView、左右箭頭、橫向選 1／2 枚、投幣動畫與拖曳行為仍要保留；這些視覺控制不應額外形成重複的 VoiceOver 焦點。
@@ -282,11 +381,14 @@ docs/VOICEOVER_SEMANTICS_BASELINE.md
 docs/IOS_RICH_TEXT_VOICEOVER_BASELINE.md
 docs/LIVE_ACCESSIBILITY_BASELINE.md
 docs/VOICEOVER_CONTINUOUS_READING.md
+docs/COMMENT_PAGINATION_RECOVERY.md
+docs/COMMENT_SWIPE_PERFORMANCE.md
 docs/COMPOSER_DOCK.md
 docs/COMPOSER_TOUCH_PRIORITY.md
 docs/VIDEO_BUFFERING.md
 docs/IOS_BACKGROUND_AUDIO.md
 docs/PLAYBACK_AUDIO_HANDOFF.md
+docs/VIDEO_PHOTO_EXPORT.md
 ```
 
 尤其不要因更新 Pili Plus 上游而退回：
@@ -297,10 +399,12 @@ docs/PLAYBACK_AUDIO_HANDOFF.md
 - VoiceOver 連續閱讀。
 - 播放緩衝優化。
 - 首頁與動態等頁面的既有語義整理。
+- UP 個人頁投稿列表的左右滑焦點穩定。
+- 影片保存狀態按影片分離及刪除後重新可保存。
 
 ## 本輪重要 commits
 
-以下重要修正都包含在目前已驗證 App 基準 `9a98521` 的 ancestry 中：
+以下重要修正都包含在目前已驗證 App 基準 `18e4c35` 的 ancestry 中：
 
 ```text
 f2ae922820e20ef8864afba60e451a4fa7c78505  fix(ios): preserve VoiceOver speech during playback
@@ -316,6 +420,14 @@ b7392297bd52aecd3f7ce80382a15ddee9312208  fix(ios): use hardware audio format fo
 26c746bcbe0ee229bb81fd05d5e8c96ac502d3f5  fix(a11y): merge favorite folder controls
 a31ac99b488eaf6bf4e76c5d17f02e9a09ff68d1  fix(a11y): expose coin controls to VoiceOver
 3fc0d658b5f247c8dd919089cfa4efdea4a70e5d  fix(a11y): expose direct one and two coin actions
+84d046b346921a01afb26b01455a324483010eb0  fix(a11y): recover continuous comment paging across all reply views
+fc8a520ce92833c19b43741c387a9cb45e5889ec  fix(a11y): restore smooth comment swipe behavior
+74bead3e9e1753571a6800268e329d9dd6fe1aa4  fix: replace photo export status with per-video button state
+c9a2cc24b8059bfa01dd7fe56685c2c6fefa9281  fix(ios): track exported Photos assets by local identifier
+1303a484ff34ed2e05cff3d71d4f42bc6c5b5346  fix: keep Photos asset identifiers device-local
+c7e3d5721a524613314f16f2b1469ad3d96db1ea  chore(ios): explain Photos read access for export state
+44db81f704acf4b08cbaacc633ab37146239e298  fix(a11y): constrain focus visibility to nearest scrollable
+18e4c35bbe7176029e95bbb784244ce5bc801691  fix(a11y): keep member video focus inside inner scroll
 ```
 
 ## 同步 Pili Plus 上游時的最低驗收
@@ -325,7 +437,9 @@ a31ac99b488eaf6bf4e76c5d17f02e9a09ff68d1  fix(a11y): expose coin controls to Voi
 - [ ] 首頁／動態／我的等主要頁面左右滑與觸摸瀏覽正常。
 - [ ] 首頁頂部分頁切換穩定。
 - [ ] 評論與回覆可找到、可操作。
-- [ ] 連續閱讀沒有卡死或異常跳焦點。
+- [ ] 大量評論跨頁連續閱讀沒有卡死、異常跳焦點或需要先退一步才能繼續。
+- [ ] 評論單指左右滑手感沒有明顯變卡。
+- [ ] UP 個人頁投稿列表右滑可持續前進，左滑跨頁回翻不亂跳、不撞牆。
 - [ ] 動態投票可朗讀狀態並投票。
 - [ ] 投票建立頁「顯示投票比例」與「匿名投票」會朗讀勾選狀態，且不會朗讀「已變暗」。
 - [ ] 普通動態「造訪使用者」直接進正確 UP 主頁。
@@ -341,16 +455,7 @@ a31ac99b488eaf6bf4e76c5d17f02e9a09ff68d1  fix(a11y): expose coin controls to Voi
 - [ ] 回前景後 VoiceOver 正常。
 - [ ] 播放頁直接拉下控制中心／通知中心，雙指雙擊可播放／暫停，控制中心按鈕可用。
 - [ ] 播放頁進度列時間及百分比持續同步，上下滑仍可調整進度。
+- [ ] 保存影片後同一按鈕變成「已保存到相簿」，切到其他未保存影片不會誤顯示已保存。
+- [ ] 已保存影片若從 Photos 刪除，重新進前景／回到頁面後可恢復「保存到相簿」。
 
 任何一項失敗，都應視為上游同步 regression，而不是直接覆蓋目前無障礙實作。
-
-## 影片頁控制與保存到相簿基準
-
-自 `17007d6` 起納入已實機確認的穩定基準：
-
-- 「顯示彈幕」是單一 VoiceOver 控制項，狀態使用「已開啟／已關閉」值；雙擊可切換。
-- 有文字的「更多選項」不重複朗讀，雙擊可開啟選單；選單內保留快取、稍後再看、筆記、封面及其他原有功能。
-- 「保存到相簿」可由播放頁找到；保存目前影片分 P 後，已確認影片時長完整且有聲音。
-- 保存流程的快取重用、音畫合成與下載完整性規格見 `docs/VIDEO_PHOTO_EXPORT.md`。
-
-以上三項已由 iPhone VoiceOver 實機確認，後續同步 Pili Plus 上游時不得移除或改回未命名／重複朗讀的控制項。
