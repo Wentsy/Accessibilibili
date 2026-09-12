@@ -71,7 +71,7 @@
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>NSPhotoLibraryUsageDescription</key>
-		<string>允許保存圖片及影片到照片圖庫</string>
+		<string>用於保存您選擇的影片，並確認已保存的影片是否仍存在，以正確顯示保存狀態</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>將您選擇的影片及圖片保存到照片圖庫</string>
 		<key>NSCameraUsageDescription</key>
