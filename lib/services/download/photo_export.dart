@@ -19,7 +19,7 @@ abstract final class PhotoExport {
   static final _pending = <int>{};
 
   static Map<String, String> _assetIds() {
-    final value = GStorage.setting.get(_assetIdsKey);
+    final value = GStorage.localCache.get(_assetIdsKey);
     if (value is! Map) return <String, String>{};
     return <String, String>{
       for (final entry in value.entries)
@@ -43,14 +43,14 @@ abstract final class PhotoExport {
 
   static Future<void> _recordAsset(int cid, String localIdentifier) async {
     final ids = _assetIds()..['$cid'] = localIdentifier;
-    await GStorage.setting.put(_assetIdsKey, ids);
+    await GStorage.localCache.put(_assetIdsKey, ids);
     _markSaved(cid);
   }
 
   static Future<void> _forgetAsset(int cid) async {
     final ids = _assetIds();
     if (ids.remove('$cid') != null) {
-      await GStorage.setting.put(_assetIdsKey, ids);
+      await GStorage.localCache.put(_assetIdsKey, ids);
     }
     _unmarkSaved(cid);
   }
