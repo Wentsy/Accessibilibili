@@ -11,8 +11,16 @@ import 'package:synchronized/synchronized.dart';
 abstract final class PhotoExport {
   static const channel = MethodChannel('accessibilibili/video_export');
   static final status = ValueNotifier<String>('');
+  static final savedCids = ValueNotifier<Set<int>>(<int>{});
   static final _lock = Lock();
   static final _pending = <int>{};
+
+  static bool isSaved(int cid) => savedCids.value.contains(cid);
+
+  static void _markSaved(int cid) {
+    if (savedCids.value.contains(cid)) return;
+    savedCids.value = <int>{...savedCids.value, cid};
+  }
 
   static void report(String message) {
     status.value = message;
@@ -50,6 +58,10 @@ abstract final class PhotoExport {
   }
 
   static Future<void> save(BiliDownloadEntryInfo entry) async {
+    if (isSaved(entry.cid)) {
+      report('已保存到相簿：${entry.showTitle}');
+      return;
+    }
     if (!_pending.add(entry.cid)) {
       report('這部影片已在等待保存，請勿重複操作。');
       return;
@@ -75,6 +87,7 @@ abstract final class PhotoExport {
           );
           status.value = '正在保存到相簿：${entry.showTitle}';
           await channel.invokeMethod<void>('saveMovie', output);
+          _markSaved(entry.cid);
           report('已保存到相簿：${entry.showTitle}');
         } catch (e) {
           report('保存失敗：${_message(e)}。離線快取仍保留，可從快取頁重試。');
@@ -90,22 +103,31 @@ abstract final class PhotoExport {
   }
 }
 
-/// Persistent, discoverable feedback; no repeated progress announcements that
-/// interrupt VoiceOver's continuous reading or the player's audio session.
-class PhotoExportStatus extends StatelessWidget {
-  const PhotoExportStatus({super.key});
+/// The primary video action owns the saved-state feedback. Keeping it tied to
+/// the current cid prevents one video's completed state from leaking into the
+/// next video page.
+class PhotoExportButton extends StatelessWidget {
+  const PhotoExportButton({
+    super.key,
+    required this.cid,
+    required this.onPressed,
+  });
+
+  final int cid;
+  final VoidCallback onPressed;
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<String>(
-    valueListenable: PhotoExport.status,
-    builder: (context, message, _) => message.isEmpty
-        ? const SizedBox.shrink()
-        : Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Semantics(
-              container: true,
-              child: Text(message),
-            ),
-          ),
+  Widget build(BuildContext context) => ValueListenableBuilder<Set<int>>(
+    valueListenable: PhotoExport.savedCids,
+    builder: (context, savedCids, _) {
+      final isSaved = savedCids.contains(cid);
+      return TextButton.icon(
+        icon: Icon(
+          isSaved ? Icons.check_rounded : Icons.photo_library_outlined,
+        ),
+        label: Text(isSaved ? '已保存到相簿' : '保存到相簿'),
+        onPressed: isSaved ? null : onPressed,
+      );
+    },
   );
 }
