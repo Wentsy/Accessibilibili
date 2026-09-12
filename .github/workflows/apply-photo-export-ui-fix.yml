@@ -37,7 +37,7 @@ jobs:
             ],
           ),
           if (Platform.isIOS) const PhotoExportStatus(),
-'''
+          '''
           new = '''              if (Platform.isIOS)
                 Obx(
                   () => PhotoExportButton(
@@ -50,7 +50,7 @@ jobs:
               _moreBtn(colorScheme.onSurface, showLabel: true),
             ],
           ),
-'''
+          '''
           if old not in text:
               raise SystemExit('target photo export UI block was not found')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
