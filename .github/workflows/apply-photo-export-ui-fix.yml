@@ -27,30 +27,32 @@ jobs:
 
           path = Path('lib/pages/video/view.dart')
           text = path.read_text(encoding='utf-8')
-          old = '''              if (Platform.isIOS)
-                TextButton.icon(
-                  icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('保存到相簿'),
-                  onPressed: () => videoDetailController.onSaveToPhotos(context),
-                ),
-              _moreBtn(colorScheme.onSurface, showLabel: true),
-            ],
-          ),
-          if (Platform.isIOS) const PhotoExportStatus(),
-          '''
-          new = '''              if (Platform.isIOS)
-                Obx(
-                  () => PhotoExportButton(
-                    cid: videoDetailController.seasonCid ??
-                        videoDetailController.cid.value,
-                    onPressed: () =>
-                        videoDetailController.onSaveToPhotos(context),
-                  ),
-                ),
-              _moreBtn(colorScheme.onSurface, showLabel: true),
-            ],
-          ),
-          '''
+          old = '\n'.join([
+              '              if (Platform.isIOS)',
+              '                TextButton.icon(',
+              '                  icon: const Icon(Icons.photo_library_outlined),',
+              "                  label: const Text('保存到相簿'),",
+              '                  onPressed: () => videoDetailController.onSaveToPhotos(context),',
+              '                ),',
+              '              _moreBtn(colorScheme.onSurface, showLabel: true),',
+              '            ],',
+              '          ),',
+              '          if (Platform.isIOS) const PhotoExportStatus(),',
+          ]) + '\n'
+          new = '\n'.join([
+              '              if (Platform.isIOS)',
+              '                Obx(',
+              '                  () => PhotoExportButton(',
+              '                    cid: videoDetailController.seasonCid ??',
+              '                        videoDetailController.cid.value,',
+              '                    onPressed: () =>',
+              '                        videoDetailController.onSaveToPhotos(context),',
+              '                  ),',
+              '                ),',
+              '              _moreBtn(colorScheme.onSurface, showLabel: true),',
+              '            ],',
+              '          ),',
+          ]) + '\n'
           if old not in text:
               raise SystemExit('target photo export UI block was not found')
           path.write_text(text.replace(old, new, 1), encoding='utf-8')
