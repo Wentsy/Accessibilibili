@@ -12,9 +12,22 @@ final class VideoPhotoExporter {
     channel.setMethodCallHandler { call, result in
       switch call.method {
       case "requestPermission":
-        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
           DispatchQueue.main.async { result(status == .authorized || status == .limited) }
         }
+      case "assetExists":
+        guard let localIdentifier = call.arguments as? String,
+              !localIdentifier.isEmpty else {
+          result(FlutterError(code: "arguments", message: "缺少照片識別碼", details: nil))
+          return
+        }
+        let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        guard status == .authorized || status == .limited else {
+          result(FlutterError(code: "photos_permission", message: "目前無法讀取照片圖庫以確認影片是否仍存在", details: nil))
+          return
+        }
+        let assets = PHAsset.fetchAssets(withLocalIdentifiers: [localIdentifier], options: nil)
+        result(assets.count > 0)
       case "prepareMovie":
         guard let args = call.arguments as? [String: Any],
               let videos = args["videos"] as? [String], !videos.isEmpty else {
@@ -36,12 +49,17 @@ final class VideoPhotoExporter {
           result(FlutterError(code: "format", message: "照片圖庫不支援這個影片格式，請改用 H.264 重新下載", details: nil))
           return
         }
+        var localIdentifier: String?
         PHPhotoLibrary.shared().performChanges({
-          PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: URL(fileURLWithPath: path))
+          let request = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: URL(fileURLWithPath: path))
+          localIdentifier = request?.placeholderForCreatedAsset?.localIdentifier
         }) { success, error in
           DispatchQueue.main.async {
-            if success { result(nil) }
-            else {
+            if success, let localIdentifier, !localIdentifier.isEmpty {
+              result(localIdentifier)
+            } else if success {
+              result(FlutterError(code: "photos_identifier", message: "影片已寫入照片圖庫，但無法取得影片識別碼", details: nil))
+            } else {
               result(FlutterError(code: "photos", message: error?.localizedDescription ?? "照片圖庫無法保存這個影片格式", details: nil))
             }
           }
