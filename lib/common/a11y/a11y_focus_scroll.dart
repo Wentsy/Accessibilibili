@@ -31,6 +31,7 @@ void a11yEnsureVisible(BuildContext context, {
   bool immediate = true,
   bool recoverAfterSuppression = false,
   bool forwardRecovery = false,
+  bool nearestScrollableOnly = false,
 }) {
   if (!MediaQuery.accessibleNavigationOf(context)) return;
   if (DateTime.now().millisecondsSinceEpoch < _a11yFocusScrollSuppressedUntilMs) {
@@ -42,7 +43,8 @@ void a11yEnsureVisible(BuildContext context, {
         _deferredReplyFocus.remove(context);
         if (context.mounted) {
           a11yEnsureVisible(context, immediate: immediate,
-            recoverAfterSuppression: true, forwardRecovery: true);
+            recoverAfterSuppression: true, forwardRecovery: true,
+            nearestScrollableOnly: nearestScrollableOnly);
         }
       });
     }
@@ -93,14 +95,38 @@ void a11yEnsureVisible(BuildContext context, {
     // A restored old/top node must never be replayed as a backwards jump.
     if (forwardRecovery && itemRect.top < viewportRect.top) return;
 
+    Future<void> ensureVisible({
+      required double alignment,
+      required Duration duration,
+    }) {
+      // Nested pages such as an UP's contribution grid have both an inner
+      // content viewport and an outer profile/header viewport. Flutter's
+      // Scrollable.ensureVisible walks every scrollable ancestor, which can
+      // move both viewports during a VoiceOver backward swipe and invalidate
+      // the semantic focus handoff. Opted-in callers constrain the adjustment
+      // to the nearest viewport that actually owns the focused item.
+      if (nearestScrollableOnly) {
+        return scrollable.position.ensureVisible(
+          renderObject,
+          alignment: alignment,
+          duration: duration,
+          curve: Curves.easeOutCubic,
+        );
+      }
+      return Scrollable.ensureVisible(
+        context,
+        alignment: alignment,
+        duration: duration,
+        curve: Curves.easeOutCubic,
+      );
+    }
+
     // If VoiceOver somehow lands on a semantic node that is already outside
     // the real viewport, bring it back to the middle immediately.
     if (!viewportRect.overlaps(itemRect)) {
-      Scrollable.ensureVisible(
-        context,
+      ensureVisible(
         alignment: 0.5,
         duration: immediate ? Duration.zero : const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
       );
       return;
     }
@@ -121,11 +147,9 @@ void a11yEnsureVisible(BuildContext context, {
     // Pull the focused item slightly inward instead of centering it. This
     // keeps reading direction natural and causes Flutter to lay out semantic
     // nodes just beyond the visible edge.
-    Scrollable.ensureVisible(
-      context,
+    ensureVisible(
       alignment: nearBottom ? 0.68 : 0.32,
       duration: immediate ? Duration.zero : const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
     );
   });
   // Accessibility actions can arrive while Flutter is idle. Registering a
