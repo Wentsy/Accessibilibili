@@ -1498,15 +1498,17 @@ class _VideoDetailPageVState extends State<VideoDetailPageV>
             spacing: 8,
             children: [
               if (Platform.isIOS)
-                TextButton.icon(
-                  icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('保存到相簿'),
-                  onPressed: () => videoDetailController.onSaveToPhotos(context),
+                Obx(
+                  () => PhotoExportButton(
+                    cid: videoDetailController.seasonCid ??
+                        videoDetailController.cid.value,
+                    onPressed: () =>
+                        videoDetailController.onSaveToPhotos(context),
+                  ),
                 ),
               _moreBtn(colorScheme.onSurface, showLabel: true),
             ],
           ),
-          if (Platform.isIOS) const PhotoExportStatus(),
         ],
       ],
     );
