@@ -68,7 +68,10 @@ class VideoCardHMemberVideo extends StatelessWidget {
       label:
           '${videoItem.title}，播放 ${videoItem.stat?.view ?? "?"} 次$publishTimePart',
       hint: '點兩下開啟影片。上滑有更多操作',
-      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(
+        context,
+        nearestScrollableOnly: true,
+      ),
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(label: '分享'): () {
           if (bvid?.isNotEmpty != true) return;
