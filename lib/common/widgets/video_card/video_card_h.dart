@@ -61,6 +61,7 @@ class VideoCardH extends StatelessWidget {
             cover: videoItem.cover,
             ownerName: videoItem.owner.name,
             ownerMid: videoItem.owner.mid,
+            deferForAccessibility: true,
           );
         },
       },
