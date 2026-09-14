@@ -1,22 +1,25 @@
+import 'dart:ui' as ui;
+
 import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/pages/dynamics_repost/view.dart';
 import 'package:PiliPlus/utils/accounts.dart';
+import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/share_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
 /// 顯示影片播放頁與 VoiceOver 影片卡共用的分享對話框。
 ///
-/// VoiceOver 的 CustomSemanticsAction 在 iOS 上會於無障礙事件回呼期間執行。
-/// 從該回呼立即推 dialog 可能被事件本身吞掉，因此無障礙入口會先跨出
-/// 這次事件，再使用目前 App 的 active context 開啟同一個分享對話框。
+/// 影片卡的 bvid 並不保證存在；與開啟影片相同，缺少 bvid 時會使用 aid
+/// 換算 BV 號，避免 VoiceOver 分享動作在 `bvid == null` 時無聲退出。
 void showVideoShareDialog({
   required BuildContext context,
-  required String bvid,
+  String? bvid,
   int? aid,
   required String title,
   String? cover,
@@ -25,10 +28,34 @@ void showVideoShareDialog({
   String playedTimePos = '',
   bool deferForAccessibility = false,
 }) {
-  if (bvid.isEmpty) return;
+  var resolvedBvid = bvid;
+  if ((resolvedBvid == null || resolvedBvid.isEmpty) && aid != null) {
+    resolvedBvid = IdUtils.av2bv(aid);
+  }
 
-  final videoUrl = '${HttpString.baseUrl}/video/$bvid';
+  if (resolvedBvid == null || resolvedBvid.isEmpty) {
+    if (deferForAccessibility) {
+      SemanticsService.sendAnnouncement(
+        WidgetsBinding.instance.platformDispatcher.views.first,
+        '無法取得影片資訊，分享未開啟',
+        ui.TextDirection.ltr,
+      );
+    }
+    SmartDialog.showToast('無法取得影片資訊');
+    return;
+  }
+
+  final videoUrl = '${HttpString.baseUrl}/video/$resolvedBvid';
   final isLogin = Accounts.main.isLogin;
+
+  if (deferForAccessibility) {
+    // 這也是診斷標記：若能聽到這句，就代表 CustomSemanticsAction 確實有進入分享 handler。
+    SemanticsService.sendAnnouncement(
+      WidgetsBinding.instance.platformDispatcher.views.first,
+      '正在開啟分享',
+      ui.TextDirection.ltr,
+    );
+  }
 
   void openDialog() {
     final activeContext = Get.context ?? context;
