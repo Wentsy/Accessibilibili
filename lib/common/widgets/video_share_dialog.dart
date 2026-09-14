@@ -9,7 +9,9 @@ import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/share_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:flutter/material.dart';
+// Match the app's Material widgets and localization delegates.
+// Legacy flutter/material.dart uses a different MaterialLocalizations type.
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 
