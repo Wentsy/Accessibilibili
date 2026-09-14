@@ -430,6 +430,31 @@ c7e3d5721a524613314f16f2b1469ad3d96db1ea  chore(ios): explain Photos read access
 18e4c35bbe7176029e95bbb784244ce5bc801691  fix(a11y): keep member video focus inside inner scroll
 ```
 
+
+## 影片卡片分享穩定基準（2026-09-14 實機驗證）
+
+重點檔案：
+
+```text
+lib/common/widgets/video_share_dialog.dart
+lib/common/widgets/video_card/video_card_v.dart
+lib/common/widgets/video_card/video_card_h.dart
+```
+
+- 首頁及其他影片列表的影片卡片，VoiceOver 上滑操作中的「分享」可正常開啟影片分享介面。
+- 分享介面使用與影片播放頁相同的分享選單，包含「複製連結」、「其它app打开」及手機上的「分享視頻」等選項。
+- 雙擊「分享視頻」後可正常進入 iOS 系統分享介面，不會停在「正在開啟分享」或顯示「分享介面開啟失敗」。
+- 影片卡缺少 bvid 時可由 aid 換算影片識別碼；無法取得影片資訊時才提示失敗。
+- 分享視窗的關閉、複製連結及後續分享操作都使用目前視窗的 Navigator，不會因 VoiceOver 自訂動作造成路由失效。
+- 已實機驗證：2026-09-14，首頁影片卡上下滑選單分享成功。
+
+本次修正 commits：
+
+```text
+c62b027d101dbad274cb96f734b8d7e988d86016  fix(a11y): use player dialog presentation for video card sharing
+263827f257f69da7ebf606ca9044bbeb1b625105  fix: use app Material UI library for video share dialog
+```
+
 ## 同步 Pili Plus 上游時的最低驗收
 
 每次更新官方版本後，在把新版視為 Accessibilibili 新基準前，至少用 iPhone VoiceOver 確認：
@@ -455,6 +480,7 @@ c7e3d5721a524613314f16f2b1469ad3d96db1ea  chore(ios): explain Photos read access
 - [ ] 回前景後 VoiceOver 正常。
 - [ ] 播放頁直接拉下控制中心／通知中心，雙指雙擊可播放／暫停，控制中心按鈕可用。
 - [ ] 播放頁進度列時間及百分比持續同步，上下滑仍可調整進度。
+- [ ] 首頁及其他影片卡片上滑「分享」可開啟同一分享介面，並能進入 iOS 系統分享。
 - [ ] 保存影片後同一按鈕變成「已保存到相簿」，切到其他未保存影片不會誤顯示已保存。
 - [ ] 已保存影片若從 Photos 刪除，重新進前景／回到頁面後可恢復「保存到相簿」。
 
