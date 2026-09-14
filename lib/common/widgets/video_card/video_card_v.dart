@@ -77,7 +77,6 @@ class VideoCardV extends StatelessWidget {
           );
         }
         break;
-      // 动态
       case 'picture':
         try {
           PiliScheme.routePushFromUrl(videoItem.uri!);
@@ -92,7 +91,6 @@ class VideoCardV extends StatelessWidget {
     }
   }
 
-  /// 無障礙自訂操作：VoiceOver 上下滑切換、點兩下啟用
   Map<CustomSemanticsAction, VoidCallback> _a11yActions(BuildContext context) {
     final bvid = videoItem.bvid;
     return <CustomSemanticsAction, VoidCallback>{
@@ -101,7 +99,6 @@ class VideoCardV extends StatelessWidget {
         final res = await VideoHttp.likeVideo(bvid: bvid, type: true);
         if (res case Success(:final response)) {
           SmartDialog.showToast(response);
-          // 🔴 語音反饋：VoiceOver 立即朗讀結果
           SemanticsService.sendAnnouncement(
               WidgetsBinding.instance.platformDispatcher.views.first,
               response,
@@ -124,6 +121,7 @@ class VideoCardV extends StatelessWidget {
           cover: videoItem.cover,
           ownerName: videoItem.owner.name,
           ownerMid: videoItem.owner.mid,
+          deferForAccessibility: true,
         );
       },
       CustomSemanticsAction(label: '稍後再看'): () {
@@ -178,8 +176,6 @@ class VideoCardV extends StatelessWidget {
       cover: videoItem.cover,
       bvid: videoItem.bvid,
     );
-    // 🔴 無障礙改造：整卡一個語義節點，VoiceOver 左右滑逐卡瀏覽
-    // 標題+UP主+時長一次唸完；上下滑 = 點讚/分享/更多 操作
     final durationPart = videoItem.duration > 0
         ? '，時長 ${DurationUtils.formatDuration(videoItem.duration)}'
         : '';
