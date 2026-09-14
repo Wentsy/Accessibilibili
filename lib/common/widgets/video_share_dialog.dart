@@ -16,7 +16,8 @@ import 'package:get/get.dart';
 /// 顯示影片播放頁與 VoiceOver 影片卡共用的分享對話框。
 ///
 /// 影片卡的 bvid 並不保證存在；與開啟影片相同，缺少 bvid 時會使用 aid
-/// 換算 BV 號，避免 VoiceOver 分享動作在 `bvid == null` 時無聲退出。
+/// 換算 BV 號。VoiceOver 自訂動作不直接從 Semantics callback 推路由；
+/// 會強制排入下一個 Flutter frame，再由 app 的 root Navigator 開啟同一個分享對話框。
 void showVideoShareDialog({
   required BuildContext context,
   String? bvid,
@@ -48,24 +49,7 @@ void showVideoShareDialog({
   final videoUrl = '${HttpString.baseUrl}/video/$resolvedBvid';
   final isLogin = Accounts.main.isLogin;
 
-  if (deferForAccessibility) {
-    // 這也是診斷標記：若能聽到這句，就代表 CustomSemanticsAction 確實有進入分享 handler。
-    SemanticsService.sendAnnouncement(
-      WidgetsBinding.instance.platformDispatcher.views.first,
-      '正在開啟分享',
-      ui.TextDirection.ltr,
-    );
-  }
-
-  void openDialog() {
-    final activeContext = Get.context ?? context;
-    if (!activeContext.mounted) return;
-
-    showDialog<void>(
-      context: activeContext,
-      // VoiceOver 自訂動作由雙擊觸發，避免殘留事件把剛打開的 dialog 關掉。
-      barrierDismissible: !deferForAccessibility,
-      builder: (_) => SimpleDialog(
+  Widget buildShareDialog(BuildContext presentationContext) => SimpleDialog(
         clipBehavior: Clip.hardEdge,
         contentPadding: const EdgeInsets.symmetric(vertical: 12),
         children: [
@@ -125,7 +109,7 @@ void showVideoShareDialog({
               onTap: () {
                 Get.back();
                 showModalBottomSheet(
-                  context: activeContext,
+                  context: presentationContext,
                   isScrollControlled: true,
                   useSafeArea: true,
                   builder: (context) => RepostPanel(
@@ -149,7 +133,7 @@ void showVideoShareDialog({
                 Get.back();
                 try {
                   PageUtils.pmShare(
-                    activeContext,
+                    presentationContext,
                     content: {
                       'id': aid.toString(),
                       'title': title,
@@ -166,13 +150,46 @@ void showVideoShareDialog({
               },
             ),
         ],
-      ),
-    );
-  }
+      );
 
   if (deferForAccessibility) {
-    Future<void>.delayed(const Duration(milliseconds: 300), openDialog);
-  } else {
-    openDialog();
+    SemanticsService.sendAnnouncement(
+      WidgetsBinding.instance.platformDispatcher.views.first,
+      '正在開啟分享',
+      ui.TextDirection.ltr,
+    );
+
+    // CustomSemanticsAction 不一定會觸發新的 Flutter frame。
+    // 主動 scheduleFrame，確保下面的 post-frame callback 一定會執行，
+    // 並且已經完全離開 iOS VoiceOver 的 Semantics action callback。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navigator = Get.key.currentState;
+      final overlayContext = navigator?.overlay?.context;
+      if (navigator == null || overlayContext == null) {
+        SmartDialog.showToast('分享介面暫時無法開啟');
+        SemanticsService.sendAnnouncement(
+          WidgetsBinding.instance.platformDispatcher.views.first,
+          '分享介面開啟失敗',
+          ui.TextDirection.ltr,
+        );
+        return;
+      }
+
+      navigator.push<void>(
+        DialogRoute<void>(
+          context: overlayContext,
+          barrierDismissible: false,
+          builder: (_) => buildShareDialog(overlayContext),
+        ),
+      );
+    });
+    WidgetsBinding.instance.scheduleFrame();
+    return;
   }
+
+  if (!context.mounted) return;
+  showDialog<void>(
+    context: context,
+    builder: (_) => buildShareDialog(context),
+  );
 }
