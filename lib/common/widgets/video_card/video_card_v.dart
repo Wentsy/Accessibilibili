@@ -112,7 +112,6 @@ class VideoCardV extends StatelessWidget {
         }
       },
       CustomSemanticsAction(label: '分享'): () {
-        if (bvid == null) return;
         showVideoShareDialog(
           context: context,
           bvid: bvid,
