@@ -94,6 +94,7 @@ class ActionItem extends StatelessWidget {
       selected: selectStatus,
       value: selectStatus ? '已啟用' : '未啟用',
       liveRegion: true,
+      onTap: onTap,
       child: child,
     );
     return expand ? Expanded(child: child) : child;
