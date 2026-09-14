@@ -52,7 +52,6 @@ class VideoCardH extends StatelessWidget {
       onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(label: '分享'): () {
-          if (bvid == null) return;
           showVideoShareDialog(
             context: context,
             bvid: bvid,
