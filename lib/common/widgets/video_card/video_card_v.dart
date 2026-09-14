@@ -5,6 +5,7 @@ import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/common/widgets/video_popup_menu.dart';
+import 'package:PiliPlus/common/widgets/video_share_dialog.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/http/video.dart';
@@ -115,8 +116,15 @@ class VideoCardV extends StatelessWidget {
       },
       CustomSemanticsAction(label: '分享'): () {
         if (bvid == null) return;
-        Utils.copyText('https://www.bilibili.com/video/$bvid');
-        SmartDialog.showToast('連結已複製，可直接分享');
+        showVideoShareDialog(
+          context: context,
+          bvid: bvid,
+          aid: videoItem.aid,
+          title: videoItem.title,
+          cover: videoItem.cover,
+          ownerName: videoItem.owner.name,
+          ownerMid: videoItem.owner.mid,
+        );
       },
       CustomSemanticsAction(label: '稍後再看'): () {
         if (bvid == null || !Accounts.main.isLogin) {
