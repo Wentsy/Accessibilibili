@@ -1,13 +1,13 @@
 import 'package:flutter/semantics.dart' show CustomSemanticsAction;
 import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/style.dart';
-import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/image/image_save.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/progress_bar/video_progress_indicator.dart';
 import 'package:PiliPlus/common/widgets/stat/stat.dart';
 import 'package:PiliPlus/common/widgets/video_popup_menu.dart';
+import 'package:PiliPlus/common/widgets/video_share_dialog.dart';
 import 'package:PiliPlus/http/search.dart';
 import 'package:PiliPlus/models/horizontal_video_model.dart';
 import 'package:PiliPlus/models_new/video/video_detail/dimension.dart';
@@ -15,7 +15,6 @@ import 'package:PiliPlus/utils/date_utils.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
-import 'package:PiliPlus/utils/utils.dart';
 import 'package:material_ui/material_ui.dart';
 
 // 视频卡片 - 水平布局
@@ -54,8 +53,15 @@ class VideoCardH extends StatelessWidget {
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(label: '分享'): () {
           if (bvid == null) return;
-          Utils.copyText('https://www.bilibili.com/video/$bvid');
-          SmartDialog.showToast('連結已複製，可直接分享');
+          showVideoShareDialog(
+            context: context,
+            bvid: bvid,
+            aid: videoItem.aid,
+            title: videoItem.title,
+            cover: videoItem.cover,
+            ownerName: videoItem.owner.name,
+            ownerMid: videoItem.owner.mid,
+          );
         },
       },
       child: ExcludeSemantics(
