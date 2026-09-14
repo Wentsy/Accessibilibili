@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:PiliPlus/http/constants.dart';
@@ -11,13 +12,12 @@ import 'package:PiliPlus/utils/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
-import 'package:get/get.dart';
 
 /// 顯示影片播放頁與 VoiceOver 影片卡共用的分享對話框。
 ///
 /// 影片卡的 bvid 並不保證存在；與開啟影片相同，缺少 bvid 時會使用 aid
 /// 換算 BV 號。VoiceOver 自訂動作不直接從 Semantics callback 推路由；
-/// 會強制排入下一個 Flutter frame，再由 app 的 root Navigator 開啟同一個分享對話框。
+/// 只延後到下一個事件迴圈，隨後與播放頁使用相同的 showDialog 路徑。
 void showVideoShareDialog({
   required BuildContext context,
   String? bvid,
@@ -49,7 +49,10 @@ void showVideoShareDialog({
   final videoUrl = '${HttpString.baseUrl}/video/$resolvedBvid';
   final isLogin = Accounts.main.isLogin;
 
-  Widget buildShareDialog(BuildContext presentationContext) => SimpleDialog(
+  Widget buildShareDialog(
+    BuildContext presentationContext,
+    BuildContext dialogContext,
+  ) => SimpleDialog(
         clipBehavior: Clip.hardEdge,
         contentPadding: const EdgeInsets.symmetric(vertical: 12),
         children: [
@@ -60,7 +63,7 @@ void showVideoShareDialog({
               style: TextStyle(fontSize: 14),
             ),
             onTap: () {
-              Get.back();
+              Navigator.of(dialogContext).pop();
               Utils.copyText(videoUrl);
             },
             trailing: playedTimePos.isNotEmpty
@@ -68,7 +71,7 @@ void showVideoShareDialog({
                     tooltip: '精确分享',
                     icon: const Icon(Icons.timer_outlined),
                     onPressed: () {
-                      Get.back();
+                      Navigator.of(dialogContext).pop();
                       Utils.copyText('$videoUrl$playedTimePos');
                     },
                   )
@@ -81,7 +84,7 @@ void showVideoShareDialog({
               style: TextStyle(fontSize: 14),
             ),
             onTap: () {
-              Get.back();
+              Navigator.of(dialogContext).pop();
               PageUtils.launchURL(videoUrl);
             },
           ),
@@ -93,7 +96,7 @@ void showVideoShareDialog({
                 style: TextStyle(fontSize: 14),
               ),
               onTap: () {
-                Get.back();
+                Navigator.of(dialogContext).pop();
                 ShareUtils.shareText(
                   '$title UP主: ${ownerName ?? ''} - $videoUrl',
                 );
@@ -107,7 +110,7 @@ void showVideoShareDialog({
                 style: TextStyle(fontSize: 14),
               ),
               onTap: () {
-                Get.back();
+                Navigator.of(dialogContext).pop();
                 showModalBottomSheet(
                   context: presentationContext,
                   isScrollControlled: true,
@@ -130,7 +133,7 @@ void showVideoShareDialog({
                 style: TextStyle(fontSize: 14),
               ),
               onTap: () {
-                Get.back();
+                Navigator.of(dialogContext).pop();
                 try {
                   PageUtils.pmShare(
                     presentationContext,
@@ -152,44 +155,41 @@ void showVideoShareDialog({
         ],
       );
 
-  if (deferForAccessibility) {
-    SemanticsService.sendAnnouncement(
-      WidgetsBinding.instance.platformDispatcher.views.first,
-      '正在開啟分享',
-      ui.TextDirection.ltr,
-    );
-
-    // CustomSemanticsAction 不一定會觸發新的 Flutter frame。
-    // 主動 scheduleFrame，確保下面的 post-frame callback 一定會執行，
-    // 並且已經完全離開 iOS VoiceOver 的 Semantics action callback。
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final navigator = Get.key.currentState;
-      final overlayContext = navigator?.overlay?.context;
-      if (navigator == null || overlayContext == null) {
-        SmartDialog.showToast('分享介面暫時無法開啟');
-        SemanticsService.sendAnnouncement(
-          WidgetsBinding.instance.platformDispatcher.views.first,
-          '分享介面開啟失敗',
-          ui.TextDirection.ltr,
-        );
-        return;
-      }
-
-      navigator.push<void>(
-        DialogRoute<void>(
-          context: overlayContext,
-          barrierDismissible: false,
-          builder: (_) => buildShareDialog(overlayContext),
-        ),
+  void reportOpenFailure() {
+    SmartDialog.showToast('分享介面暫時無法開啟，請重試');
+    if (deferForAccessibility) {
+      SemanticsService.sendAnnouncement(
+        WidgetsBinding.instance.platformDispatcher.views.first,
+        '分享介面開啟失敗，請重試',
+        ui.TextDirection.ltr,
       );
-    });
-    WidgetsBinding.instance.scheduleFrame();
-    return;
+    }
   }
 
-  if (!context.mounted) return;
-  showDialog<void>(
-    context: context,
-    builder: (_) => buildShareDialog(context),
-  );
+  Future<void> openDialog() async {
+    if (!context.mounted) {
+      reportOpenFailure();
+      return;
+    }
+    try {
+      // Keep the originating page's Navigator and inherited theme, exactly as
+      // the in-player share button does. Close using the dialog's own context.
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => buildShareDialog(context, dialogContext),
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Unable to open video share dialog: $error\n$stackTrace');
+      reportOpenFailure();
+    }
+  }
+
+  if (deferForAccessibility) {
+    // Leave the native semantics callback without waiting for a rendered frame.
+    // The dialog itself requests the frame; a post-frame callback must not be
+    // the prerequisite for creating it. Let the new route speak its contents.
+    Timer.run(() => unawaited(openDialog()));
+  } else {
+    unawaited(openDialog());
+  }
 }
