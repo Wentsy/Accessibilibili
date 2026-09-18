@@ -39,6 +39,7 @@ internal static class Program
         }
 
         WinForms.ApplicationConfiguration.Initialize();
+        EnsureTelegramRunning();
 
         _worker = new Thread(WorkerLoop)
         {
@@ -89,6 +90,45 @@ internal static class Program
         };
 
         WinForms.Application.Run();
+    }
+
+    private static void EnsureTelegramRunning()
+    {
+        if (Process.GetProcessesByName("Telegram").Length > 0
+            || Process.GetProcessesByName("TelegramDesktop").Length > 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var telegram = Path.Combine(AppContext.BaseDirectory, "Telegram.exe");
+            if (File.Exists(telegram))
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = telegram,
+                    WorkingDirectory = AppContext.BaseDirectory,
+                    UseShellExecute = true
+                });
+            }
+            else
+            {
+                WinForms.MessageBox.Show(
+                    "找不到同資料夾的 Telegram.exe。請保留整個壓縮包解壓後的檔案結構。",
+                    "TelegramAccessible",
+                    WinForms.MessageBoxButtons.OK,
+                    WinForms.MessageBoxIcon.Warning);
+            }
+        }
+        catch
+        {
+            WinForms.MessageBox.Show(
+                "Telegram 啟動失敗。你也可以先手動開啟 Telegram.exe，再執行 TelegramAccessible.exe。",
+                "TelegramAccessible",
+                WinForms.MessageBoxButtons.OK,
+                WinForms.MessageBoxIcon.Warning);
+        }
     }
 
     private static void WorkerLoop()
