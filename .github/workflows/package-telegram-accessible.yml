@@ -1,0 +1,70 @@
+name: Package accessible Telegram portable
+
+on:
+  push:
+    branches:
+      - build/telegram-accessibility-exe
+    paths:
+      - '.github/workflows/package-telegram-accessible.yml'
+      - 'tools/TelegramAccessibility/**'
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build accessibility launcher
+        shell: pwsh
+        run: |
+          dotnet publish tools/TelegramAccessibility/TelegramAccessibility.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=None -p:DebugSymbols=false -o publish
+
+      - name: Download Telegram Desktop 7.2.9 portable
+        shell: pwsh
+        run: |
+          $url = 'https://github.com/telegramdesktop/tdesktop/releases/download/v7.2.9/td-portable-win-x64-7.2.9.zip'
+          Invoke-WebRequest -Uri $url -OutFile telegram.zip
+          Expand-Archive telegram.zip -DestinationPath telegram-unpacked -Force
+
+      - name: Assemble portable package
+        shell: pwsh
+        run: |
+          $telegram = Get-ChildItem telegram-unpacked -Recurse -Filter Telegram.exe | Select-Object -First 1
+          if (-not $telegram) { throw 'Telegram.exe not found in official portable archive.' }
+          New-Item -ItemType Directory -Force artifact | Out-Null
+          Copy-Item (Join-Path $telegram.Directory.FullName '*') artifact -Recurse -Force
+          Copy-Item publish/TelegramAccessible.exe artifact/TelegramAccessible.exe -Force
+          @'
+          Telegram 7.2.9 希希無障礙可攜測試版
+
+          使用方式：
+          1. 解壓整個資料夾。
+          2. 執行 TelegramAccessible.exe。
+          3. 它會自動啟動同資料夾的官方 Telegram.exe。
+          4. TelegramAccessible 會留在系統通知區；結束 Telegram 後可從通知區結束它。
+
+          這不是 NVDA 外掛，也不會掃描整個聊天訊息樹。
+
+          第一版測試重點：
+          - Hermes 機器人聊天的輸入框按一次 Tab，是否能直接進訊息清單。
+          - /help 等 Bot Commands 是否不再把第一次 Tab 卡住。
+          - Bot command / 一般按鈕使用 Enter 或 Space 是否能啟用。
+          - 訊息清單的方向鍵是否維持 Telegram 原生操作。
+          - 語音訊息 Space 是否維持 Telegram 原生播放/暫停。
+
+          如果某個 Telegram 控制項沒有標準 UI Automation 動作，啟動器才會退回模擬點擊目前控制項。
+          '@ | Set-Content artifact/使用說明.txt -Encoding UTF8
+
+      - name: Upload portable package
+        uses: actions/upload-artifact@v7
+        with:
+          name: Telegram-7.2.9-XiXi-Accessible-Portable
+          path: artifact/
+          retention-days: 3
