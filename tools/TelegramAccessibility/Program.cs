@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Automation;
 using WinForms = System.Windows.Forms;
@@ -38,7 +39,8 @@ internal static class Program
             return;
         }
 
-        WinForms.ApplicationConfiguration.Initialize();
+        WinForms.Application.EnableVisualStyles();
+        WinForms.Application.SetCompatibleTextRenderingDefault(false);
         EnsureTelegramRunning();
 
         _worker = new Thread(WorkerLoop)
@@ -154,7 +156,7 @@ internal static class Program
         }
 
         var data = Marshal.PtrToStructure<KbdLlHookStruct>(lParam);
-        if ((ulong)data.DwExtraInfo.ToInt64() == InjectedMarker || !IsTelegramForeground())
+        if ((ulong)data.DwExtraInfo == InjectedMarker || !IsTelegramForeground())
         {
             return CallNextHookEx(_hook, nCode, wParam, lParam);
         }
@@ -242,9 +244,6 @@ internal static class Program
                     else if (p.Current.ExpandCollapseState == ExpandCollapseState.Expanded)
                         p.Collapse();
                 }))
-                return;
-
-            if (TryPattern<LegacyIAccessiblePattern>(focus, LegacyIAccessiblePattern.Pattern, p => p.DoDefaultAction()))
                 return;
 
             if (TryClickElement(focus))
@@ -495,7 +494,7 @@ internal static class Program
                 WScan = 0,
                 DwFlags = up ? 0x0002u : 0u,
                 Time = 0,
-                DwExtraInfo = (UIntPtr)InjectedMarker
+                DwExtraInfo = unchecked((UIntPtr)InjectedMarker)
             }
         }
     };
@@ -510,7 +509,7 @@ internal static class Program
                 Type = 0,
                 U = new InputUnion
                 {
-                    Mi = new MouseInput { DwFlags = 0x0002u, DwExtraInfo = (UIntPtr)InjectedMarker }
+                    Mi = new MouseInput { DwFlags = 0x0002u, DwExtraInfo = unchecked((UIntPtr)InjectedMarker) }
                 }
             },
             new Input
@@ -518,7 +517,7 @@ internal static class Program
                 Type = 0,
                 U = new InputUnion
                 {
-                    Mi = new MouseInput { DwFlags = 0x0004u, DwExtraInfo = (UIntPtr)InjectedMarker }
+                    Mi = new MouseInput { DwFlags = 0x0004u, DwExtraInfo = unchecked((UIntPtr)InjectedMarker) }
                 }
             }
         };
