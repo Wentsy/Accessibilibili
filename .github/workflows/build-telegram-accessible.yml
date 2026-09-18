@@ -3,7 +3,7 @@ name: Build accessible Telegram 7.2.9
 on:
   push:
     branches:
-      - build/telegram-accessibility-exe
+      - build/telegram-integrated-final
     paths:
       - '.github/workflows/build-telegram-accessible.yml'
       - 'tools/TelegramIntegrated/**'
