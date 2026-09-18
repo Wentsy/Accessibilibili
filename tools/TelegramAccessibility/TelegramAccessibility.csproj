@@ -6,7 +6,7 @@
     <UseWPF>true</UseWPF>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <AssemblyName>TelegramAccessibility</AssemblyName>
+    <AssemblyName>TelegramAccessible</AssemblyName>
     <RootNamespace>TelegramAccessibility</RootNamespace>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
