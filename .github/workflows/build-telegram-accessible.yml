@@ -92,7 +92,7 @@ jobs:
 
       - name: Build Telegram
         run: |
-          cmake --build "%TBUILD%\tdesktop\out" --config Release --parallel
+          cmake --build "%TBUILD%\tdesktop\out" --config Debug --parallel
 
       - name: Prepare portable artifact
         shell: pwsh
