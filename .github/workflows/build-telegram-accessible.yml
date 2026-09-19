@@ -97,7 +97,7 @@ jobs:
       - name: Prepare portable artifact
         shell: pwsh
         run: |
-          $out = Join-Path $env:TGROOT 'out\Release'
+          $out = Join-Path $env:TGROOT 'out\Debug'
           $artifact = Join-Path $env:GITHUB_WORKSPACE 'artifact'
           New-Item -ItemType Directory -Force -Path $artifact | Out-Null
           Copy-Item (Join-Path $out 'Telegram.exe') $artifact
