@@ -90,6 +90,35 @@ abstract final class VideoUtils {
               .toString();
   }
 
+  /// Keep API URLs intact, and use the existing CDN rewrite rules only for
+  /// recognized media paths. A small, diverse shortlist bounds test traffic.
+  static List<String> autoCdnCandidates(
+    Iterable<String> urls, {
+    bool isAudio = false,
+  }) {
+    final source = urls.toList();
+    if (source.isEmpty) return const [];
+    final preferred = getCdnUrl(source, isAudio: isAudio);
+    final result = <String>{preferred, ...source};
+    if (source.any((url) => _mirrorRegex.hasMatch(url)) &&
+        !(isAudio && disableAudioCDN)) {
+      for (final cdn in [
+        CDNService.aliov,
+        CDNService.hwov,
+        CDNService.akamai,
+      ]) {
+        result.add(getCdnUrl(source, defaultCDNService: cdn, isAudio: isAudio));
+      }
+    }
+    return result
+        .where((url) {
+          final uri = Uri.tryParse(url);
+          return uri != null && (uri.scheme == 'https' || uri.scheme == 'http');
+        })
+        .take(6)
+        .toList();
+  }
+
   static String getLiveCdnUrl(CodecItem e, {int index = 0}) {
     final urlInfo = e.urlInfo.getOrFirst(index);
     return (liveCdnUrl ?? urlInfo.host) + e.baseUrl + urlInfo.extra;

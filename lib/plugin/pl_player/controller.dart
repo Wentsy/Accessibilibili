@@ -31,6 +31,8 @@ import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/services/audio_transition_queue.dart';
+import 'package:PiliPlus/services/auto_cdn_selector.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
@@ -607,6 +609,27 @@ class PlPlayerController with BlockConfigMixin {
     Volume? volume,
     bool autoFullScreenFlag = false,
   }) async {
+    _stopAutoCdn();
+    final cdnGeneration = _cdnGeneration;
+    if (!isLive &&
+        Pref.autoCdn &&
+        dataSource is NetworkSource &&
+        dataSource.videoCandidates.isNotEmpty) {
+      _cdnSource = dataSource;
+      _cdnVolume = volume;
+      _cdnOnInit = onInit;
+      _cdnSelector = _newCdnSelector();
+      _cdnNetworkSubscription ??= Connectivity().onConnectivityChanged.listen((
+        _,
+      ) {
+        AutoCdnSelector.resetNetwork();
+        _cdnSelector?.cancel();
+        if (_cdnSource != null) _cdnSelector = _newCdnSelector();
+        _cdnAttempts = 0;
+        _cdnTriedVideo.clear();
+        _cdnTriedAudio.clear();
+      }, onError: (Object _) {});
+    }
     try {
       _processing = true;
       this.isLive = isLive;
@@ -637,6 +660,12 @@ class PlPlayerController with BlockConfigMixin {
         await pause(notify: false);
       }
 
+      _cdnWantsPlay = autoplay;
+      if (_cdnSource != null) {
+        dataSource = await _selectCdn(_cdnSource!);
+        if (cdnGeneration != _cdnGeneration) return;
+        this.dataSource = dataSource;
+      }
       if (_playerCount == 0) {
         return;
       }
@@ -647,8 +676,12 @@ class PlPlayerController with BlockConfigMixin {
       updateDuration(Duration.zero);
 
       // 配置Player 音轨、字幕等等
-      await _createVideoController(dataSource, seekTo, volume);
+      await _createVideoController(
+        dataSource, seekTo, volume,
+        isCurrent: () => cdnGeneration == _cdnGeneration,
+      );
 
+      if (cdnGeneration != _cdnGeneration) return;
       if (_playerCount == 0) {
         _removeListeners();
         _videoPlayerController?.dispose();
@@ -669,13 +702,217 @@ class PlPlayerController with BlockConfigMixin {
       await _initializePlayer();
       onInit?.call();
     } catch (err, stackTrace) {
+      if (cdnGeneration != _cdnGeneration) return;
       dataStatus.value = DataStatus.error;
       if (kDebugMode) {
         debugPrint(stackTrace.toString());
         debugPrint('plPlayer err:  $err');
       }
     } finally {
-      _processing = false;
+      if (cdnGeneration == _cdnGeneration) {
+        _processing = false;
+        _watchAutoCdn();
+      }
+    }
+  }
+
+  AutoCdnSelector? _cdnSelector;
+  NetworkSource? _cdnSource;
+  StreamSubscription<List<ConnectivityResult>>? _cdnNetworkSubscription;
+  Timer? _cdnTimer;
+  int _cdnGeneration = 0;
+  bool _cdnWantsPlay = false;
+  bool _cdnRecovering = false;
+  bool _cdnNetworkError = false;
+  int _cdnAttempts = 0;
+  DateTime _cdnProgressAt = DateTime.now();
+  DateTime _cdnOpenedAt = DateTime.now();
+  Duration _cdnLastPosition = Duration.zero;
+  Duration _cdnLastBuffer = Duration.zero;
+  final Set<String> _cdnTriedVideo = {};
+  final Set<String> _cdnTriedAudio = {};
+  Volume? _cdnVolume;
+  VoidCallback? _cdnOnInit;
+
+  AutoCdnSelector _newCdnSelector() => AutoCdnSelector(
+    headers: {'User-Agent': BrowserUa.pc, 'Referer': HttpString.baseUrl},
+  );
+
+  void _stopAutoCdn() {
+    ++_cdnGeneration;
+    _cdnTimer?.cancel();
+    _cdnTimer = null;
+    _cdnSelector?.cancel();
+    _cdnSelector = null;
+    _cdnSource = null;
+    _cdnOnInit = null;
+    _cdnVolume = null;
+    _cdnRecovering = false;
+    _cdnNetworkError = false;
+    _cdnAttempts = 0;
+    _cdnTriedVideo.clear();
+    _cdnTriedAudio.clear();
+  }
+
+  Future<NetworkSource> _selectCdn(
+    NetworkSource source, {
+    bool recovery = false,
+  }) async {
+    final selector = _cdnSelector;
+    if (selector == null) return source;
+    final audioOnly =
+        onlyPlayAudio.value && source.audioSource?.isNotEmpty == true;
+    final videos = source.videoCandidates
+        .where((url) => !_cdnTriedVideo.contains(url))
+        .toList();
+    final audios = source.audioCandidates
+        .where((url) => !_cdnTriedAudio.contains(url))
+        .toList();
+    String video = source.videoSource;
+    String? audio = source.audioSource;
+    if (!audioOnly && videos.isNotEmpty) {
+      video =
+          await selector.choose(videos, useCache: !recovery) ??
+          (recovery ? video : videos.first);
+    }
+    if (audios.isNotEmpty) {
+      // No second startup download: prefer the same CDN for the audio track.
+      // During recovery test the audio too, since either track can be blocked.
+      if (audioOnly || recovery) {
+        audio = await selector.choose(audios, useCache: !recovery) ?? audio;
+      } else {
+        final host = Uri.parse(video).host;
+        audio = audios.firstWhere(
+          (url) => Uri.parse(url).host == host,
+          orElse: () => audio ?? audios.first,
+        );
+      }
+    }
+    if (!identical(selector, _cdnSelector)) return source;
+    return NetworkSource(
+      videoSource: video,
+      audioSource: audio,
+      videoCandidates: source.videoCandidates,
+      audioCandidates: source.audioCandidates,
+    );
+  }
+
+  void _watchAutoCdn() {
+    if (_cdnSelector == null) return;
+    _cdnOpenedAt = _cdnProgressAt = DateTime.now();
+    _cdnLastPosition = _videoPlayerController?.state.position ?? Duration.zero;
+    _cdnLastBuffer = _videoPlayerController?.state.buffer ?? Duration.zero;
+    _cdnTimer?.cancel();
+    _cdnTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      final player = _videoPlayerController;
+      if (player == null || _cdnSource == null) return;
+      final now = DateTime.now();
+      final state = player.state;
+      final progressed = state.position != _cdnLastPosition;
+      if (progressed && !state.buffering) _cdnNetworkError = false;
+      if (_processing ||
+          !_cdnWantsPlay ||
+          isSeeking.value ||
+          (state.completed && !_cdnNetworkError) ||
+          progressed ||
+          state.buffer > _cdnLastBuffer) {
+        _cdnProgressAt = now;
+      }
+      _cdnLastPosition = state.position;
+      _cdnLastBuffer = state.buffer;
+      if (progressed &&
+          !state.buffering &&
+          now.difference(_cdnOpenedAt) >= const Duration(seconds: 15)) {
+        final current = dataSource;
+        if (current is NetworkSource) {
+          if (!onlyPlayAudio.value)
+            AutoCdnSelector.remember(current.videoSource);
+          if (current.audioSource?.isNotEmpty == true) {
+            AutoCdnSelector.remember(current.audioSource!);
+          }
+        }
+      }
+      if (!_processing &&
+          !_cdnRecovering &&
+          _cdnWantsPlay &&
+          (!state.completed || _cdnNetworkError) &&
+          !isSeeking.value &&
+          now.difference(_cdnProgressAt) >= const Duration(seconds: 8) &&
+          (state.buffering ||
+              _cdnNetworkError ||
+              dataStatus.value == DataStatus.error ||
+              state.duration == Duration.zero)) {
+        unawaited(_recoverCdn());
+      }
+    });
+  }
+
+  Future<void> _recoverCdn() async {
+    final source = _cdnSource;
+    final player = _videoPlayerController;
+    if (source == null ||
+        player == null ||
+        _cdnRecovering ||
+        !_cdnWantsPlay ||
+        _cdnAttempts >= 3 ||
+        _processing)
+      return;
+    final generation = _cdnGeneration;
+    final current = dataSource;
+    if (current is! NetworkSource) return;
+    _cdnRecovering = true;
+    _cdnAttempts++;
+    _cdnTriedVideo.add(current.videoSource);
+    AutoCdnSelector.forget(current.videoSource);
+    if (current.audioSource?.isNotEmpty == true) {
+      _cdnTriedAudio.add(current.audioSource!);
+      AutoCdnSelector.forget(current.audioSource!);
+    }
+    try {
+      final next = await _selectCdn(
+        NetworkSource(
+          videoSource: current.videoSource,
+          audioSource: current.audioSource,
+          videoCandidates: source.videoCandidates,
+          audioCandidates: source.audioCandidates,
+        ),
+        recovery: true,
+      );
+      if (generation != _cdnGeneration ||
+          !_cdnWantsPlay ||
+          !identical(player, _videoPlayerController) ||
+          _playerCount == 0 ||
+          (next.videoSource == current.videoSource &&
+              next.audioSource == current.audioSource))
+        return;
+      // A seek or resumed download during sampling makes recovery unnecessary.
+      if (DateTime.now().difference(_cdnProgressAt) <
+          const Duration(seconds: 8)) {
+        return;
+      }
+      final position = player.state.position;
+      final playbackRequest = _playbackRequest;
+      dataSource = next;
+      _cdnNetworkError = false;
+      await _createVideoController(
+        next, position, _cdnVolume,
+        isCurrent: () => generation == _cdnGeneration,
+      );
+      if (generation != _cdnGeneration || _playerCount == 0) return;
+      await player.setRate(_playbackSpeed.value);
+      if (generation != _cdnGeneration || _playerCount == 0) return;
+      dataStatus.value = DataStatus.loaded;
+      _cdnOnInit?.call();
+      if (_cdnWantsPlay && playbackRequest == _playbackRequest) {
+        await play(hideControls: !controls);
+      }
+    } catch (_) {
+      // The next bounded attempt can try remaining candidates. No toast/VO.
+    } finally {
+      if (generation == _cdnGeneration) {
+        _cdnRecovering = false;
+        _cdnOpenedAt = _cdnProgressAt = DateTime.now();
+      }
     }
   }
 
@@ -780,8 +1017,10 @@ class PlPlayerController with BlockConfigMixin {
   Future<void> _createVideoController(
     DataSource dataSource,
     Duration? seekTo,
-    Volume? volume,
-  ) async {
+    Volume? volume, {
+    bool Function()? isCurrent,
+  }) async {
+    if (isCurrent?.call() == false) return;
     isBuffering.value = false;
     _heartDuration = 0;
     danmakuController?.clear();
@@ -803,6 +1042,7 @@ class PlPlayerController with BlockConfigMixin {
       }
     }
 
+    if (isCurrent?.call() == false) return;
     final Map<String, String> extras = {
       if (dataSource is FileSource)
         'cache': 'no'
@@ -899,7 +1139,7 @@ class PlPlayerController with BlockConfigMixin {
     // }
 
     // 自动播放
-    if (_autoPlay) {
+    if (_autoPlay && (_cdnSelector == null || _cdnWantsPlay)) {
       playIfExists();
       // await play(duration: duration);
     }
@@ -1014,6 +1254,15 @@ class PlPlayerController with BlockConfigMixin {
           }
           return;
         }
+        if (_cdnSelector != null &&
+            (event.startsWith('Failed to open ') ||
+                event.startsWith('Can not open external file ') ||
+                event.startsWith('tcp: ffurl_read returned ') ||
+                event.contains('Stream ends prematurely'))) {
+          // The watchdog handles stalls, without the legacy toast/reopen loop.
+          _cdnNetworkError = true;
+          return;
+        }
         if (event.startsWith("Failed to open https://") ||
             event.startsWith("Can not open external file https://") ||
             //tcp: ffurl_read returned 0xdfb9b0bb
@@ -1096,6 +1345,7 @@ class PlPlayerController with BlockConfigMixin {
     // Reflect the requested position immediately in UI and semantics. The
     // player stream will reconcile it with the actual decoder position later.
     this.position.value = position.inSeconds;
+    _cdnProgressAt = DateTime.now();
     _heartDuration = position.inSeconds;
 
     Future<void> seek() async {
@@ -1175,6 +1425,8 @@ class PlPlayerController with BlockConfigMixin {
   /// 播放视频
   Future<void> play({bool repeat = false, bool hideControls = true}) async {
     if (_playerCount == 0) return;
+    _cdnWantsPlay = true;
+    _cdnProgressAt = DateTime.now();
     final request = ++_playbackRequest;
     final player = _videoPlayerController;
     if (player == null) return;
@@ -1214,6 +1466,7 @@ class PlPlayerController with BlockConfigMixin {
 
   /// 暂停播放
   Future<void> pause({bool notify = true, bool isInterrupt = false}) async {
+    _cdnWantsPlay = false;
     final request = ++_playbackRequest;
     final player = _videoPlayerController;
     if (player == null) return;
@@ -1637,6 +1890,9 @@ class PlPlayerController with BlockConfigMixin {
     }
 
     _playerCount = 0;
+    _stopAutoCdn();
+    _cdnNetworkSubscription?.cancel();
+    _cdnNetworkSubscription = null;
     if (removeSafeArea) {
       showSystemBar();
     }

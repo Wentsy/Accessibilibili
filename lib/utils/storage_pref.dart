@@ -296,6 +296,9 @@ abstract final class Pref {
     defaultValue: Platform.isAndroid ? '30' : '0',
   );
 
+  static bool get autoCdn =>
+      _setting.get(SettingBoxKey.autoCdn, defaultValue: true);
+
   static CDNService get defaultCDNService {
     if (_setting.get(SettingBoxKey.CDNService) case final String cdnName) {
       return CDNService.values.byName(cdnName);

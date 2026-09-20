@@ -55,11 +55,17 @@ List<SettingsModel> get videoSettings => [
       ),
     ),
   ),
+  const SwitchModel(
+    title: '自动选择播放线路',
+    subtitle: '后台选择线路，播放卡住时自动尝试备用线路',
+    leading: Icon(Icons.alt_route),
+    setKey: SettingBoxKey.autoCdn,
+    defaultVal: true,
+  ),
   NormalModel(
     title: 'CDN 设置',
     leading: const Icon(MdiIcons.cloudPlusOutline),
-    getSubtitle: () =>
-        '当前使用：${VideoUtils.cdnService.desc}，部分 CDN 可能失效，如无法播放请尝试切换',
+    getSubtitle: () => '手动线路：${VideoUtils.cdnService.desc}；关闭自动选择后固定使用',
     onTap: _showCDNDialog,
   ),
   NormalModel(
