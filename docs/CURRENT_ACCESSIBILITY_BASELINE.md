@@ -4,20 +4,32 @@
 
 ## 目前穩定點
 
-- 日期：2026-09-13
+- 日期：2026-09-20
 - 分支：`main`
-- **已驗證 App 程式碼基準 commit：`18e4c35bbe7176029e95bbb784244ce5bc801691`**
-- 本輪新增確認：影片保存狀態按影片分離並可檢查相簿資產是否仍存在；UP 個人頁投稿列表的 VoiceOver 單指左滑回翻不再因巢狀捲動而亂跳或掉入左右撞牆狀態。
+- **已驗證 App 程式碼基準 commit：`63b6f7a74cb5f9d15e9f69c2123742e704d2f31e`（2.1.3+5711）**
+- 本輪新增確認：影片保存狀態按影片分離並可檢查相簿資產是否仍存在；UP 個人頁投稿列表的 VoiceOver 單指左滑回翻不再因巢狀捲動而亂跳或掉入左右撞牆狀態；影片播放線路可在背景自動選擇、健康播放不干擾，卡住時靜默改試備用線路。
 
-本文件之後可能會有純文件、CI 或工作流程清理 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `18e4c35` 的程式碼狀態為本輪穩定基準。
+本文件之後可能會有純文件、CI 或工作流程清理 commit，因此 `main` HEAD 不一定等於上面的 SHA；判斷 App 行為時，以 `63b6f7a7` 的程式碼狀態為本輪穩定基準。
 
 除非後續版本完成新一輪 VoiceOver 實機驗證，否則遇到回歸應優先與此基準比較。
 
 ## 開發與驗證流程
 
-使用者已明確持續授權直接提交及合併至 `main`，不必逐次詢問；除非有獨立測試需求，不另外建立 PR。開發環境無法執行的編譯與實機測試，由 Hermes 編譯 IPA、使用者在 iPhone 上驗證。只有使用者回報測試通過後，才更新已驗證穩定基準；程式碼提交本身不代表已實測。
+使用者已明確持續授權直接提交及合併至 `main`，不必逐次詢問；除非有獨立測試需求，不另外建立 PR。開發環境無法執行的編譯與實機測試，由 Hermes 編譯 IPA、使用者在 iPhone 上驗證。只有使用者回報測試通過後，才更新已驗證穩定基準；程式碼提交本身不代表已實測。提交前必須先做完整差異、格式、靜態分析與相關自動測試；修改既有 controller、服務或平台 API 時，須核對實際成員名稱、型別與 SDK 相容性。若環境可執行 Flutter，先跑完整分析與相關測試；若不能編譯 iOS，明確交 Hermes 編譯，不能把單檔語法檢查當作編譯驗證。
 
 ## 本輪實機確認通過
+
+### 2026-09-20：自動播放線路選擇穩定
+
+使用者以 iPhone VoiceOver 實機確認 2.1.3+5711 正常。GitHub Actions iOS 編譯成功；本輪程式以 `63b6f7a7` 為穩定基準。
+
+- 「自動選擇播放線路」預設開啟；整個選線與線路失效後的恢復都在背景執行，不新增 VoiceOver 朗讀、不移動焦點、不影響 VoiceOver 與影片音訊共存。
+- 開始播放時只以小量並行請求快速選擇可用線路；近期實際穩定的線路會被暫存優先使用，換網路時重新評估。
+- 正常播放不可因比較其他線路而自行切換；只有明確卡住、無資料進展或開啟失敗時，才在背景嘗試備用線路，保留播放位置、播放速度及播放／暫停意圖。
+- 手動關閉「自動選擇播放線路」後，播放回到原有手動 CDN 設定。
+- 本輪需保留 Hermes 修正：恢復播放時依 `showControls.value` 決定是否隱藏控制列，不可使用不存在的 `controls` getter。
+
+
 
 ### 2026-09-13：UP 個人頁回翻穩定
 
@@ -397,7 +409,7 @@ docs/VIDEO_PHOTO_EXPORT.md
 - 評論／樓中樓、發表評論與發表回覆控制項的可達性。
 - 三指翻頁、VoiceOver 焦點與 viewport 同步。
 - VoiceOver 連續閱讀。
-- 播放緩衝優化。
+- 播放緩衝優化與自動線路選擇。
 - 首頁與動態等頁面的既有語義整理。
 - UP 個人頁投稿列表的左右滑焦點穩定。
 - 影片保存狀態按影片分離及刪除後重新可保存。
@@ -428,6 +440,8 @@ c9a2cc24b8059bfa01dd7fe56685c2c6fefa9281  fix(ios): track exported Photos assets
 c7e3d5721a524613314f16f2b1469ad3d96db1ea  chore(ios): explain Photos read access for export state
 44db81f704acf4b08cbaacc633ab37146239e298  fix(a11y): constrain focus visibility to nearest scrollable
 18e4c35bbe7176029e95bbb784244ce5bc801691  fix(a11y): keep member video focus inside inner scroll
+c000a75  feat: silently select and recover playback CDN routes
+63b6f7a74cb5f9d15e9f69c2123742e704d2f31e  fix: read playback controls visibility during CDN recovery
 ```
 
 
@@ -475,6 +489,9 @@ c62b027d101dbad274cb96f734b8d7e988d86016  fix(a11y): use player dialog presentat
 - [ ] 雙擊「投2枚硬幣」可一次正常投出 2 枚。
 - [ ] 轉載／非原創影片不會錯誤提供超過 1 枚的可用投幣額度。
 - [ ] 播放影片不切斷 VoiceOver。
+- [ ] 自動選擇播放線路開啟時，開始播放、正常連續播放與 VoiceOver 操作皆無額外朗讀或焦點跳動。
+- [ ] 遇到不能播放或持續卡住的影片時，可在背景改試備用線路；恢復後位置、播放／暫停意圖與控制列狀態正確。
+- [ ] 關閉「自動選擇播放線路」後，回到手動 CDN 設定。
 - [ ] 播放中退背景仍可播放／暫停／恢復。
 - [ ] 前景暫停後退背景，Magic Tap 仍可恢復。
 - [ ] 回前景後 VoiceOver 正常。
