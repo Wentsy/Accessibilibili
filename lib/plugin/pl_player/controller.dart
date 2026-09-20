@@ -904,7 +904,7 @@ class PlPlayerController with BlockConfigMixin {
       dataStatus.value = DataStatus.loaded;
       _cdnOnInit?.call();
       if (_cdnWantsPlay && playbackRequest == _playbackRequest) {
-        await play(hideControls: !controls);
+        await play(hideControls: !showControls.value);
       }
     } catch (_) {
       // The next bounded attempt can try remaining candidates. No toast/VO.
