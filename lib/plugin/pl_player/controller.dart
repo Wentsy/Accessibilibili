@@ -661,6 +661,7 @@ class PlPlayerController with BlockConfigMixin {
       }
 
       _cdnWantsPlay = autoplay;
+      _syncBufferingRecovery();
       if (_cdnSource != null) {
         dataSource = await _selectCdn(_cdnSource!);
         if (cdnGeneration != _cdnGeneration) return;
@@ -711,6 +712,7 @@ class PlPlayerController with BlockConfigMixin {
     } finally {
       if (cdnGeneration == _cdnGeneration) {
         _processing = false;
+        _syncBufferingRecovery();
         _watchAutoCdn();
       }
     }
@@ -733,6 +735,16 @@ class PlPlayerController with BlockConfigMixin {
   final Set<String> _cdnTriedAudio = {};
   Volume? _cdnVolume;
   VoidCallback? _cdnOnInit;
+
+  void _syncBufferingRecovery() {
+    audioSessionHandler?.setBufferingRecovery(
+      _playerCount > 0 &&
+          _cdnWantsPlay &&
+          !isLive &&
+          dataSource is NetworkSource &&
+          (_processing || _cdnRecovering || isBuffering.value || _cdnNetworkError),
+    ).ignore();
+  }
 
   AutoCdnSelector _newCdnSelector() => AutoCdnSelector(
     headers: {'User-Agent': BrowserUa.pc, 'Referer': HttpString.baseUrl},
@@ -809,7 +821,25 @@ class PlPlayerController with BlockConfigMixin {
       final now = DateTime.now();
       final state = player.state;
       final progressed = state.position != _cdnLastPosition;
-      if (progressed && !state.buffering) _cdnNetworkError = false;
+      if (progressed && !state.buffering) {
+        if (_cdnNetworkError) {
+          _cdnNetworkError = false;
+          _syncBufferingRecovery();
+        }
+        // A long video must not permanently lose recovery after three stalls.
+        // Re-arm only after a sustained period without a playback/download stall.
+        if (now.difference(_cdnOpenedAt) >= const Duration(seconds: 60)) {
+          _cdnAttempts = 0;
+          _cdnTriedVideo.clear();
+          _cdnTriedAudio.clear();
+        }
+      } else if (!state.playing ||
+          state.buffering ||
+          _cdnNetworkError ||
+          isSeeking.value ||
+          _processing) {
+        _cdnOpenedAt = now;
+      }
       if (_processing ||
           !_cdnWantsPlay ||
           isSeeking.value ||
@@ -861,6 +891,7 @@ class PlPlayerController with BlockConfigMixin {
     final current = dataSource;
     if (current is! NetworkSource) return;
     _cdnRecovering = true;
+    _syncBufferingRecovery();
     _cdnAttempts++;
     _cdnTriedVideo.add(current.videoSource);
     AutoCdnSelector.forget(current.videoSource);
@@ -881,10 +912,10 @@ class PlPlayerController with BlockConfigMixin {
       if (generation != _cdnGeneration ||
           !_cdnWantsPlay ||
           !identical(player, _videoPlayerController) ||
-          _playerCount == 0 ||
-          (next.videoSource == current.videoSource &&
-              next.audioSource == current.audioSource))
+          _playerCount == 0)
         return;
+      // With no alternate CDN, reopen the same URL at the current position.
+      // The same three-attempt limit still bounds a completely offline stream.
       // A seek or resumed download during sampling makes recovery unnecessary.
       if (DateTime.now().difference(_cdnProgressAt) <
           const Duration(seconds: 8)) {
@@ -911,6 +942,7 @@ class PlPlayerController with BlockConfigMixin {
     } finally {
       if (generation == _cdnGeneration) {
         _cdnRecovering = false;
+        _syncBufferingRecovery();
         _cdnOpenedAt = _cdnProgressAt = DateTime.now();
       }
     }
@@ -1050,6 +1082,9 @@ class PlPlayerController with BlockConfigMixin {
         ...Pref.initLiveBuffer()
       else
         ...Pref.initBuffer(_playbackSpeed.value),
+      // The default HTTP read timeout is 60s, longer than a typical iOS
+      // background recovery window. Bound dead connections for network VOD.
+      if (dataSource is NetworkSource && !isLive) 'network-timeout': '10',
     };
 
     String video = dataSource.videoSource;
@@ -1190,6 +1225,9 @@ class PlPlayerController with BlockConfigMixin {
       ///completed
       stream.completed.listen((bool completed) {
         if (completed) {
+          if (!_cdnNetworkError && !_cdnRecovering && !_processing) {
+            audioSessionHandler?.setBufferingRecovery(false).ignore();
+          }
           playerStatus.value = .completed;
 
           for (final element in _statusListeners) {
@@ -1224,6 +1262,7 @@ class PlPlayerController with BlockConfigMixin {
       }),
       stream.buffering.listen((bool buffering) {
         isBuffering.value = buffering;
+        _syncBufferingRecovery();
         videoPlayerServiceHandler?.onStatusChange(
           playerStatus.value,
           buffering,
@@ -1261,6 +1300,7 @@ class PlPlayerController with BlockConfigMixin {
                 event.contains('Stream ends prematurely'))) {
           // The watchdog handles stalls, without the legacy toast/reopen loop.
           _cdnNetworkError = true;
+          _syncBufferingRecovery();
           return;
         }
         if (event.startsWith("Failed to open https://") ||
@@ -1431,6 +1471,7 @@ class PlPlayerController with BlockConfigMixin {
     final player = _videoPlayerController;
     if (player == null) return;
     // 播放时自动隐藏控制条
+    _syncBufferingRecovery();
     controls = !hideControls;
     // repeat为true，将从头播放
     if (repeat) {
@@ -1450,6 +1491,8 @@ class PlPlayerController with BlockConfigMixin {
         return;
       }
       if (!active) {
+        _cdnWantsPlay = false;
+        _syncBufferingRecovery();
         playerStatus.value = PlayerStatus.paused;
         return;
       }
@@ -1457,6 +1500,10 @@ class PlPlayerController with BlockConfigMixin {
         await player.play();
         if (isCurrent()) playerStatus.value = PlayerStatus.playing;
       } catch (_) {
+        if (isCurrent()) {
+          _cdnWantsPlay = false;
+          _syncBufferingRecovery();
+        }
         await audioSessionHandler?.setActive(false);
         rethrow;
       }
@@ -1467,6 +1514,7 @@ class PlPlayerController with BlockConfigMixin {
   /// 暂停播放
   Future<void> pause({bool notify = true, bool isInterrupt = false}) async {
     _cdnWantsPlay = false;
+    _syncBufferingRecovery();
     final request = ++_playbackRequest;
     final player = _videoPlayerController;
     if (player == null) return;
@@ -1890,6 +1938,7 @@ class PlPlayerController with BlockConfigMixin {
     }
 
     _playerCount = 0;
+    audioSessionHandler?.setBufferingRecovery(false).ignore();
     _stopAutoCdn();
     _cdnNetworkSubscription?.cancel();
     _cdnNetworkSubscription = null;

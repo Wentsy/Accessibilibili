@@ -6,6 +6,9 @@ import UIKit
 public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
   private static var backgroundPlaybackEnabled = false
   private var lifecycleObservers: [NSObjectProtocol] = []
+  private var bufferingRecoveryNeeded = false
+  private var bufferingTask: UIBackgroundTaskIdentifier = .invalid
+  private var bufferingTaskExpired = false
 
   // audio_service forwards remote Play back to Dart. When media is already
   // paused before the app backgrounds, iOS may not retain the same Now Playing
@@ -45,6 +48,11 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
       }
 
       Self.backgroundPlaybackEnabled = enabled
+      updateBufferingTask()
+      result(nil)
+    case "setBufferingRecovery":
+      bufferingRecoveryNeeded = call.arguments as? Bool ?? false
+      updateBufferingTask()
       result(nil)
     default:
       result(FlutterMethodNotImplemented)
@@ -137,6 +145,8 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
   }
 
   private func applyPlaybackRole(background: Bool, force: Bool = false) {
+    // Request time before changing the session, which can briefly stop audio.
+    updateBufferingTask(background: background)
     guard force || Self.backgroundPlaybackEnabled else { return }
 
     let session = AVAudioSession.sharedInstance()
@@ -153,6 +163,34 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
     } catch {
       // Dart's audio_session path remains a fallback on the next transition.
     }
+  }
+
+  private func updateBufferingTask(background: Bool? = nil) {
+    let isBackground = background ?? (UIApplication.shared.applicationState != .active)
+    guard Self.backgroundPlaybackEnabled, bufferingRecoveryNeeded, isBackground else {
+      endBufferingTask()
+      bufferingTaskExpired = false
+      return
+    }
+    // Repeated events must not renew an expired request indefinitely.
+    guard bufferingTask == .invalid, !bufferingTaskExpired else { return }
+    bufferingTask = UIApplication.shared.beginBackgroundTask(
+      withName: "Video buffering recovery"
+    ) { [weak self] in
+      guard let self else { return }
+      self.bufferingTaskExpired = true
+      self.endBufferingTask()
+    }
+    if bufferingTask == .invalid {
+      bufferingTaskExpired = true
+    }
+  }
+
+  private func endBufferingTask() {
+    guard bufferingTask != .invalid else { return }
+    let task = bufferingTask
+    bufferingTask = .invalid
+    UIApplication.shared.endBackgroundTask(task)
   }
 
   private func startPausedKeepAliveIfNeeded() {
@@ -246,6 +284,7 @@ public class MediaKitLibsIosVideoPlugin: NSObject, FlutterPlugin {
   }
 
   deinit {
+    endBufferingTask()
     stopPausedKeepAlive()
     for observer in lifecycleObservers {
       NotificationCenter.default.removeObserver(observer)

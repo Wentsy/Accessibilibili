@@ -18,6 +18,20 @@ class AudioSessionHandler with WidgetsBindingObserver {
   bool _playInterrupted = false;
   int _iosSessionModeRequest = 0;
 
+  // A cache underrun can stop the AudioUnit even though the user still wants
+  // playback. Give the pending network recovery bounded iOS execution time.
+  Future<void> setBufferingRecovery(bool needed) async {
+    if (!Platform.isIOS) return;
+    try {
+      await _backgroundAudioChannel.invokeMethod<void>(
+        'setBufferingRecovery',
+        needed,
+      );
+    } catch (_) {
+      // Older native wrappers must remain usable during development.
+    }
+  }
+
   AudioSessionConfiguration _iosPlaybackConfiguration({
     required bool mixWithVoiceOver,
   }) {
