@@ -734,25 +734,6 @@ class VideoDetailController extends GetxController
           : NetworkSource(
               videoSource: videoUrl!,
               audioSource: audioUrl,
-              videoCandidates:
-                  Pref.autoCdn &&
-                      videoUrl == VideoUtils.getCdnUrl(firstVideo.playUrls)
-                  ? VideoUtils.autoCdnCandidates(firstVideo.playUrls)
-                  : const [],
-              audioCandidates:
-                  Pref.autoCdn &&
-                      data.dash != null &&
-                      audioUrl?.isNotEmpty == true
-                  ? VideoUtils.autoCdnCandidates(
-                      data.dash!.audio!
-                          .firstWhere(
-                            (item) => item.id == currentAudioQa?.code,
-                            orElse: () => data.dash!.audio!.first,
-                          )
-                          .playUrls,
-                      isAudio: true,
-                    )
-                  : const [],
             ),
       seekTo: seek,
       duration: data.timeLength == null
@@ -903,7 +884,6 @@ class VideoDetailController extends GetxController
           firstVideo = VideoItem(
             id: data.quality!,
             baseUrl: videoUrl,
-            backupUrl: durl.length == 1 ? durl.single.playUrls.toList() : null,
             codecs: 'avc1',
             quality: videoQuality,
           );

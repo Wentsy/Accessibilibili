@@ -296,9 +296,6 @@ abstract final class Pref {
     defaultValue: Platform.isAndroid ? '30' : '0',
   );
 
-  static bool get autoCdn =>
-      _setting.get(SettingBoxKey.autoCdn, defaultValue: true);
-
   static CDNService get defaultCDNService {
     if (_setting.get(SettingBoxKey.CDNService) case final String cdnName) {
       return CDNService.values.byName(cdnName);
@@ -838,20 +835,21 @@ abstract final class Pref {
 
   static Map<String, String> initBuffer([double playbackSpeed = 1.0]) {
     if (autoBuffer) {
-      // Keep a useful reserve at higher playback rates. A fixed 64 MiB forward
-      // budget bounds memory even for long videos; limits apply per demuxer.
-      // After an underrun refill enough to avoid repeated short bursts of audio.
+      // Keep a useful reserve at higher playback rates without increasing the
+      // byte budget. Limits apply per demuxer (DASH may have audio and video).
       final speed = playbackSpeed.isFinite && playbackSpeed > 0
           ? playbackSpeed.clamp(0.5, 4.0)
           : 1.0;
       return {
         'cache': 'yes',
-        'cache-secs': (120 * speed).toStringAsFixed(3),
+        'cache-secs': (60 * speed).toStringAsFixed(3),
         // Refill continuously rather than deliberately letting the cache drain.
         'demuxer-hysteresis-secs': '0',
-        'demuxer-max-bytes': (64 * 0x100000).toString(),
+        'demuxer-max-bytes': (32 * 0x100000).toString(),
         'demuxer-max-back-bytes': (4 * 0x100000).toString(),
         'cache-pause': 'yes',
+        // Refill more after an actual underrun, without increasing the normal
+        // prefetch budget or adding a wait before initial playback/seeking.
         'cache-pause-wait': (8 * speed).toStringAsFixed(3),
         // Do not add a mandatory wait to every start or VoiceOver seek.
         'cache-pause-initial': 'no',
