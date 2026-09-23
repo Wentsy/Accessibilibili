@@ -21,6 +21,36 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
   final RxBool loadMoreFailed = false.obs;
   Future<void>? _replyLoad;
   int _paginationGeneration = 0;
+  bool _announcingPageLoad = false;
+
+  /// Explicit three-finger requests only; prefetch and Read All stay silent.
+  Future<void> onA11yReplyLoadMore() async {
+    if (isClosed || _announcingPageLoad) return;
+    if (isLoading && _replyLoad == null) {
+      a11yAnnounce('正在載入評論，請稍候');
+      return;
+    }
+    if (!loadingState.value.isSuccess) {
+      await onA11yRefresh(label: '評論');
+      return;
+    }
+    if (isEnd) {
+      a11yAnnounce('沒有更多評論');
+      return;
+    }
+    _announcingPageLoad = true;
+    final generation = _paginationGeneration;
+    a11yAnnounce('正在載入更多評論');
+    try {
+      await retryLoadMore();
+      if (isClosed || generation != _paginationGeneration) return;
+      a11yAnnounce(loadMoreFailed.value || !lastRequestSucceeded
+          ? '評論載入失敗，請再試一次'
+          : isEnd ? '沒有更多評論' : '評論載入完成，可以繼續向上翻頁');
+    } finally {
+      _announcingPageLoad = false;
+    }
+  }
 
   // Join an existing request instead of losing a boundary action while loading.
   // A failed prefetch gets one retry, then waits for another reading/page

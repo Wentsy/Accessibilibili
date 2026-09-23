@@ -11,6 +11,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 class FakeReplies extends ReplyController<List<ReplyInfo>> {
   int requests = 0;
+  final announcements = <String>[];
+  @override
+  void a11yAnnounce(String message) => announcements.add(message);
   final responses = Queue<Future<LoadingState<List<ReplyInfo>>> Function()>();
   FakeReplies() {
     loadingState.value = Success([ReplyInfo()]);
@@ -27,6 +30,27 @@ class FakeReplies extends ReplyController<List<ReplyInfo>> {
 }
 
 void main() {
+  test('explicit load joins quiet prefetch and announces once', () async {
+    final controller = FakeReplies();
+    addTearDown(controller.onClose);
+    final response = Completer<LoadingState<List<ReplyInfo>>>();
+    controller.responses.add(() => response.future);
+    final automatic = controller.onLoadMore();
+    expect(controller.announcements, isEmpty);
+    final explicit = controller.onA11yReplyLoadMore();
+    await controller.onA11yReplyLoadMore();
+    expect(controller.requests, 1);
+    expect(controller.announcements, ['正在載入更多評論']);
+    response.complete(Success([ReplyInfo()]));
+    await automatic;
+    await explicit;
+    expect(controller.announcements.last, '評論載入完成，可以繼續向上翻頁');
+    controller.isEnd = true;
+    await controller.onA11yReplyLoadMore();
+    expect(controller.announcements.last, '沒有更多評論');
+    expect(controller.requests, 1);
+  });
+
   for (final allowRefresh in [false, true]) {
     testWidgets('top boundary refresh opt-in: $allowRefresh', (tester) async {
       final controller = FakeReplies();
@@ -45,7 +69,8 @@ void main() {
         ),
       )));
       final marker = find.byWidgetPredicate((widget) => widget is Semantics &&
-          widget.properties.identifier == 'a11y-reply-scroll|more');
+          widget.properties.identifier == (allowRefresh
+              ? 'a11y-feed-scroll|viewport' : 'a11y-reply-scroll|more'));
       final node = tester.getSemantics(marker);
       void scrollDown() => tester.binding.pipelineOwner.semanticsOwner!
           .performAction(node.id, SemanticsAction.scrollDown);
@@ -162,6 +187,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(controller.requests, 1);
     expect(marker('end'), findsOneWidget);
+    expect(controller.announcements, isEmpty); // Read All stays quiet.
     final end = tester.getSemantics(marker('end'));
     tester.binding.pipelineOwner.semanticsOwner!.performAction(end.id, SemanticsAction.scrollUp);
     await tester.pumpAndSettle();

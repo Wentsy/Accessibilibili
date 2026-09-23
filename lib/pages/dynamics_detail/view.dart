@@ -346,6 +346,7 @@ class _DynamicDetailPageState
         useOwnReplyViewport ? controller.scrollController : null;
     final reply = ReplyPagedScroll(
       controller: controller,
+      allowRefresh: true,
       child: CustomScrollView(
         controller: replyScrollController,
         primary: useOwnReplyViewport ? false : null,

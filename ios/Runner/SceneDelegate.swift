@@ -306,6 +306,9 @@ private enum VoiceOverComposerTouchBridge {
 /// focus callbacks, hit testing, or showOnScreen, so normal left/right VoiceOver
 /// navigation remains owned by Flutter.
 private enum VoiceOverReplyReadingBridge {
+  // Read All also dispatches a vertical action at the loaded boundary. Keep
+  // that internal action separate from explicit three-finger feed gestures.
+  static var forwardingReadAll = false
   private static let replyIdentifierPrefix = "a11y-read-reply|"
 
   private typealias TraitsGetter = @convention(c) (
@@ -456,6 +459,8 @@ private enum VoiceOverReplyReadingBridge {
           // posts pageScrolled only after new comments have been laid out.
           let dispatch = unsafeBitCast(method_getImplementation(method), to: ScrollHandler.self)
           // UIKit down maps to Flutter scrollUp: the wrapper's forward action.
+          forwardingReadAll = true
+          defer { forwardingReadAll = false }
           return dispatch(wrapper, selector, UIAccessibilityScrollDirection.down.rawValue)
         }
         // Flutter maps UIAccessibilityScrollDirection.up to
@@ -762,6 +767,7 @@ private enum VoiceOverFeedScrollBridge {
     let block: @convention(block) (AnyObject, Int) -> Bool = { object, rawDirection in
       guard
         UIAccessibility.isVoiceOverRunning,
+        !VoiceOverReplyReadingBridge.forwardingReadAll,
         let direction = UIAccessibilityScrollDirection(rawValue: rawDirection),
         direction == .up || direction == .down,
         let receiver = object as? NSObject,

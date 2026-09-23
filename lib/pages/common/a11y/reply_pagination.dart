@@ -17,17 +17,10 @@ class ReplyPagedScroll extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Obx(() {
     final data = controller.loadingState.value.dataOrNull;
-    return VoiceOverPagedScroll(
+    final paged = VoiceOverPagedScroll(
       controller: controller.scrollController,
       replyHasMore: data != null && !controller.isEnd,
-      onScrollBackwardAtStart: allowRefresh
-          ? () { controller.onA11yRefresh(label: '評論'); }
-          : null,
       onScrollForwardAtEnd: () async {
-        if (allowRefresh && !controller.loadingState.value.isSuccess) {
-          await controller.onA11yRefresh(label: '評論');
-          return;
-        }
         final before = controller.loadingState.value.dataOrNull?.length ?? 0;
         await controller.retryLoadMore();
         if (!context.mounted || controller.isClosed ||
@@ -43,6 +36,18 @@ class ReplyPagedScroll extends StatelessWidget {
         }
       },
       child: child,
+    );
+    if (!allowRefresh) return paged;
+    // Separate the native explicit-gesture route from Read All's quiet
+    // reply wrapper. Keep its more/end marker intact for continuous reading.
+    return VoiceOverPagedScroll(
+      controller: controller.scrollController,
+      nativeFeedScroll: true,
+      onScrollBackwardAtStart: () {
+        controller.onA11yRefresh(label: '評論');
+      },
+      onScrollForwardAtEnd: controller.onA11yReplyLoadMore,
+      child: paged,
     );
   });
 }
