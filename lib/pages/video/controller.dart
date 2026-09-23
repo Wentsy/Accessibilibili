@@ -63,6 +63,7 @@ import 'package:PiliPlus/utils/extension/num_ext.dart';
 import 'package:PiliPlus/utils/extension/size_ext.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:PiliPlus/utils/playback_startup.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
@@ -806,11 +807,39 @@ class VideoDetailController extends GetxController
       return;
     }
     isQuerying = true;
+    try {
+      await _queryVideoUrl(
+        fromReset: fromReset,
+        autoFullScreenFlag: autoFullScreenFlag,
+      );
+    } finally {
+      isQuerying = false;
+    }
+  }
+
+  Future<void> _queryVideoUrl({
+    required bool fromReset,
+    required bool autoFullScreenFlag,
+  }) async {
     if (plPlayerController.enableSponsorBlock && isBlock && !fromReset) {
       querySponsorBlock(bvid: bvid, cid: cid.value);
     }
-    if (plPlayerController.cacheVideoQa == null) {
-      final isWiFi = await ConnectivityUtils.isWiFi;
+    final (result, isWiFi) = await preparePlaybackSource(
+      loadSource: () => VideoHttp.videoUrl(
+        cid: cid.value,
+        bvid: bvid,
+        epid: epId,
+        seasonId: seasonId,
+        tryLook: plPlayerController.tryLook,
+        videoType: _actualVideoType ?? videoType,
+        language: currLang.value,
+        voiceBalance: plPlayerController.enableAudioNormalization,
+      ),
+      needsNetworkPreferences: plPlayerController.cacheVideoQa == null,
+      readIsWiFi: () => ConnectivityUtils.isWiFi,
+    );
+    if (isClosed) return;
+    if (isWiFi != null && plPlayerController.cacheVideoQa == null) {
       plPlayerController
         ..cacheVideoQa = isWiFi
             ? Pref.defaultVideoQa
@@ -820,17 +849,6 @@ class VideoDetailController extends GetxController
             : Pref.defaultAudioQaCellular;
       preferCodecs = isWiFi ? Pref.preferCodecs : Pref.preferCodecsCellular;
     }
-
-    final result = await VideoHttp.videoUrl(
-      cid: cid.value,
-      bvid: bvid,
-      epid: epId,
-      seasonId: seasonId,
-      tryLook: plPlayerController.tryLook,
-      videoType: _actualVideoType ?? videoType,
-      language: currLang.value,
-      voiceBalance: plPlayerController.enableAudioNormalization,
-    );
 
     if (result case Success(:final response)) {
       data = response;
@@ -891,7 +909,6 @@ class VideoDetailController extends GetxController
           currentDecodeFormats = VideoDecodeFormatType.AVC;
           currentVideoQa.value = videoQuality;
           await _initPlayerIfNeeded(autoFullScreenFlag);
-          isQuerying = false;
           return;
         } else {
           SmartDialog.showToast('视频资源不存在');
@@ -900,7 +917,6 @@ class VideoDetailController extends GetxController
           if (plPlayerController.isFullScreen.value) {
             plPlayerController.triggerFullScreen(status: false);
           }
-          isQuerying = false;
           return;
         }
       }
@@ -983,7 +999,6 @@ class VideoDetailController extends GetxController
       }
       result.toast();
     }
-    isQuerying = false;
   }
 
   late final List<PostSegmentModel> postList = <PostSegmentModel>[];
