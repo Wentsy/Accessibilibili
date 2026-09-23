@@ -27,6 +27,40 @@ class FakeReplies extends ReplyController<List<ReplyInfo>> {
 }
 
 void main() {
+  for (final allowRefresh in [false, true]) {
+    testWidgets('top boundary refresh opt-in: $allowRefresh', (tester) async {
+      final controller = FakeReplies();
+      addTearDown(controller.onClose);
+      final semantics = tester.ensureSemantics();
+      addTearDown(semantics.dispose);
+      final response = Completer<LoadingState<List<ReplyInfo>>>();
+      controller.responses.add(() => response.future);
+      await tester.pumpWidget(MaterialApp(home: MediaQuery(
+        data: const MediaQueryData(accessibleNavigation: true),
+        child: ReplyPagedScroll(
+          controller: controller,
+          allowRefresh: allowRefresh,
+          child: ListView(controller: controller.scrollController,
+            children: const [SizedBox(height: 100, child: Text('Comment'))]),
+        ),
+      )));
+      final marker = find.byWidgetPredicate((widget) => widget is Semantics &&
+          widget.properties.identifier == 'a11y-reply-scroll|more');
+      final node = tester.getSemantics(marker);
+      void scrollDown() => tester.binding.pipelineOwner.semanticsOwner!
+          .performAction(node.id, SemanticsAction.scrollDown);
+      scrollDown();
+      await tester.pump();
+      scrollDown();
+      await tester.pump();
+      // Repeated gestures must not create concurrent refreshes; nested
+      // replies (the default) must not refresh at all.
+      expect(controller.requests, allowRefresh ? 1 : 0);
+      response.complete(Success([ReplyInfo()]));
+      await tester.pumpAndSettle();
+    });
+  }
+
   test('300 comments append with stable list identity; real end stops requests', () async {
     final controller = FakeReplies();
     addTearDown(controller.onClose);

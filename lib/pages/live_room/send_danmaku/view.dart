@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:PiliPlus/common/widgets/button/toolbar_icon_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/text_field.dart';
+import 'package:PiliPlus/common/widgets/flutter/text_field/ios_native_rich_text_field.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/http/live.dart';
 import 'package:PiliPlus/models/common/publish_panel_type.dart';
@@ -133,7 +135,20 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
             }
           },
           child: Obx(
-            () => RichTextField(
+            () => Platform.isIOS
+                ? IOSNativeRichTextField(
+                    controller: editController,
+                    focusNode: focusNode,
+                    readOnly: readOnly.value,
+                    minLines: 1,
+                    maxLines: 2,
+                    hintText: '输入弹幕内容',
+                    style: theme.textTheme.bodyLarge,
+                    onChanged: onChanged,
+                    onTapWhenReadOnly: () =>
+                        updatePanelType(PanelType.keyboard),
+                  )
+                : RichTextField(
               key: key,
               controller: editController,
               minLines: 1,

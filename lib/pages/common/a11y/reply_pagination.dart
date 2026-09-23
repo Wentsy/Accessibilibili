@@ -7,9 +7,12 @@ import 'package:get/get.dart';
 
 /// Only explicit page requests emit pageScrolled, never background prefetch.
 class ReplyPagedScroll extends StatelessWidget {
-  const ReplyPagedScroll({super.key, required this.controller, required this.child});
+  const ReplyPagedScroll({super.key, required this.controller, required this.child,
+    this.allowRefresh = false});
   final ReplyController controller;
   final Widget child;
+  // Outer comments opt in; nested replies retain their existing behavior.
+  final bool allowRefresh;
 
   @override
   Widget build(BuildContext context) => Obx(() {
@@ -17,7 +20,14 @@ class ReplyPagedScroll extends StatelessWidget {
     return VoiceOverPagedScroll(
       controller: controller.scrollController,
       replyHasMore: data != null && !controller.isEnd,
+      onScrollBackwardAtStart: allowRefresh
+          ? () { controller.onA11yRefresh(label: '評論'); }
+          : null,
       onScrollForwardAtEnd: () async {
+        if (allowRefresh && !controller.loadingState.value.isSuccess) {
+          await controller.onA11yRefresh(label: '評論');
+          return;
+        }
         final before = controller.loadingState.value.dataOrNull?.length ?? 0;
         await controller.retryLoadMore();
         if (!context.mounted || controller.isClosed ||
@@ -70,6 +80,7 @@ class ReplyScrollView extends StatelessWidget {
     final accessible = MediaQuery.accessibleNavigationOf(context);
     return ReplyPagedScroll(
       controller: replyController,
+      allowRefresh: true,
       child: CustomScrollView(
         controller: accessible ? replyController.scrollController : null,
         cacheExtent: accessible ? MediaQuery.sizeOf(context).height * 8 : null,

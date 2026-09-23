@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
-import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/common/widgets/custom_tooltip.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
@@ -98,6 +97,7 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
                           final width = widthFac * 38;
                           final height = heightFac * 38;
                           return GridView.builder(
+                            key: ObjectKey(item),
                             physics: platformClampingPhysics,
                             padding: const EdgeInsets.only(
                               left: 12,
@@ -127,6 +127,7 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
                               }
 
                               return Semantics(
+                                key: ObjectKey(e),
                                 container: true,
                                 button: true,
                                 excludeSemantics: true,
@@ -135,8 +136,8 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
                                     ? '點兩下插入這個貼圖'
                                     : '點兩下送出這個貼圖',
                                 onTap: choose,
-                                onDidGainAccessibilityFocus: () =>
-                                    a11yEnsureVisible(context),
+                                // Match the comment picker: do not move the
+                                // grid/ancestor pager during focus handoff.
                                 child: Material(
                                   type: MaterialType.transparency,
                                   child: InkWell(

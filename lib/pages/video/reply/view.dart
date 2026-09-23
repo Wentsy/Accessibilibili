@@ -101,6 +101,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
               : null,
           body: ReplyPagedScroll(
             controller: _videoReplyController,
+            allowRefresh: widget.replyLevel == 1,
             child: CustomScrollView(
               controller: _videoReplyController.scrollController,
               // Read All can consume Flutter semantic nodes beyond the visible
