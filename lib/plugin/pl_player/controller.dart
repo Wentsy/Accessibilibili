@@ -31,6 +31,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/services/audio_transition_queue.dart';
+import 'package:PiliPlus/services/live_reconnect_scheduler.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
@@ -570,6 +571,43 @@ class PlPlayerController with BlockConfigMixin {
   }
 
   bool _processing = false;
+  final _liveReconnect = LiveReconnectScheduler();
+  bool _liveWantsPlay = false;
+  Duration _liveBufferAtError = Duration.zero;
+
+  void _scheduleLiveReconnect() {
+    final player = _videoPlayerController;
+    if (!isLive || !_liveWantsPlay || player == null) return;
+    if (!_liveReconnect.isPending && !_liveReconnect.isRunning) {
+      _liveBufferAtError = player.state.buffer;
+    }
+    final source = dataSource;
+    _liveReconnect.schedule((isCurrent) async {
+      bool canReconnect() =>
+          isCurrent() &&
+          _liveWantsPlay &&
+          isLive &&
+          _playerCount > 0 &&
+          !_processing &&
+          identical(source, dataSource) &&
+          identical(player, _videoPlayerController);
+      var reopened = false;
+      await _audioTransitions.run(() async {
+        if (!canReconnect() || player.current.isEmpty) return;
+        // Reuse the original live media (opened without a seek), including its
+        // exact selected URL/options. Do not copy the old elapsed position.
+        await player.open(
+          player.current.last,
+          play: false,
+        );
+        reopened = true;
+      });
+      if (reopened && canReconnect()) {
+        await play(hideControls: !showControls.value);
+      }
+    });
+  }
+
   bool get processing => _processing;
 
   // offline
@@ -609,6 +647,12 @@ class PlPlayerController with BlockConfigMixin {
   }) async {
     try {
       _processing = true;
+      _liveReconnect.cancel();
+      _liveWantsPlay = false;
+      if (_liveReconnect.isRunning) {
+        // Finish an already-started reopen before loading another room/source.
+        await _audioTransitions.run(() async {});
+      }
       this.isLive = isLive;
       _videoType = videoType ?? VideoType.ugc;
       this.width = width;
@@ -641,6 +685,7 @@ class PlPlayerController with BlockConfigMixin {
         return;
       }
       _bufferingWantsPlay = autoplay;
+      _liveWantsPlay = isLive && autoplay;
       _syncBufferingRecovery();
       // Reset observable playback state before opening the next media so
       // VoiceOver never keeps announcing the previous video's position.
@@ -972,6 +1017,15 @@ class PlPlayerController with BlockConfigMixin {
       stream.position.listen((Duration position) {
         final posInSeconds = position.inSeconds;
 
+        if (isLive &&
+            !_liveReconnect.isRunning &&
+            player.state.playing &&
+            !isBuffering.value &&
+            player.state.buffer > _liveBufferAtError &&
+            posInSeconds > this.position.value) {
+          _liveReconnect.cancel();
+        }
+
         if (posInSeconds != this.position.value) {
           if (!isSeeking.value) {
             this.position.value = posInSeconds;
@@ -1018,8 +1072,9 @@ class PlPlayerController with BlockConfigMixin {
         if (isLive) {
           if (event.startsWith('tcp: ffurl_read returned ') ||
               event.startsWith("Failed to open https://") ||
-              event.startsWith("Can not open external file https://")) {
-            Future.delayed(const Duration(milliseconds: 3000), refreshPlayer);
+              event.startsWith("Can not open external file https://") ||
+              event.contains('Stream ends prematurely')) {
+            _scheduleLiveReconnect();
           }
           return;
         }
@@ -1205,6 +1260,7 @@ class PlPlayerController with BlockConfigMixin {
     if (player == null) return;
     // 播放时自动隐藏控制条
     _bufferingWantsPlay = true;
+    _liveWantsPlay = isLive;
     _syncBufferingRecovery();
     controls = !hideControls;
     // repeat为true，将从头播放
@@ -1225,6 +1281,8 @@ class PlPlayerController with BlockConfigMixin {
         return;
       }
       if (!active) {
+        _liveWantsPlay = false;
+        _liveReconnect.cancel();
         _bufferingWantsPlay = false;
         _syncBufferingRecovery();
         playerStatus.value = PlayerStatus.paused;
@@ -1235,6 +1293,8 @@ class PlPlayerController with BlockConfigMixin {
         if (isCurrent()) playerStatus.value = PlayerStatus.playing;
       } catch (_) {
         if (isCurrent()) {
+          _liveWantsPlay = false;
+          _liveReconnect.cancel();
           _bufferingWantsPlay = false;
           _syncBufferingRecovery();
         }
@@ -1247,6 +1307,8 @@ class PlPlayerController with BlockConfigMixin {
 
   /// 暂停播放
   Future<void> pause({bool notify = true, bool isInterrupt = false}) async {
+    _liveWantsPlay = false;
+    _liveReconnect.cancel();
     _bufferingWantsPlay = false;
     _syncBufferingRecovery();
     final request = ++_playbackRequest;
@@ -1672,6 +1734,8 @@ class PlPlayerController with BlockConfigMixin {
     }
 
     _playerCount = 0;
+    _liveWantsPlay = false;
+    _liveReconnect.cancel();
     _bufferingWantsPlay = false;
     _syncBufferingRecovery();
     if (removeSafeArea) {

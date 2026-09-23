@@ -872,6 +872,12 @@ abstract final class Pref {
   static Map<String, String> initLiveBuffer() {
     return {
       'cache': 'yes',
+      // Small live reserve; unlike VOD, avoid a long rebuffer/live-edge delay.
+      'cache-secs': '6',
+      'demuxer-hysteresis-secs': '0',
+      'cache-pause': 'yes',
+      'cache-pause-wait': '2',
+      'cache-pause-initial': 'no',
       'demuxer-max-bytes': (Pref.bufferSize * 0x200000).toStringAsFixed(0),
       'demuxer-max-back-bytes': '0',
     };
