@@ -194,6 +194,9 @@ class LiveRoomChatPanel extends StatelessWidget {
         Obx(
           () => VoiceOverPagedScroll(
             controller: liveRoomController.scrollController,
+            // Route iOS VoiceOver's three-finger gestures from the chat's
+            // inner scrolling semantics to this pager, including at edges.
+            nativeFeedScroll: true,
             onScrollBackwardAtStart: () {
               liveRoomController.refreshA11yChatHistory();
             },

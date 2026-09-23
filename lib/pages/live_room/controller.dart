@@ -421,10 +421,10 @@ class LiveRoomController extends GetxController {
   }
 
   void refreshA11yChatHistory() {
-    a11yActionFeedback(message: '已到最舊彈幕');
+    _refreshLatestA11yChat(keepAtStart: true);
   }
 
-  Future<void> _refreshLatestA11yChat() async {
+  Future<void> _refreshLatestA11yChat({bool keepAtStart = false}) async {
     if (_a11yRefreshingHistory) {
       a11yActionFeedback(message: '正在重新整理彈幕');
       return;
@@ -443,10 +443,19 @@ class LiveRoomController extends GetxController {
       if (res case Success(:final response)) {
         messages.assignAll(response ?? const <DanmakuMsg>[]);
         builtLength = messages.length;
-        a11yChatPaused = false;
-        disableAutoScroll.value = false;
+        // A refresh requested from the oldest visible message should not
+        // throw VoiceOver to the newest message at the bottom. Resume live
+        // updates when the user explicitly pages forward to the end.
+        a11yChatPaused = keepAtStart;
+        disableAutoScroll.value = keepAtStart;
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          _jumpToBottom();
+          if (keepAtStart) {
+            if (scrollController.hasClients) {
+              scrollController.jumpTo(scrollController.position.minScrollExtent);
+            }
+          } else {
+            _jumpToBottom();
+          }
           a11yActionFeedback(message: '彈幕已重新整理');
         });
       } else {
