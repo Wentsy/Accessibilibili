@@ -151,17 +151,47 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
               ],
               const Divider(),
               if (!(isHorizontal && PlatformUtils.isDesktop))
-                Obx(
-                  () => TextButton.icon(
-                    onPressed: isLoading ? null : introController.expand.toggle,
-                    icon: Icon(
-                      introController.expand.value
-                          ? Icons.expand_less
-                          : Icons.expand_more,
+                Obx(() {
+                  final collapsed =
+                      !introController.expand.value && !isLoading;
+                  if (!collapsed) {
+                    return TextButton.icon(
+                      onPressed:
+                          isLoading ? null : introController.expand.toggle,
+                      icon: Icon(
+                        introController.expand.value
+                            ? Icons.expand_less
+                            : Icons.expand_more,
+                      ),
+                      label: Text(
+                        introController.expand.value ? '收合簡介' : '展開簡介',
+                      ),
+                    );
+                  }
+                  final descV2 = videoDetail.descV2;
+                  final description = descV2 != null && descV2.isNotEmpty
+                      ? descV2.map((part) => part.rawText ?? '').join()
+                      : videoDetail.desc ?? '';
+                  return TextLinkRotor(
+                    identifier: 'a11y-video-description-collapsed',
+                    links: videoTextLinks(description, videoDetailCtr),
+                    builder: (focusLinks) => Semantics(
+                      container: true,
+                      identifier: 'a11y-video-description-collapsed',
+                      button: true,
+                      label: '展開簡介',
+                      onTap: introController.expand.toggle,
+                      onDidGainAccessibilityFocus: focusLinks,
+                      child: ExcludeSemantics(
+                        child: TextButton.icon(
+                          onPressed: introController.expand.toggle,
+                          icon: const Icon(Icons.expand_more),
+                          label: const Text('展開簡介'),
+                        ),
+                      ),
                     ),
-                    label: Text(introController.expand.value ? '收合簡介' : '展開簡介'),
-                  ),
-                ),
+                  );
+                }),
               if (isHorizontal && PlatformUtils.isDesktop)
                 ..._infos(videoDetail)
               else
