@@ -646,7 +646,6 @@ private final class IOSTextLinkRotor {
       )
     }
 
-    let oldOwners = hosts
     hosts = []
 
     let targetList = labels.enumerated().map { index, label in
@@ -677,9 +676,7 @@ private final class IOSTextLinkRotor {
       focused.accessibilityCustomRotors =
         (focused.accessibilityCustomRotors ?? []) + [rotor]
     }
-
-    _ = oldOwners
-  }
+\n  }
 }
 
 @main
