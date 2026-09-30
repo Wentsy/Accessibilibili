@@ -493,33 +493,46 @@ private final class IOSRotorLink: UIAccessibilityElement {
 
 private final class IOSTextLinkRotor {
   private let channel: FlutterMethodChannel
-  private weak var owner: NSObject?
+  private var hosts: [(host: NSObject, rotors: [UIAccessibilityCustomRotor]?)] = []
   private var targets: [IOSRotorLink] = []
   private var registrationId: Int?
-  private var originalRotors: [UIAccessibilityCustomRotor]?
 
   init(messenger: FlutterBinaryMessenger) {
-    channel = FlutterMethodChannel(name: "accessibilibili/text_link_rotor", binaryMessenger: messenger)
+    channel = FlutterMethodChannel(
+      name: "accessibilibili/text_link_rotor",
+      binaryMessenger: messenger
+    )
     channel.setMethodCallHandler { [weak self] call, result in
-      guard let self = self else { result(nil); return }
+      guard let self else {
+        result(nil)
+        return
+      }
       switch call.method {
       case "focus":
         guard let args = call.arguments as? [String: Any],
               let id = args["id"] as? Int,
               let identifier = args["identifier"] as? String,
-              let labels = args["labels"] as? [String] else {
-          result(FlutterError(code: "invalid_rotor", message: "Invalid link rotor registration", details: nil))
+              let labels = args["labels"] as? [String]
+        else {
+          result(
+            FlutterError(
+              code: "invalid_rotor",
+              message: "Invalid link rotor registration",
+              details: nil
+            )
+          )
           return
         }
         self.clear()
         self.registrationId = id
-        // Flutter's focus action may arrive before UIKit finishes changing focus.
         DispatchQueue.main.async { [weak self] in
           self?.install(id: id, identifier: identifier, labels: labels)
         }
         result(nil)
       case "clear":
-        if let id = call.arguments as? Int, self.registrationId == id { self.clear() }
+        if let id = call.arguments as? Int, self.registrationId == id {
+          self.clear()
+        }
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
@@ -528,60 +541,144 @@ private final class IOSTextLinkRotor {
   }
 
   private func clear() {
-    owner?.accessibilityCustomRotors = originalRotors
-    owner = nil
-    originalRotors = nil
-    targets = []
+    for entry in hosts {
+      entry.host.accessibilityCustomRotors = entry.rotors
+    }
+    hosts.removeAll()
+    targets.removeAll()
     registrationId = nil
   }
 
-  private func install(id: Int, identifier: String, labels: [String], retries: Int = 2) {
-    guard registrationId == id, UIAccessibility.isVoiceOverRunning,
-          let focused = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? NSObject,
-          let identified = focused as? UIAccessibilityIdentification,
-          identified.accessibilityIdentifier == identifier else {
+  private func matchingOwner(
+    from focused: NSObject,
+    identifier: String
+  ) -> NSObject? {
+    var current: AnyObject? = focused
+    for _ in 0..<12 {
+      if let object = current as? NSObject,
+         let identified = object as? UIAccessibilityIdentification,
+         identified.accessibilityIdentifier == identifier {
+        return object
+      }
+
+      if let element = current as? UIAccessibilityElement,
+         let container = element.accessibilityContainer as AnyObject? {
+        current = container
+      } else if let view = current as? UIView {
+        current = view.superview
+      } else {
+        break
+      }
+    }
+    return nil
+  }
+
+  private func install(
+    id: Int,
+    identifier: String,
+    labels: [String],
+    retries: Int = 3
+  ) {
+    guard registrationId == id,
+          UIAccessibility.isVoiceOverRunning,
+          let focused = UIAccessibility.focusedElement(
+            using: .notificationVoiceOver
+          ) as? NSObject
+    else {
       if registrationId == id && retries > 0 {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-          self?.install(id: id, identifier: identifier, labels: labels, retries: retries - 1)
+          self?.install(
+            id: id,
+            identifier: identifier,
+            labels: labels,
+            retries: retries - 1
+          )
         }
       }
       return
     }
-    guard !labels.isEmpty else { return }
-    owner = focused
-    originalRotors = focused.accessibilityCustomRotors
-    targets = labels.enumerated().map { index, label in
-      let target = IOSRotorLink(accessibilityContainer: focused)
-      target.isAccessibilityElement = true
-      target.accessibilityLabel = label
-      target.accessibilityTraits = .link
-      target.accessibilityFrame = focused.accessibilityFrame
-      target.activate = { [weak self, weak focused] in
-        guard let self = self, let focused = focused,
-              self.registrationId == id, self.owner === focused else { return }
-        self.channel.invokeMethod("activate", arguments: ["id": id, "index": index])
+
+    guard let owner = matchingOwner(from: focused, identifier: identifier),
+          !labels.isEmpty
+    else {
+      if registrationId == id && retries > 0 {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+          self?.install(
+            id: id,
+            identifier: identifier,
+            labels: labels,
+            retries: retries - 1
+          )
+        }
       }
-      return target
+      return
     }
-    let rotor = UIAccessibilityCustomRotor(systemType: .link) { [weak self, weak focused] predicate in
-      guard let self = self, let focused = focused,
-            self.registrationId == id, self.owner === focused,
-            !focused.accessibilityFrame.isEmpty else { return nil }
+
+    let rotor = UIAccessibilityCustomRotor(systemType: .link) {
+      [weak self, weak owner] predicate in
+      guard let self,
+            let owner,
+            self.registrationId == id,
+            !labels.isEmpty
+      else {
+        return nil
+      }
+
       let current = predicate.currentItem.targetElement as? IOSRotorLink
       let forward = predicate.searchDirection == .next
       let index: Int
-      if let current = current, let position = self.targets.firstIndex(where: { $0 === current }) {
+      if let current,
+         let position = self.targets.firstIndex(where: { $0 === current }) {
         index = position + (forward ? 1 : -1)
       } else {
         index = forward ? 0 : self.targets.count - 1
       }
-      guard self.targets.indices.contains(index) else { return nil }
+
+      guard self.targets.indices.contains(index) else {
+        return nil
+      }
+
       let target = self.targets[index]
-      target.accessibilityFrame = focused.accessibilityFrame
-      return UIAccessibilityCustomRotorItemResult(targetElement: target, targetRange: nil)
+      target.accessibilityFrame = owner.accessibilityFrame
+      return UIAccessibilityCustomRotorItemResult(
+        targetElement: target,
+        targetRange: nil
+      )
     }
-    focused.accessibilityCustomRotors = (originalRotors ?? []) + [rotor]
-    // Targets inherit this rotor through their accessibility container (owner).
+
+    let oldOwners = hosts
+    hosts = []
+
+    let targetList = labels.enumerated().map { index, label in
+      let target = IOSRotorLink(accessibilityContainer: owner)
+      target.isAccessibilityElement = true
+      target.accessibilityLabel = label
+      target.accessibilityTraits = .link
+      target.accessibilityFrame = owner.accessibilityFrame
+      target.activate = { [weak self] in
+        guard let self, self.registrationId == id else {
+          return
+        }
+        self.channel.invokeMethod(
+          "activate",
+          arguments: ["id": id, "index": index]
+        )
+      }
+      return target
+    }
+    targets = targetList
+
+    hosts.append((owner, owner.accessibilityCustomRotors))
+    owner.accessibilityCustomRotors =
+      (owner.accessibilityCustomRotors ?? []) + [rotor]
+
+    if focused !== owner {
+      hosts.append((focused, focused.accessibilityCustomRotors))
+      focused.accessibilityCustomRotors =
+        (focused.accessibilityCustomRotors ?? []) + [rotor]
+    }
+
+    _ = oldOwners
   }
 }
 
