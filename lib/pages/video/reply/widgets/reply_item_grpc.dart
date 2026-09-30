@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/semantics.dart';
 
+import 'package:PiliPlus/common/widgets/video_timeline.dart';
+import 'package:PiliPlus/utils/video_timestamps.dart';
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -1060,6 +1062,22 @@ class ReplyItemGrpc extends StatelessWidget {
     required bool isSubReply,
   }) {
     late String message = item.content.message;
+    VideoDetailController? timelineController;
+    if (item.type.toInt() == 1) {
+      try {
+        final tag = getTag?.call() ?? Get.arguments?['heroTag'];
+        if (tag != null) {
+          final candidate = Get.find<VideoDetailController>(tag: tag);
+          if (candidate.aid == item.oid.toInt()) timelineController = candidate;
+        }
+      } catch (_) {
+        // Comments opened outside a video have no player to seek.
+      }
+    }
+    final player = timelineController;
+    final times = player == null
+        ? <Duration>[]
+        : parseVideoTimestamps(message, durationMs: player.data.timeLength);
     final ownerMid = Int64(Accounts.main.mid);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -1265,6 +1283,12 @@ class ReplyItemGrpc extends StatelessWidget {
                 style: style,
               ),
             ),
+            if (player != null && times.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.schedule, size: 19),
+                title: Text('時間軸', style: style),
+                onTap: () => showVideoTimeline(context, player, times),
+              ),
             ListTile(
               onTap: () {
                 Get.back();
