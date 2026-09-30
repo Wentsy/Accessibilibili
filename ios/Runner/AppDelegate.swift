@@ -676,7 +676,8 @@ private final class IOSTextLinkRotor {
       focused.accessibilityCustomRotors =
         (focused.accessibilityCustomRotors ?? []) + [rotor]
     }
-\n  }
+
+  }
 }
 
 @main
