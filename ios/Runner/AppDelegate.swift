@@ -493,9 +493,12 @@ private final class IOSRotorLink: UIAccessibilityElement {
 
 private final class IOSTextLinkRotor {
   private let channel: FlutterMethodChannel
-  private var hosts: [(host: NSObject, rotors: [UIAccessibilityCustomRotor]?)] = []
+  private weak var hostWindow: UIWindow?
+  private var originalRotors: [UIAccessibilityCustomRotor]?
+  private var rotor: UIAccessibilityCustomRotor?
   private var targets: [IOSRotorLink] = []
-  private var registrationId: Int?
+  private var activeId: Int?
+  private var activeFocusedElement: NSObject?
 
   init(messenger: FlutterBinaryMessenger) {
     channel = FlutterMethodChannel(
@@ -507,11 +510,11 @@ private final class IOSTextLinkRotor {
         result(nil)
         return
       }
+
       switch call.method {
       case "focus":
         guard let args = call.arguments as? [String: Any],
               let id = args["id"] as? Int,
-              let identifier = args["identifier"] as? String,
               let labels = args["labels"] as? [String]
         else {
           result(
@@ -523,103 +526,58 @@ private final class IOSTextLinkRotor {
           )
           return
         }
-        self.clear()
-        self.registrationId = id
-        DispatchQueue.main.async { [weak self] in
-          self?.install(id: id, identifier: identifier, labels: labels)
-        }
+
+        self.registerFocus(id: id, labels: labels)
         result(nil)
+
       case "clear":
-        if let id = call.arguments as? Int, self.registrationId == id {
-          self.clear()
+        if let id = call.arguments as? Int, self.activeId == id {
+          self.clearFocus()
         }
         result(nil)
+
       default:
         result(FlutterMethodNotImplemented)
       }
     }
   }
 
-  private func clear() {
-    for entry in hosts {
-      entry.host.accessibilityCustomRotors = entry.rotors
-    }
-    hosts.removeAll()
-    targets.removeAll()
-    registrationId = nil
+  private func currentWindow() -> UIWindow? {
+    UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap(\.windows)
+      .first { $0.isKeyWindow }
+      ?? UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .flatMap(\.windows)
+        .first { !$0.isHidden && $0.alpha > 0 }
   }
 
-  private func matchingOwner(
-    from focused: NSObject,
-    identifier: String
-  ) -> NSObject? {
-    var current: AnyObject? = focused
-    for _ in 0..<12 {
-      if let object = current as? NSObject,
-         let identified = object as? UIAccessibilityIdentification,
-         identified.accessibilityIdentifier == identifier {
-        return object
-      }
-
-      if let element = current as? UIAccessibilityElement,
-         let container = element.accessibilityContainer as AnyObject? {
-        current = container
-      } else if let view = current as? UIView {
-        current = view.superview
-      } else {
-        break
-      }
-    }
-    return nil
-  }
-
-  private func install(
-    id: Int,
-    identifier: String,
-    labels: [String],
-    retries: Int = 3
-  ) {
-    guard registrationId == id,
-          UIAccessibility.isVoiceOverRunning,
-          let focused = UIAccessibility.focusedElement(
-            using: .notificationVoiceOver
-          ) as? NSObject
-    else {
-      if registrationId == id && retries > 0 {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-          self?.install(
-            id: id,
-            identifier: identifier,
-            labels: labels,
-            retries: retries - 1
-          )
-        }
-      }
+  private func ensureRotorInstalled() {
+    guard let window = currentWindow() else {
       return
     }
 
-    guard let owner = matchingOwner(from: focused, identifier: identifier),
-          !labels.isEmpty
-    else {
-      if registrationId == id && retries > 0 {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-          self?.install(
-            id: id,
-            identifier: identifier,
-            labels: labels,
-            retries: retries - 1
-          )
-        }
+    if hostWindow !== window {
+      if let oldWindow = hostWindow {
+        oldWindow.accessibilityCustomRotors = originalRotors
       }
-      return
+      hostWindow = window
+      originalRotors = window.accessibilityCustomRotors
+      window.accessibilityCustomRotors =
+        (window.accessibilityCustomRotors ?? []) + [makeRotor()]
+    } else if rotor == nil {
+      window.accessibilityCustomRotors =
+        (window.accessibilityCustomRotors ?? []) + [makeRotor()]
     }
+  }
 
+  private func makeRotor() -> UIAccessibilityCustomRotor {
     let rotor = UIAccessibilityCustomRotor(systemType: .link) {
-      [weak self, weak owner] predicate in
+      [weak self] predicate in
       guard let self,
-            let owner,
-            self.registrationId == id,
-            !labels.isEmpty
+            let activeId = self.activeId,
+            !self.targets.isEmpty
       else {
         return nil
       }
@@ -627,6 +585,7 @@ private final class IOSTextLinkRotor {
       let current = predicate.currentItem.targetElement as? IOSRotorLink
       let forward = predicate.searchDirection == .next
       let index: Int
+
       if let current,
          let position = self.targets.firstIndex(where: { $0 === current }) {
         index = position + (forward ? 1 : -1)
@@ -639,23 +598,41 @@ private final class IOSTextLinkRotor {
       }
 
       let target = self.targets[index]
-      target.accessibilityFrame = owner.accessibilityFrame
+      if let focused = self.activeFocusedElement {
+        target.accessibilityFrame = focused.accessibilityFrame
+      }
+
+      guard self.activeId == activeId else {
+        return nil
+      }
       return UIAccessibilityCustomRotorItemResult(
         targetElement: target,
         targetRange: nil
       )
     }
+    self.rotor = rotor
+    return rotor
+  }
 
-    hosts = []
+  private func registerFocus(id: Int, labels: [String]) {
+    guard UIAccessibility.isVoiceOverRunning, !labels.isEmpty else {
+      clearFocus()
+      return
+    }
 
-    let targetList = labels.enumerated().map { index, label in
-      let target = IOSRotorLink(accessibilityContainer: owner)
+    activeId = id
+    activeFocusedElement =
+      UIAccessibility.focusedElement(using: .notificationVoiceOver) as? NSObject
+
+    targets = labels.enumerated().map { index, label in
+      let target = IOSRotorLink(accessibilityContainer: activeFocusedElement)
       target.isAccessibilityElement = true
       target.accessibilityLabel = label
       target.accessibilityTraits = .link
-      target.accessibilityFrame = owner.accessibilityFrame
+      target.accessibilityFrame =
+        activeFocusedElement?.accessibilityFrame ?? .zero
       target.activate = { [weak self] in
-        guard let self, self.registrationId == id else {
+        guard let self, self.activeId == id else {
           return
         }
         self.channel.invokeMethod(
@@ -665,18 +642,14 @@ private final class IOSTextLinkRotor {
       }
       return target
     }
-    targets = targetList
 
-    hosts.append((owner, owner.accessibilityCustomRotors))
-    owner.accessibilityCustomRotors =
-      (owner.accessibilityCustomRotors ?? []) + [rotor]
+    ensureRotorInstalled()
+  }
 
-    if focused !== owner {
-      hosts.append((focused, focused.accessibilityCustomRotors))
-      focused.accessibilityCustomRotors =
-        (focused.accessibilityCustomRotors ?? []) + [rotor]
-    }
-
+  private func clearFocus() {
+    activeId = nil
+    activeFocusedElement = nil
+    targets.removeAll()
   }
 }
 
