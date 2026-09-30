@@ -1063,16 +1063,15 @@ class ReplyItemGrpc extends StatelessWidget {
   }) {
     late String message = item.content.message;
     VideoDetailController? timelineController;
-    if (item.type.toInt() == 1) {
-      try {
-        final tag = getTag?.call() ?? Get.arguments?['heroTag'];
-        if (tag != null) {
-          final candidate = Get.find<VideoDetailController>(tag: tag);
-          if (candidate.aid == item.oid.toInt()) timelineController = candidate;
-        }
-      } catch (_) {
-        // Comments opened outside a video have no player to seek.
+    // 外層評論與樓中樓都共用這個選單；只要目前位於影片頁，
+    // 就使用該頁播放器解析時間點，避免樓中樓的 oid/type 欄位差異把入口隱藏。
+    try {
+      final tag = getTag?.call() ?? Get.arguments?['heroTag'];
+      if (tag != null) {
+        timelineController = Get.find<VideoDetailController>(tag: tag);
       }
+    } catch (_) {
+      // 在影片頁外開啟評論時沒有播放器可跳轉。
     }
     final player = timelineController;
     final times = player == null
@@ -1365,3 +1364,4 @@ class ReplyItemGrpc extends StatelessWidget {
     );
   }
 }
+
