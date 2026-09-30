@@ -480,10 +480,116 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
   }
 }
 
+/// These elements are returned only by the link rotor, never inserted into
+/// accessibilityElements, so ordinary swipes still read one complete comment.
+private final class IOSRotorLink: UIAccessibilityElement {
+  var activate: (() -> Void)?
+  override func accessibilityActivate() -> Bool {
+    guard let activate = activate else { return false }
+    activate()
+    return true
+  }
+}
+
+private final class IOSTextLinkRotor {
+  private let channel: FlutterMethodChannel
+  private weak var owner: NSObject?
+  private var targets: [IOSRotorLink] = []
+  private var registrationId: Int?
+  private var originalRotors: [UIAccessibilityCustomRotor]?
+
+  init(messenger: FlutterBinaryMessenger) {
+    channel = FlutterMethodChannel(name: "accessibilibili/text_link_rotor", binaryMessenger: messenger)
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard let self = self else { result(nil); return }
+      switch call.method {
+      case "focus":
+        guard let args = call.arguments as? [String: Any],
+              let id = args["id"] as? Int,
+              let identifier = args["identifier"] as? String,
+              let labels = args["labels"] as? [String] else {
+          result(FlutterError(code: "invalid_rotor", message: "Invalid link rotor registration", details: nil))
+          return
+        }
+        self.clear()
+        self.registrationId = id
+        // Flutter's focus action may arrive before UIKit finishes changing focus.
+        DispatchQueue.main.async { [weak self] in
+          self?.install(id: id, identifier: identifier, labels: labels)
+        }
+        result(nil)
+      case "clear":
+        if let id = call.arguments as? Int, self.registrationId == id { self.clear() }
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+  }
+
+  private func clear() {
+    owner?.accessibilityCustomRotors = originalRotors
+    owner = nil
+    originalRotors = nil
+    targets = []
+    registrationId = nil
+  }
+
+  private func install(id: Int, identifier: String, labels: [String], retries: Int = 2) {
+    guard registrationId == id, UIAccessibility.isVoiceOverRunning,
+          let focused = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? NSObject,
+          let identified = focused as? UIAccessibilityIdentification,
+          identified.accessibilityIdentifier == identifier else {
+      if registrationId == id && retries > 0 {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+          self?.install(id: id, identifier: identifier, labels: labels, retries: retries - 1)
+        }
+      }
+      return
+    }
+    guard !labels.isEmpty else { return }
+    owner = focused
+    originalRotors = focused.accessibilityCustomRotors
+    targets = labels.enumerated().map { index, label in
+      let target = IOSRotorLink(accessibilityContainer: focused)
+      target.isAccessibilityElement = true
+      target.accessibilityLabel = label
+      target.accessibilityTraits = .link
+      target.accessibilityFrame = focused.accessibilityFrame
+      target.activate = { [weak self, weak focused] in
+        guard let self = self, let focused = focused,
+              self.registrationId == id, self.owner === focused else { return }
+        self.channel.invokeMethod("activate", arguments: ["id": id, "index": index])
+      }
+      return target
+    }
+    let rotor = UIAccessibilityCustomRotor(systemType: .link) { [weak self, weak focused] predicate in
+      guard let self = self, let focused = focused,
+            self.registrationId == id, self.owner === focused,
+            !focused.accessibilityFrame.isEmpty else { return nil }
+      let current = predicate.currentItem.targetElement as? IOSRotorLink
+      let forward = predicate.searchDirection == .next
+      let index: Int
+      if let current = current, let position = self.targets.firstIndex(where: { $0 === current }) {
+        index = position + (forward ? 1 : -1)
+      } else {
+        index = forward ? 0 : self.targets.count - 1
+      }
+      guard self.targets.indices.contains(index) else { return nil }
+      let target = self.targets[index]
+      target.accessibilityFrame = focused.accessibilityFrame
+      return UIAccessibilityCustomRotorItemResult(targetElement: target, targetRange: nil)
+    }
+    focused.accessibilityCustomRotors = (originalRotors ?? []) + [rotor]
+    // Targets inherit this rotor through their accessibility container (owner).
+  }
+}
+
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var accessibilityChannel: FlutterMethodChannel?
   private var videoPhotoExporter: VideoPhotoExporter?
+  private var textLinkRotor: IOSTextLinkRotor?
 
   override func application(
     _ application: UIApplication,
@@ -495,6 +601,7 @@ private final class IOSRichTextEditor: NSObject, FlutterPlatformView, UITextView
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    textLinkRotor = IOSTextLinkRotor(messenger: engineBridge.applicationRegistrar.messenger())
     videoPhotoExporter = VideoPhotoExporter(messenger: engineBridge.applicationRegistrar.messenger())
 
     if let registrar = engineBridge.pluginRegistry.registrar(

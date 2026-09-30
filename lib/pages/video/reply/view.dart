@@ -255,6 +255,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
               return ReplyA11ySemantics(
                 key: ValueKey('reply-${item.id}'),
                 replyItem: item,
+                videoController: _videoReplyController.videoCtr,
                 onAccessibilityFocus: () {
                   if (index >= response.length - 5) {
                     _videoReplyController.retryLoadMore();
@@ -309,6 +310,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
           maxHeight: MediaQuery.sizeOf(context).height,
         ),
         (context) => VideoReplyReplyPanel(
+          videoController: _videoReplyController.videoCtr,
           id: id,
           oid: oid,
           rpid: rpid,

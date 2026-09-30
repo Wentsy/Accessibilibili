@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+import 'package:PiliPlus/common/a11y/text_link_rotor.dart';
+import 'package:PiliPlus/common/a11y/video_text_links.dart';
 import 'package:PiliPlus/common/widgets/video_timeline.dart';
 import 'package:PiliPlus/utils/video_timestamps.dart';
 import 'package:PiliPlus/common/assets.dart';
@@ -303,28 +306,37 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
           label: const Text('時間軸'),
         ),
       if (description.isNotEmpty)
-        Semantics(
-          onLongPress: times.isNotEmpty ? openTimeline : null,
-          child: SelectionText.rich(
-            descV2 != null && descV2.isNotEmpty
-                ? buildDesc(descV2)
-                : TextSpan(text: description),
-            style: const TextStyle(height: 1.4),
-            contextMenuBuilder: (context, state) =>
-                AdaptiveTextSelectionToolbar.buttonItems(
-                  anchors: state.contextMenuAnchors,
-                  buttonItems: [
-                    ...state.contextMenuButtonItems,
-                    if (times.isNotEmpty)
-                      ContextMenuButtonItem(
-                        label: '時間軸',
-                        onPressed: () {
-                          state.hideToolbar();
-                          openTimeline();
-                        },
-                      ),
-                  ],
-                ),
+        TextLinkRotor(
+          identifier: 'a11y-video-description',
+          links: videoTextLinks(description, videoDetailCtr),
+          builder: (focusLinks) => Semantics(
+            identifier: 'a11y-video-description',
+            container: true,
+            excludeSemantics: Platform.isIOS,
+            label: Platform.isIOS ? description : null,
+            onDidGainAccessibilityFocus: focusLinks,
+            onLongPress: times.isNotEmpty ? openTimeline : null,
+            child: SelectionText.rich(
+              descV2 != null && descV2.isNotEmpty
+                  ? buildDesc(descV2)
+                  : TextSpan(text: description),
+              style: const TextStyle(height: 1.4),
+              contextMenuBuilder: (context, state) =>
+                  AdaptiveTextSelectionToolbar.buttonItems(
+                    anchors: state.contextMenuAnchors,
+                    buttonItems: [
+                      ...state.contextMenuButtonItems,
+                      if (times.isNotEmpty)
+                        ContextMenuButtonItem(
+                          label: '時間軸',
+                          onPressed: () {
+                            state.hideToolbar();
+                            openTimeline();
+                          },
+                        ),
+                    ],
+                  ),
+            ),
           ),
         ),
       const SizedBox(height: 8),

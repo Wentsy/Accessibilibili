@@ -1,3 +1,4 @@
+import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/a11y/composer_dock.dart';
@@ -45,6 +46,7 @@ class VideoReplyReplyPanel extends CommonSlidePage {
     required this.replyType,
     this.isNested = false,
     this.upMid,
+    this.videoController,
   });
   final int? id;
   final int oid;
@@ -55,6 +57,7 @@ class VideoReplyReplyPanel extends CommonSlidePage {
   final int replyType;
   final bool isNested;
   final Int64? upMid;
+  final VideoDetailController? videoController;
 
   @override
   State<VideoReplyReplyPanel> createState() => _VideoReplyReplyPanelState();
@@ -299,6 +302,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
       slivers: [
         SliverToBoxAdapter(
           child: ReplyA11ySemantics(
+            videoController: widget.videoController,
             replyItem: firstFloor,
             sortKey: const OrdinalSortKey(0),
             label: _a11yLabel(firstFloor),
@@ -390,6 +394,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                   final item = response[index];
                   final reply = _replyItem(context, item, index);
                   final child = ReplyA11ySemantics(
+                    videoController: widget.videoController,
                     replyItem: item,
                     sortKey: OrdinalSortKey(index + 2.0),
                     onAccessibilityFocus: () {
@@ -432,6 +437,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                   final item = response[index];
                   final reply = _replyItem(context, item, index);
                   final child = ReplyA11ySemantics(
+                    videoController: widget.videoController,
                     replyItem: item,
                     sortKey: OrdinalSortKey(index + 2.0),
                     label: _a11yLabel(item),
@@ -516,6 +522,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
           maxHeight: MediaQuery.sizeOf(context).height,
         ),
         (context) => VideoReplyReplyPanel(
+          videoController: widget.videoController,
           oid: replyItem.oid.toInt(),
           rpid: replyItem.root.toInt(),
           dialog: replyItem.dialog.toInt(),

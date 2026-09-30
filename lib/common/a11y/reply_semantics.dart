@@ -1,6 +1,10 @@
+import 'package:PiliPlus/common/a11y/text_link_rotor.dart';
+import 'package:PiliPlus/common/a11y/video_text_links.dart';
+import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
 import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
-import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart' show ReplyInfo;
+import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
+    show ReplyInfo;
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/reply.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
@@ -16,12 +20,14 @@ class ReplyA11ySemantics extends StatelessWidget {
     required this.child,
     required this.label,
     this.onTap,
+    this.videoController,
     this.onTapHint,
     this.onAccessibilityFocus,
     this.sortKey,
   });
 
   final ReplyInfo replyItem;
+  final VideoDetailController? videoController;
   final Widget child;
   final String label;
   final VoidCallback? onTap;
@@ -92,32 +98,51 @@ class ReplyA11ySemantics extends StatelessWidget {
     final semanticsLabel = commentTime.isEmpty
         ? label
         : '$label，$commentTime評論';
-    return Semantics(
-      container: true,
-      sortKey: sortKey,
-      explicitChildNodes: false,
-      identifier: 'a11y-read-reply|${replyItem.oid}|${replyItem.id}',
-      label: semanticsLabel,
-      hint: onTapHint,
-      textDirection: TextDirection.ltr,
-      onTap: onTap,
-      onTapHint: onTapHint,
-      onDidGainAccessibilityFocus: () {
-        onAccessibilityFocus?.call();
-        // Make the next lazy-list nodes available without a scroll animation
-        // racing VoiceOver's read-from-current-item traversal.
-        a11yEnsureVisible(context, immediate: true, recoverAfterSuppression: true);
-      },
-      onDidLoseAccessibilityFocus: () => cancelDeferredReplyFocus(context),
-      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
-        CustomSemanticsAction(
-          label: action == Int64.ONE ? '取消赞' : '点赞这条评论',
-        ): () => _toggleLike(context),
-        CustomSemanticsAction(
-          label: action == Int64.TWO ? '取消踩' : '点踩这条评论',
-        ): () => _toggleDislike(context),
-      },
-      child: ExcludeSemantics(child: child),
+    final identifier = 'a11y-read-reply|${replyItem.oid}|${replyItem.id}';
+    return TextLinkRotor(
+      identifier: identifier,
+      links: videoTextLinks(
+        replyItem.content.message,
+        videoController,
+        titles: {
+          for (final entry in replyItem.content.urls.entries)
+            if (!entry.value.extra.isWordSearch) entry.key: entry.value.title,
+        },
+      ),
+      builder: (focusLinks) => Semantics(
+        container: true,
+        sortKey: sortKey,
+        explicitChildNodes: false,
+        identifier: identifier,
+        label: semanticsLabel,
+        hint: onTapHint,
+        textDirection: TextDirection.ltr,
+        onTap: onTap,
+        onTapHint: onTapHint,
+        onDidGainAccessibilityFocus: () {
+          focusLinks();
+          onAccessibilityFocus?.call();
+          // Make the next lazy-list nodes available without a scroll animation
+          // racing VoiceOver's read-from-current-item traversal.
+          a11yEnsureVisible(
+            context,
+            immediate: true,
+            recoverAfterSuppression: true,
+          );
+        },
+        onDidLoseAccessibilityFocus: () => cancelDeferredReplyFocus(context),
+        customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+          CustomSemanticsAction(
+            label: action == Int64.ONE ? '取消赞' : '点赞这条评论',
+          ): () =>
+              _toggleLike(context),
+          CustomSemanticsAction(
+            label: action == Int64.TWO ? '取消踩' : '点踩这条评论',
+          ): () =>
+              _toggleDislike(context),
+        },
+        child: ExcludeSemantics(child: child),
+      ),
     );
   }
 }
