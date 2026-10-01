@@ -1,8 +1,6 @@
 import 'dart:math';
 import 'package:flutter/semantics.dart';
 
-import 'package:PiliPlus/common/widgets/video_timeline.dart';
-import 'package:PiliPlus/utils/video_timestamps.dart';
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -1061,22 +1059,7 @@ class ReplyItemGrpc extends StatelessWidget {
     required VoidCallback onDelete,
     required bool isSubReply,
   }) {
-    late String message = item.content.message;
-    VideoDetailController? timelineController;
-    // 外層評論與樓中樓都共用這個選單；只要目前位於影片頁，
-    // 就使用該頁播放器解析時間點，避免樓中樓的 oid/type 欄位差異把入口隱藏。
-    try {
-      final tag = getTag?.call() ?? Get.arguments?['heroTag'];
-      if (tag != null) {
-        timelineController = Get.find<VideoDetailController>(tag: tag);
-      }
-    } catch (_) {
-      // 在影片頁外開啟評論時沒有播放器可跳轉。
-    }
-    final player = timelineController;
-    final times = player == null
-        ? <Duration>[]
-        : parseVideoTimestamps(message, durationMs: player.data.timeLength);
+    final message = item.content.message;
     final ownerMid = Int64(Accounts.main.mid);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -1282,12 +1265,6 @@ class ReplyItemGrpc extends StatelessWidget {
                 style: style,
               ),
             ),
-            if (player != null && times.isNotEmpty)
-              ListTile(
-                leading: const Icon(Icons.schedule, size: 19),
-                title: Text('時間軸', style: style),
-                onTap: () => showVideoTimeline(context, player, times),
-              ),
             ListTile(
               onTap: () {
                 Get.back();
