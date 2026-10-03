@@ -1,8 +1,6 @@
 import 'dart:io' show Platform;
 import 'package:PiliPlus/common/a11y/text_link_rotor.dart';
 import 'package:PiliPlus/common/a11y/video_text_links.dart';
-import 'package:PiliPlus/common/widgets/video_timeline.dart';
-import 'package:PiliPlus/utils/video_timestamps.dart';
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -322,19 +320,8 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
     final description = descV2 != null && descV2.isNotEmpty
         ? descV2.map((part) => part.rawText ?? '').join()
         : videoDetail.desc ?? '';
-    final times = parseVideoTimestamps(
-      description,
-      durationMs: videoDetailCtr.data.timeLength,
-    );
-    void openTimeline() => showVideoTimeline(context, videoDetailCtr, times);
     return [
       const SizedBox(height: 8, width: double.infinity),
-      if (times.isNotEmpty)
-        TextButton.icon(
-          onPressed: openTimeline,
-          icon: const Icon(Icons.schedule),
-          label: const Text('時間軸'),
-        ),
       if (description.isNotEmpty)
         TextLinkRotor(
           identifier: 'a11y-video-description',
@@ -345,27 +332,11 @@ class _UgcIntroPanelState extends State<UgcIntroPanel> {
             excludeSemantics: Platform.isIOS,
             label: Platform.isIOS ? description : null,
             onDidGainAccessibilityFocus: focusLinks,
-            onLongPress: times.isNotEmpty ? openTimeline : null,
             child: SelectionText.rich(
               descV2 != null && descV2.isNotEmpty
                   ? buildDesc(descV2)
                   : TextSpan(text: description),
               style: const TextStyle(height: 1.4),
-              contextMenuBuilder: (context, state) =>
-                  AdaptiveTextSelectionToolbar.buttonItems(
-                    anchors: state.contextMenuAnchors,
-                    buttonItems: [
-                      ...state.contextMenuButtonItems,
-                      if (times.isNotEmpty)
-                        ContextMenuButtonItem(
-                          label: '時間軸',
-                          onPressed: () {
-                            state.hideToolbar();
-                            openTimeline();
-                          },
-                        ),
-                    ],
-                  ),
             ),
           ),
         ),
