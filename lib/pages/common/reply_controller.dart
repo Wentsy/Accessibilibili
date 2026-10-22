@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/widgets/colored_box_transition.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/controller.dart';
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show MainListReply, ReplyInfo, SubjectControl, Mode;
@@ -5,17 +6,97 @@ import 'package:PiliPlus/grpc/bilibili/pagination.pb.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/reply.dart';
 import 'package:PiliPlus/models/common/reply/reply_sort_type.dart';
+import 'package:PiliPlus/models_new/dynamic/dyn_mention/item.dart';
 import 'package:PiliPlus/pages/common/common_list_controller.dart';
 import 'package:PiliPlus/pages/common/publish/publish_route.dart';
 import 'package:PiliPlus/pages/video/reply_new/view.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
+import 'package:PiliPlus/utils/reply_scheme_helper.dart';
 import 'package:PiliPlus/utils/reply_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:fixnum/fixnum.dart';
+import 'package:collection/collection.dart';
+import 'package:fixnum/fixnum.dart' show Int64;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:flutter/semantics.dart';
 import 'package:material_ui/material_ui.dart';
+
+mixin MainReplyLocateMixin on ReplyLocateMixin<MainListReply> {
+  final Map args = Get.arguments ?? const {};
+
+  Int64? targetRootRpId; // highlight
+  void clearTargetRootRpId() {
+    args.remove(rootRpIdKey);
+    targetRootRpId = null;
+  }
+
+  @override
+  void onInit() {
+    if (args[rootRpIdKey] case final int rpid) {
+      rootRpId = Int64(rpid);
+    }
+    super.onInit();
+  }
+
+  @override
+  bool customHandleResponse(bool isRefresh, Success<MainListReply> response) {
+    final flag = super.customHandleResponse(isRefresh, response);
+    if (isRefresh && rootRpId != null && args.containsKey(rootRpIdKey)) {
+      final replies = response.response.replies;
+      final rootReply = replies.firstWhereOrNull((e) => e.id == rootRpId);
+      if (rootReply != null) {
+        onAnimRootReply(rootReply);
+      }
+    }
+    return flag;
+  }
+
+  void onAnimRootReply(ReplyInfo rootReply) {
+    targetRootRpId = rootRpId;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => colorAnimController
+          .forward(from: 0)
+          .whenComplete(clearTargetRootRpId),
+    );
+  }
+}
+
+mixin ReplyLocateMixin<T>
+    on ReplyController<T>, GetSingleTickerProviderStateMixin {
+  AnimationController? _animController;
+  bool get hasAnimController => _animController != null;
+  AnimationController get colorAnimController =>
+      _animController ??= AnimationController(
+        duration: const Duration(milliseconds: 1000),
+        vsync: this,
+      );
+
+  Animation<Color?>? _colorAnim;
+  Animation<Color?> colorAnim(ColorScheme colorScheme) =>
+      _colorAnim ??= colorAnimController.drive(
+        ColorTween(
+          begin: colorScheme.onInverseSurface,
+          end: colorScheme.surface,
+        ).chain(CurveTween(curve: const Interval(0.8, 1.0))),
+      );
+
+  Widget colorAnimWrapper(ColorScheme colorScheme, Widget child) =>
+      ColoredBoxTransition(color: colorAnim(colorScheme), child: child);
+
+  @override
+  void didChangeDependencies(BuildContext context) {
+    super.didChangeDependencies(context);
+    _colorAnim = null;
+  }
+
+  @override
+  void onClose() {
+    _colorAnim = null;
+    _animController?.dispose();
+    _animController = null;
+    super.onClose();
+  }
+}
 
 abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
   final RxBool loadMoreFailed = false.obs;
@@ -114,10 +195,12 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
       _enableCommAntifraud || _biliSendCommAntifraud;
   dynamic get sourceId;
 
+  ReplySortType get prefSortType => Pref.replySortType;
+
   @override
   void onInit() {
     super.onInit();
-    final cacheSortType = Pref.replySortType;
+    final cacheSortType = prefSortType;
     sortType = cacheSortType.obs;
     mode = cacheSortType == .time ? Mode.MAIN_LIST_TIME : Mode.MAIN_LIST_HOT;
   }
@@ -127,6 +210,19 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     final count = this.count.value;
     if (count != -1 && length >= count) {
       isEnd = true;
+    }
+  }
+
+  late final _filterIntro = Pref.filterIntro;
+  String? intro;
+  @pragma('vm:prefer-inline')
+  void _removeIntro(MainListReply data) {
+    final intro = this.intro;
+    if (intro != null &&
+        intro.isNotEmpty &&
+        _filterIntro &&
+        data.replies.isNotEmpty) {
+      data.replies.removeWhere((i) => i.content.message.trim() == intro);
     }
   }
 
@@ -147,6 +243,9 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
       }
     }
     isEnd = data.cursor.isEnd;
+
+    _removeIntro(data);
+
     return false;
   }
 
@@ -212,6 +311,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     ReplyInfo? replyItem, {
     int? oid,
     int? replyType,
+    MentionItem? mentionItem,
   }) {
     if (loadingState.value case Error(:final errMsg, :final code)) {
       if (errMsg != null && (code == 12061 || code == 12002)) {
@@ -239,6 +339,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
                 parent: oid != null ? 0 : replyItem!.id.toInt(),
                 replyType: replyItem?.type.toInt() ?? replyType!,
                 replyItem: replyItem,
+                mentionItem: mentionItem,
                 items: savedReplies[key],
 
                 /// hd api deprecated
@@ -298,7 +399,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     loadingState.refresh();
   }
 
-  void onCheckReply(ReplyInfo replyInfo, {required bool isManual}) {
+  void onCheckReply(ReplyInfo replyInfo, {bool isManual = true}) {
     ReplyUtils.onCheckReply(
       replyInfo: replyInfo,
       biliSendCommAntifraud: _biliSendCommAntifraud,

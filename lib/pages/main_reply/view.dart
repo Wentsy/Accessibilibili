@@ -3,6 +3,7 @@ import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
+import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -52,6 +53,7 @@ class _MainReplyPageState extends State<MainReplyPage>
   );
 
   late EdgeInsets padding;
+  late ColorScheme colorScheme;
 
   void _publishComment() {
     try {
@@ -68,11 +70,11 @@ class _MainReplyPageState extends State<MainReplyPage>
   void didChangeDependencies() {
     super.didChangeDependencies();
     padding = MediaQuery.viewPaddingOf(context);
+    colorScheme = ColorScheme.of(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = ColorScheme.of(context);
     return SimpleScaffold(
       bottomBar: useVoiceOverComposerDock(context)
           ? VoiceOverComposerDock(onPressed: _publishComment)
@@ -90,10 +92,8 @@ class _MainReplyPageState extends State<MainReplyPage>
               replyController: _controller,
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                buildReplyHeader(colorScheme),
-                Obx(
-                  () => _buildBody(colorScheme, _controller.loadingState.value),
-                ),
+                buildReplyHeader(),
+                Obx(() => _buildBody(_controller.loadingState.value)),
               ],
             ),
           ),
@@ -117,15 +117,14 @@ class _MainReplyPageState extends State<MainReplyPage>
     );
   }
 
-  Widget _buildBody(
-    ColorScheme colorScheme,
-    LoadingState<List<ReplyInfo>?> loadingState,
-  ) {
+  Widget _buildBody(LoadingState<List<ReplyInfo>?> loadingState) {
     return switch (loadingState) {
-      Loading() => SliverPrototypeExtentList.builder(
-        itemCount: 10,
-        itemBuilder: (_, _) => const VideoReplySkeleton(),
-        prototypeItem: const VideoReplySkeleton(),
+      Loading() => const SliverPrototypeExtentList(
+        prototypeItem: VideoReplySkeleton(),
+        delegate: SliverSingleChildDelegate(
+          count: 10,
+          child: VideoReplySkeleton(),
+        ),
       ),
       Success(:final response) =>
         response != null && response.isNotEmpty
@@ -178,8 +177,7 @@ class _MainReplyPageState extends State<MainReplyPage>
                       onDelete: (item, subIndex) =>
                           _controller.onRemove(index, item, subIndex),
                       upMid: _controller.upMid,
-                      onCheckReply: (item) =>
-                          _controller.onCheckReply(item, isManual: true),
+                      onCheckReply: _controller.onCheckReply,
                       onToggleTop: (item) => _controller.onToggleTop(
                         item,
                         index,
@@ -202,7 +200,7 @@ class _MainReplyPageState extends State<MainReplyPage>
     };
   }
 
-  Widget buildReplyHeader(ColorScheme colorScheme) {
+  Widget buildReplyHeader() {
     final secondary = colorScheme.secondary;
     return SliverFloatingHeaderWidget(
       backgroundColor: colorScheme.surface,
@@ -282,21 +280,21 @@ class _MainReplyPageState extends State<MainReplyPage>
               ),
             ),
           ),
-          body: ViewSafeArea(
-            child: VideoReplyReplyPanel(
-              enableSlide: false,
-              id: id,
-              oid: oid,
-              rpid: rpid,
-              isVideoDetail: false,
-              replyType: _controller.replyType,
-              firstFloor: replyItem,
-              upMid: _controller.upMid,
-            ),
-          ).constraintWidth(),
         ),
-        routeName: 'dynamicDetail-Copy',
-      );
-    });
+        body: ViewSafeArea(
+          child: VideoReplyReplyPanel(
+            enableSlide: false,
+            id: id,
+            oid: replyItem.oid.toInt(),
+            rpid: replyItem.id.toInt(),
+            isVideoDetail: false,
+            replyType: _controller.replyType,
+            firstFloor: replyItem,
+            upMid: _controller.upMid,
+          ),
+        ).constraintWidth(),
+      ),
+      routeName: 'dynamicDetail-Copy',
+    );
   }
 }

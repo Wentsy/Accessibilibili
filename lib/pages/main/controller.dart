@@ -51,22 +51,20 @@ class MainController extends GetxController
   late bool hasHome = false;
   late final homeController = Get.putOrFind(HomeController.new);
 
+  late final disableLikeMsg = Pref.disableLikeMsg;
   late DynamicBadgeMode msgBadgeMode = Pref.msgBadgeMode;
   late Set<MsgUnReadType> msgUnReadTypes = Pref.msgUnReadTypeV2;
-  late final RxString msgUnReadCount = ''.obs;
+  late final RxnString msgUnReadCount = RxnString(null);
   late int lastCheckUnreadAt = 0;
 
   final enableMYBar = Pref.enableMYBar;
   final floatingNavBar = Pref.floatingNavBar;
   final useSideBar = Pref.useSideBar;
+  final hideSideBarLabel = Pref.hideSideBarLabel;
   final mainTabBarView = Pref.mainTabBarView;
   late final optTabletNav = Pref.optTabletNav;
 
   late bool directExitOnBack = Pref.directExitOnBack;
-  late bool showTrayIcon = Pref.showTrayIcon;
-  late bool minimizeOnExit = Pref.minimizeOnExit;
-  late bool pauseOnMinimize = Pref.pauseOnMinimize;
-  late bool isPlaying = false;
 
   static const _period = 5 * 60 * 1000;
   late int _lastSelectTime = 0;
@@ -153,7 +151,7 @@ class MainController extends GetxController
               count += response.at;
               break;
             case MsgUnReadType.like:
-              count += response.like;
+              if (!disableLikeMsg) count += response.like;
               break;
             case MsgUnReadType.sysMsg:
               count += response.sysMsg;
@@ -165,12 +163,16 @@ class MainController extends GetxController
     return count;
   }
 
+  void clearUnreadMsg() {
+    msgUnReadCount.value = null;
+  }
+
   Future<void> queryUnreadMsg([bool isChangeType = false]) async {
     if (!accountService.isLogin.value ||
         !hasHome ||
         msgUnReadTypes.isEmpty ||
         msgBadgeMode == DynamicBadgeMode.hidden) {
-      msgUnReadCount.value = '';
+      clearUnreadMsg();
       return;
     }
 
@@ -179,7 +181,7 @@ class MainController extends GetxController
     final count = res.sum;
 
     final countStr = count == 0
-        ? ''
+        ? null
         : count > 99
         ? '99+'
         : count.toString();
@@ -230,7 +232,7 @@ class MainController extends GetxController
       navigationBars = NavigationBarType.values;
     } else {
       navigationBars = navBarSort
-          .map((i) => NavigationBarType.values[i])
+          .map(NavigationBarType.values.elementAt)
           .toList();
     }
     this.navigationBars = navigationBars;
@@ -310,12 +312,10 @@ class MainController extends GetxController
         EasyThrottle.throttle(
           'topOrRefresh',
           const Duration(milliseconds: 500),
-          () {
-            if (currentNav == NavigationBarType.home) {
-              homeController.onRefresh();
-            } else if (currentNav == NavigationBarType.dynamics) {
-              dynamicController.onRefresh();
-            }
+          () => switch (currentNav) {
+            .home => homeController.onRefresh(),
+            .dynamics => dynamicController.onRefresh(),
+            .mine => null,
           },
         );
       } else {
@@ -355,6 +355,7 @@ class MainController extends GetxController
   @override
   void onChangeAccount(bool isLogin) {
     if (isLogin) {
+      queryUnreadMsg();
       getUnreadDynamic();
     } else {
       setDynCount();

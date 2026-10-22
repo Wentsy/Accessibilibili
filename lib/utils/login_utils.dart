@@ -3,10 +3,11 @@ import 'dart:io' show Platform;
 
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/user.dart';
-import 'package:PiliPlus/main.dart';
+import 'package:PiliPlus/main.dart' show webViewEnvironment;
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
+import 'package:PiliPlus/utils/linux_cookie_manager.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -19,19 +20,16 @@ import 'package:get/get.dart';
 
 abstract final class LoginUtils {
   static FutureOr setWebCookie([Account? account]) {
-    if (Platform.isLinux) {
-      return null;
-    }
+    if (Platform.isLinux) return null;
     final cookies = (account ?? Accounts.main).cookieJar.toList();
     final webManager = web.CookieManager.instance(
       webViewEnvironment: webViewEnvironment,
     );
-    final isWindows = Platform.isWindows;
     return Future.wait(
       cookies.map(
         (cookie) => webManager.setCookie(
           url: web.WebUri(
-            '${isWindows ? 'https://' : ''} ${cookie.domain}',
+            '${Platform.isWindows ? 'https://' : ''}${cookie.domain}',
           ),
           name: cookie.name,
           value: cookie.value,
@@ -86,7 +84,9 @@ abstract final class LoginUtils {
       ..isLogin.value = false;
 
     return Future.wait([
-      if (!Platform.isLinux)
+      if (Platform.isLinux)
+        LinuxCookieManager.deleteAllCookies()
+      else
         web.CookieManager.instance(
           webViewEnvironment: webViewEnvironment,
         ).deleteAllCookies(),
@@ -97,11 +97,9 @@ abstract final class LoginUtils {
   static String generateBuvid() {
     final md5Str = Digest(
       List.generate(16, (_) => Utils.random.nextInt(256)),
-    ).toString();
+    ).toString().toUpperCase();
     return 'XY${md5Str[2]}${md5Str[12]}${md5Str[22]}$md5Str';
   }
-
-  static final buvid = Pref.buvid;
 
   // static String getUUID() {
   //   return const Uuid().v4().replaceAll('-', '');

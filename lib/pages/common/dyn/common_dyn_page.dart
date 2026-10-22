@@ -3,6 +3,7 @@ import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
+import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
@@ -14,6 +15,7 @@ import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/models/common/enum_with_label.dart';
+import 'package:PiliPlus/pages/article/widgets/sliver_list.dart';
 import 'package:PiliPlus/pages/common/dyn/common_dyn_controller.dart';
 import 'package:PiliPlus/pages/common/fab_mixin.dart';
 import 'package:PiliPlus/pages/video/reply/vote/reply_vote_item.dart';
@@ -30,12 +32,45 @@ import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
 enum DynType implements EnumWithLabel {
+  repost('转发'),
   reply('评论'),
-  reaction('赞与转发');
+  like('赞');
 
   @override
   final String label;
   const DynType(this.label);
+}
+
+mixin DynReplyLocateStateMixin<T extends StatefulWidget>
+    on CommonDynPageMixin<T> {
+  DynReplyLocateMixin get dynReplyLocateCtr =>
+      controller as DynReplyLocateMixin;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    dynReplyLocateCtr.didChangeDependencies(context);
+  }
+
+  @override
+  Widget buildReply(BuildContext context, int index, ReplyInfo item) {
+    final child = super.buildReply(context, index, item);
+    final controller = dynReplyLocateCtr;
+    if (item.id == controller.targetRootRpId) {
+      final targetSecondRpId = controller.targetSecondRpId;
+      if (targetSecondRpId == null) {
+        return controller.colorAnimWrapper(theme.colorScheme, child);
+      } else {
+        controller
+          ..targetRootRpId = null
+          ..targetSecondRpId = null;
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => replyReply(context, item, targetSecondRpId),
+        );
+      }
+    }
+    return child;
+  }
 }
 
 abstract class CommonDynPageState<T extends StatefulWidget> extends State<T>
@@ -57,7 +92,11 @@ abstract class CommonDynPageMultiState<T extends StatefulWidget>
   @override
   void initState() {
     super.initState();
-    tabController = TabController(length: DynType.values.length, vsync: this);
+    tabController = TabController(
+      length: DynType.values.length,
+      initialIndex: DynType.reply.index,
+      vsync: this,
+    );
   }
 
   @override
@@ -70,6 +109,7 @@ abstract class CommonDynPageMultiState<T extends StatefulWidget>
 mixin CommonDynPageMixin<T extends StatefulWidget>
     on State<T>, TickerProvider, BaseFabMixin<T>, FabMixin<T> {
   CommonDynController get controller;
+  bool get isArticle => false;
 
   bool get horizontalPreview => !isPortrait && controller.horizontalPreview;
 
@@ -145,9 +185,12 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
   Widget replyList(LoadingState<List<ReplyInfo>?> loadingState) {
     switch (loadingState) {
       case Loading():
-        return SliverList.builder(
-          itemCount: 12,
-          itemBuilder: (context, index) => const VideoReplySkeleton(),
+        return const SliverPrototypeExtentList(
+          prototypeItem: VideoReplySkeleton(),
+          delegate: SliverSingleChildDelegate(
+            count: 12,
+            child: VideoReplySkeleton(),
+          ),
         );
       case Success(:final response):
         if (response != null && response.isNotEmpty) {
@@ -157,7 +200,7 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
           if (hasVote) {
             count++;
           }
-          return SliverList.builder(
+          return ArticleSliverList.builder(
             itemCount: count,
             findChildIndexCallback: (key) {
               final itemIndex = response.indexWhere(
@@ -238,7 +281,7 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
           );
         }
 
-        final child = HttpError(
+        final child = httpError(
           errMsg: '还没有评论',
           onReload: controller.onReload,
         );
@@ -254,40 +297,70 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
         }
         return child;
       case Error(:final errMsg):
-        return HttpError(
+        return httpError(
           errMsg: errMsg,
           onReload: controller.onReload,
         );
     }
   }
 
+  Widget buildReply(BuildContext context, int index, ReplyInfo item) {
+    return ReplyItemGrpc(
+      replyItem: item,
+      replyLevel: 1,
+      replyReply: (item, id) => throttleReplyReply(context, item, id),
+      onReply: controller.onReply,
+      onDelete: (item, subIndex) => controller.onRemove(index, item, subIndex),
+      upMid: controller.upMid,
+      onViewImage: hideFab,
+      onCheckReply: controller.onCheckReply,
+      onToggleTop: (item) => controller.onToggleTop(
+        item,
+        index,
+        controller.oid,
+        controller.replyType,
+      ),
+    );
+  }
+
+  Widget httpError({String? errMsg, VoidCallback? onReload}) {
+    return HttpError(
+      errMsg: errMsg,
+      onReload: controller.onReload,
+    );
+  }
+
+  void throttleReplyReply(BuildContext context, ReplyInfo replyItem, int? id) {
+    EasyThrottle.throttle(
+      'replyReply',
+      const Duration(milliseconds: 500),
+      () => replyReply(context, replyItem, id),
+    );
+  }
+
   void replyReply(BuildContext context, ReplyInfo replyItem, int? id) {
-    EasyThrottle.throttle('replyReply', const Duration(milliseconds: 500), () {
-      int oid = replyItem.oid.toInt();
-      int rpid = replyItem.id.toInt();
-      Widget replyReplyPage({bool showBackBtn = true}) {
-        final child = ViewSafeArea(
-          left: showBackBtn,
-          right: showBackBtn,
-          child: VideoReplyReplyPanel(
-            enableSlide: false,
-            id: id,
-            oid: oid,
-            rpid: rpid,
-            isVideoDetail: !showBackBtn,
-            replyType: controller.replyType,
-            firstFloor: replyItem,
-            upMid: controller.upMid,
-          ),
-        );
-        if (showBackBtn) {
-          return SimpleScaffold(
-            appBar: AppBar(
-              title: const Text('评论详情'),
-              shape: Border(
-                bottom: BorderSide(
-                  color: theme.colorScheme.outline.withValues(alpha: 0.1),
-                ),
+    Widget replyReplyPage({bool showBackBtn = true}) {
+      final child = ViewSafeArea(
+        left: showBackBtn,
+        right: showBackBtn,
+        child: VideoReplyReplyPanel(
+          enableSlide: false,
+          id: id,
+          oid: replyItem.oid.toInt(),
+          rpid: replyItem.id.toInt(),
+          isVideoDetail: !showBackBtn,
+          replyType: controller.replyType,
+          firstFloor: replyItem,
+          upMid: controller.upMid,
+        ),
+      );
+      if (showBackBtn) {
+        return SimpleScaffold(
+          appBar: AppBar(
+            title: const Text('评论详情'),
+            shape: Border(
+              bottom: BorderSide(
+                color: theme.colorScheme.outline.withValues(alpha: 0.1),
               ),
             ),
             body: child,
@@ -322,7 +395,26 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
           );
         }
       }
-    });
+      return child;
+    }
+
+    if (!isPortrait) {
+      final scaffoldState = MiniScaffold.maybeOf(context);
+      if (scaffoldState != null) {
+        hideFab();
+        scaffoldState.showBottomSheet(
+          constraints: const BoxConstraints(),
+          (context) => replyReplyPage(showBackBtn: false),
+        );
+        return;
+      }
+    }
+
+    Get.to(
+      replyReplyPage,
+      routeName: 'dynamicDetail-Copy',
+      arguments: arguments,
+    );
   }
 
   Widget ratioWidget(double maxWidth) => IconButton(

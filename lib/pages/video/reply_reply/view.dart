@@ -6,8 +6,8 @@ import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
+import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
-import 'package:PiliPlus/common/widgets/colored_box_transition.dart';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/scaffold/mini_scaffold.dart';
@@ -24,7 +24,6 @@ import 'package:PiliPlus/pages/video/reply_reply/controller.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
 import 'package:PiliPlus/utils/extension/widget_ext.dart';
 import 'package:PiliPlus/utils/num_utils.dart';
-import 'package:PiliPlus/utils/parse_string.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:extended_nested_scroll_view/extended_nested_scroll_view.dart';
 import 'package:fixnum/fixnum.dart' show Int64;
@@ -59,17 +58,13 @@ class VideoReplyReplyPanel extends CommonSlidePage {
   final Int64? upMid;
   final VideoDetailController? videoController;
 
-  @override
-  State<VideoReplyReplyPanel> createState() => _VideoReplyReplyPanelState();
-
   static Future<void>? toReply({
     required int oid,
     required int rootId,
-    String? rpIdStr,
+    int? rpId,
     required int type,
     Uri? uri,
   }) {
-    final rpId = parseIntOrNull(rpIdStr);
     return Get.to(
       arguments: {
         'oid': oid,
@@ -105,13 +100,15 @@ class VideoReplyReplyPanel extends CommonSlidePage {
       ),
     );
   }
+
+  @override
+  State<VideoReplyReplyPanel> createState() => _VideoReplyReplyPanelState();
 }
 
 class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
     with SingleTickerProviderStateMixin, CommonSlideMixin {
   late VideoReplyReplyController _controller;
   late final _tag = Utils.makeHeroTag('${widget.rpid}${widget.dialog}');
-  Animation<Color?>? _colorAnimation;
 
   late final bool isDialogue = widget.dialog != null;
 
@@ -379,10 +376,12 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
   ) {
     final jumpIndex = _controller.index.value;
     return switch (loadingState) {
-      Loading() => SliverPrototypeExtentList.builder(
-        prototypeItem: const VideoReplySkeleton(),
-        itemBuilder: (_, _) => const VideoReplySkeleton(),
-        itemCount: 8,
+      Loading() => const SliverPrototypeExtentList(
+        prototypeItem: VideoReplySkeleton(),
+        delegate: SliverSingleChildDelegate(
+          count: 8,
+          child: VideoReplySkeleton(),
+        ),
       ),
       Success(:final response!) =>
         MediaQuery.accessibleNavigationOf(context)
@@ -536,7 +535,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
           SmartDialog.showToast('评论可能已被删除');
         }
       },
-      onCheckReply: (item) => _controller.onCheckReply(item, isManual: true),
+      onCheckReply: _controller.onCheckReply,
     );
   }
 }

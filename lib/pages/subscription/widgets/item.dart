@@ -11,6 +11,7 @@ import 'package:flutter/semantics.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart';
 
 class SubItem extends StatelessWidget {
   final SubItemModel item;
@@ -20,6 +21,8 @@ class SubItem extends StatelessWidget {
     required this.item,
     required this.cancelSub,
   });
+
+  void onLongPress() => imageSaveDialog(title: item.title, cover: item.cover);
 
   @override
   Widget build(BuildContext context) {
@@ -186,6 +189,28 @@ class SubItem extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+Future<void>? onPushSub(String label, String heroTag, SubItemModel item) {
+  if (item.state == 1) {
+    SmartDialog.showToast('该$label已失效');
+    return null;
+  }
+  if (item.type == 11) {
+    return Get.toNamed(
+      '/favDetail',
+      parameters: {
+        'mediaId': item.id!.toString(),
+        'heroTag': heroTag,
+      },
+    );
+  } else {
+    return SubDetailPage.toSubDetailPage(
+      item.id!,
+      heroTag: heroTag,
+      subInfo: item,
     );
   }
 }

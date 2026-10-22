@@ -8,6 +8,7 @@ abstract final class DateFormatUtils {
   static final longFormatDs = DateFormat('yyyy-MM-dd HH:mm:ss');
   static final _a11yShortFormat = DateFormat('M月d日');
   static final _a11yLongFormat = DateFormat('yyyy年M月d日');
+  static final only0_9 = DateFormat('yyyyMMddHHmmss');
 
   static String dateFormat(
     int? time, {

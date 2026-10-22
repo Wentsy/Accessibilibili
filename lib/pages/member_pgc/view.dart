@@ -46,6 +46,7 @@ class _MemberBangumiState extends State<MemberBangumi>
   Widget build(BuildContext context) {
     super.build(context);
     return refreshIndicator(
+      isClampingScrollPhysics: true,
       onRefresh: _controller.onRefresh,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -85,9 +86,7 @@ class _MemberBangumiState extends State<MemberBangumi>
                   if (index == response.length - 1) {
                     _controller.onLoadMore();
                   }
-                  return PgcCardVMemberPgc(
-                    item: response[index],
-                  );
+                  return PgcCardVMemberPgc(response[index]);
                 },
                 itemCount: response.length,
               )

@@ -20,6 +20,8 @@ import 'package:PiliPlus/pages/dynamics_repost/view.dart';
 import 'package:PiliPlus/pages/video/reply/controller.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/utils/android/android_helper.dart';
+import 'package:PiliPlus/utils/bili_utils.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
@@ -29,9 +31,9 @@ import 'package:PiliPlus/utils/share_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
-import 'package:material_ui/material_ui.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart';
 
 class PgcIntroController extends CommonIntroController {
   int? seasonId;
@@ -42,7 +44,15 @@ class PgcIntroController extends CommonIntroController {
       : '追剧';
 
   late final bool isPgc;
-  late final PgcInfoModel pgcItem;
+  late PgcInfoModel pgcItem;
+
+  ScrollController? _seasonController;
+  ScrollController seasonController(int index) {
+    if (_seasonController != null) return _seasonController!;
+    return _seasonController = ScrollController(
+      initialScrollOffset: index * 150,
+    );
+  }
 
   @override
   (Object, int) get getFavRidType => (epId!, 24);
@@ -64,6 +74,10 @@ class PgcIntroController extends CommonIntroController {
 
     super.onInit();
 
+    _onGetPgcInfo();
+  }
+
+  void _onGetPgcInfo() {
     if (isPgc) {
       if (isLogin) {
         queryIsFollowed();
@@ -121,7 +135,7 @@ class PgcIntroController extends CommonIntroController {
   @override
   void actionShareVideo(BuildContext context) {
     String videoUrl =
-        '${HttpString.baseUrl}/bangumi/play/ep$epId${videoDetailCtr.playedTimePos}';
+        '${HttpString.baseUrl}/bangumi/play/ep$epId${videoDetailCtr.playedTimePos(false)}';
     showDialog(
       context: context,
       builder: (_) => SimpleDialog(
@@ -139,7 +153,7 @@ class PgcIntroController extends CommonIntroController {
             child: const Text('其它app打开', style: TextStyle(fontSize: 14)),
             onPressed: () {
               Get.back();
-              PageUtils.launchURL(videoUrl);
+              PiliAndroidHelper.openUrl(videoUrl);
             },
           ),
           if (PlatformUtils.isMobile)
@@ -191,6 +205,10 @@ class PgcIntroController extends CommonIntroController {
                     title:
                         '${pgcItem.title}${item != null ? '\n${item.showTitle}' : ''}',
                     uname: '',
+                    replyInfo: (
+                      oid: videoDetailCtr.aid,
+                      replyType: videoDetailCtr.videoType.replyType,
+                    ),
                   ),
                 );
               },
@@ -219,16 +237,7 @@ class PgcIntroController extends CommonIntroController {
                       "headline": title,
                       "source": 16,
                       "thumb": item.cover,
-                      "source_desc": switch (pgcItem.type) {
-                        1 => '番剧',
-                        2 => '电影',
-                        3 => '纪录片',
-                        4 => '国创',
-                        5 => '电视剧',
-                        6 => '漫画',
-                        7 => '综艺',
-                        _ => null,
-                      },
+                      "source_desc": BiliUtils.pgcType2Label(pgcItem.type),
                     },
                   );
                 } catch (e) {
@@ -368,8 +377,6 @@ class PgcIntroController extends CommonIntroController {
       if (nextIndex >= episodes.length) {
         if (playRepeat == PlayRepeat.listCycle) {
           nextIndex = 0;
-        } else if (playRepeat == PlayRepeat.autoPlayRelated) {
-          return false;
         } else {
           return false;
         }
@@ -477,5 +484,43 @@ class PgcIntroController extends CommonIntroController {
     } else {
       res.toast();
     }
+  }
+
+  bool _changingSeason = false;
+  bool get changingSeason => _changingSeason;
+
+  Future<bool> changeSeason(int seasonId) async {
+    if (_changingSeason) return false;
+    _changingSeason = true;
+    SmartDialog.showLoading();
+    try {
+      final res = await SearchHttp.pgcInfo(seasonId: seasonId, epId: epId);
+      if (res case Success(:final response)) {
+        final episodes = response.episodes;
+        if (episodes != null && episodes.isNotEmpty) {
+          pgcItem = response;
+          this.seasonId = seasonId;
+          onChangeEpisode(episodes.first);
+          _onGetPgcInfo();
+          return true;
+        } else {
+          SmartDialog.showToast('剧集为空');
+        }
+      } else {
+        res.toast();
+      }
+    } catch (_) {
+    } finally {
+      SmartDialog.dismiss();
+      _changingSeason = false;
+    }
+    return false;
+  }
+
+  @override
+  void onClose() {
+    _seasonController?.dispose();
+    _seasonController = null;
+    super.onClose();
   }
 }

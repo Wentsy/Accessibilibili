@@ -5,9 +5,9 @@ import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
 import 'package:PiliPlus/http/api.dart';
 import 'package:PiliPlus/http/browser_ua.dart';
+import 'package:PiliPlus/http/constants.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/http/login.dart';
 import 'package:PiliPlus/models/common/account_type.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models/home/rcmd/result.dart';
@@ -23,7 +23,6 @@ import 'package:PiliPlus/models_new/triple/pgc_triple.dart';
 import 'package:PiliPlus/models_new/triple/ugc_triple.dart';
 import 'package:PiliPlus/models_new/video/video_ai_conclusion/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/data.dart';
-import 'package:PiliPlus/models_new/video/video_detail/video_detail_response.dart';
 import 'package:PiliPlus/models_new/video/video_note_list/data.dart';
 import 'package:PiliPlus/models_new/video/video_play_info/data.dart';
 import 'package:PiliPlus/models_new/video/video_relation/data.dart';
@@ -70,13 +69,10 @@ abstract final class VideoHttp {
       List<RcmdVideoItemModel> list = <RcmdVideoItemModel>[];
       for (final i in res.data['data']['item']) {
         //过滤掉live与ad，以及拉黑用户
-        if (i['goto'] == 'av' &&
-            (i['owner'] != null &&
-                !GlobalData().blackMids.contains(i['owner']['mid']))) {
-          RcmdVideoItemModel videoItem = RcmdVideoItemModel.fromJson(i);
-          if (!RecommendFilter.filter(videoItem)) {
-            list.add(videoItem);
-          }
+        if (_filterWebRcmd(i)) continue;
+        final videoItem = RcmdVideoItemModel.fromJson(i);
+        if (!RecommendFilter.filterWithExempt(videoItem)) {
+          list.add(videoItem);
         }
       }
       return Success(list);
@@ -85,28 +81,56 @@ abstract final class VideoHttp {
     }
   }
 
+  static bool _filterWebRcmd(dynamic i) {
+    if (i['goto'] != 'av') return true;
+    if (i['owner'] != null &&
+        GlobalData().blackMids.contains(i['owner']['mid'])) {
+      return true;
+    }
+    return false;
+  }
+
+  static bool _filterAppRcmd(dynamic i) {
+    if (i['card_goto'] == 'ad_av' ||
+        i['card_goto'] == 'ad_web_s' ||
+        i['ad_info'] != null ||
+        i['can_play'] != 1) {
+      return true;
+    }
+    if (i['args'] != null &&
+        GlobalData().blackMids.contains(i['args']['up_id'])) {
+      return true;
+    }
+    if (enableFilter &&
+        i['args']?['tname'] != null &&
+        zoneRegExp.hasMatch(i['args']['tname'])) {
+      return true;
+    }
+    return false;
+  }
+
   // 添加额外的loginState变量模拟未登录状态
   static Future<LoadingState<List<RcmdVideoItemAppModel>>> rcmdVideoListApp({
     required int freshIdx,
   }) async {
     final params = {
-      'build': 2001100,
+      'build': 8430300,
       'c_locale': 'zh_CN',
       'channel': 'master',
-      'column': 4,
-      'device': 'pad',
+      'column': 2,
+      'device': 'phone',
       'device_name': 'android',
       'device_type': 0,
       'disable_rcmd': 0,
-      'flush': 5,
+      'flush': 8,
       'fnval': 976,
       'fnver': 0,
       'force_host': 2, //使用https
       'fourk': 1,
-      'guidance': 0,
-      'https_url_req': 0,
+      'guidance': 1,
+      'https_url_req': 1,
       'idx': freshIdx,
-      'mobi_app': 'android_hd',
+      'mobi_app': 'android_i',
       'network': 'wifi',
       'platform': 'android',
       'player_net': 1,
@@ -115,7 +139,7 @@ abstract final class VideoHttp {
       'recsys_mode': 0,
       's_locale': 'zh_CN',
       'splash_id': '',
-      'statistics': Constants.statistics,
+      'statistics': Constants.statisticsApp,
       'voice_balance': 0,
     };
     final res = await Request().get(
@@ -123,7 +147,7 @@ abstract final class VideoHttp {
       queryParameters: params,
       options: Options(
         headers: {
-          'buvid': LoginHttp.buvid,
+          'buvid': Accounts.get(.recommend).buvid,
           'fp_local': '1111111111111111111111111111111111111111111111111111111111111111',
           'fp_remote': '1111111111111111111111111111111111111111111111111111111111111111',
           'session_id': '11111111',
@@ -141,27 +165,28 @@ abstract final class VideoHttp {
       final list = <RcmdVideoItemAppModel>[];
       for (final i in res.data['data']['items']) {
         // 屏蔽推广和拉黑用户
-        if (i['card_goto'] != 'ad_av' &&
-            i['card_goto'] != 'ad_web_s' &&
-            i['ad_info'] == null &&
-            i['can_play'] == 1 &&
-            (i['args'] != null &&
-                !GlobalData().blackMids.contains(i['args']['up_id']))) {
-          if (enableFilter &&
-              i['args']?['tname'] != null &&
-              zoneRegExp.hasMatch(i['args']['tname'])) {
-            continue;
-          }
-          RcmdVideoItemAppModel videoItem = RcmdVideoItemAppModel.fromJson(i);
-          if (!RecommendFilter.filter(videoItem)) {
-            list.add(videoItem);
-          }
+        if (_filterAppRcmd(i)) continue;
+        final videoItem = RcmdVideoItemAppModel.fromJson(i);
+        if (!RecommendFilter.filterWithExempt(videoItem)) {
+          list.add(videoItem);
         }
       }
       return Success(list);
     } else {
       return Error(res.data['message']);
     }
+  }
+
+  static bool _filterHotAndRank(dynamic i) {
+    if (GlobalData().blackMids.contains(i['owner']['mid'])) return false;
+    if (RecommendFilter.filterTitle(i['title'])) return false;
+    if (RecommendFilter.filterLikeRatio(i['stat']['like'], i['stat']['view'])) {
+      return false;
+    }
+    if (enableFilter && i['tname'] != null && zoneRegExp.hasMatch(i['tname'])) {
+      return false;
+    }
+    return true;
   }
 
   // 最热视频
@@ -174,23 +199,12 @@ abstract final class VideoHttp {
       queryParameters: {'pn': pn, 'ps': ps},
     );
     if (res.data['code'] == 0) {
-      List<HotVideoItemModel> list = <HotVideoItemModel>[];
-      for (final i in res.data['data']['list']) {
-        if (!GlobalData().blackMids.contains(i['owner']['mid']) &&
-            !RecommendFilter.filterTitle(i['title']) &&
-            !RecommendFilter.filterLikeRatio(
-              i['stat']['like'],
-              i['stat']['view'],
-            )) {
-          if (enableFilter &&
-              i['tname'] != null &&
-              zoneRegExp.hasMatch(i['tname'])) {
-            continue;
-          }
-          list.add(HotVideoItemModel.fromJson(i));
-        }
-      }
-      return Success(list);
+      return Success(
+        (res.data['data']['list'] as List)
+            .where(_filterHotAndRank)
+            .map((e) => HotVideoItemModel.fromJson(e))
+            .toList(),
+      );
     } else {
       return Error(res.data['message']);
     }
@@ -202,7 +216,7 @@ abstract final class VideoHttp {
     int? avid,
     String? bvid,
     required int cid,
-    int? qn,
+    required int qn,
     dynamic epid,
     dynamic seasonId,
     required bool tryLook,
@@ -210,34 +224,76 @@ abstract final class VideoHttp {
     String? language,
     bool voiceBalance = false,
   }) async {
-    final dmImgStr = Utils.base64EncodeRandomString(16, 64);
-    final dmCoverImgStr = Utils.base64EncodeRandomString(32, 128);
-    final params = await WbiSign.makSign({
-      'avid': ?avid,
-      'bvid': ?bvid,
-      'ep_id': ?epid,
-      'season_id': ?seasonId,
-      'cid': cid,
-      'qn': qn ?? 80,
-      // 获取所有格式的视频
-      'fnval': 4048,
-      'fourk': 1,
-      'fnver': 0,
-      'voice_balance': voiceBalance ? 1 : 0,
-      'gaia_source': 'pre-load',
-      'isGaiaAvoided': true,
-      'web_location': 1315873,
-      // 免登录查看1080p
-      if (tryLook) 'try_look': 1,
-      'dm_img_list': '[]',
-      'dm_img_str': dmImgStr,
-      'dm_cover_img_str': dmCoverImgStr,
-      'dm_img_inter': '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
-      'cur_language': ?language,
-    });
+    final Map<String, dynamic> params;
+    Map<String, dynamic>? data;
+
+    switch (videoType) {
+      case .ugc || .pugv:
+        final dmImgStr = Utils.base64EncodeRandomString(16, 64);
+        final dmCoverImgStr = Utils.base64EncodeRandomString(32, 128);
+        params = await WbiSign.makSign({
+          'avid': ?avid,
+          'bvid': ?bvid,
+          'ep_id': ?epid,
+          'season_id': ?seasonId,
+          'cid': cid,
+          'qn': qn,
+          // 获取所有格式的视频
+          'fnval': 4048,
+          'fourk': 1,
+          'fnver': 0,
+          'voice_balance': voiceBalance ? 1 : 0,
+          'gaia_source': 'pre-load',
+          'isGaiaAvoided': true,
+          'web_location': 1315873,
+          if (videoType == .pugv) ...const {
+            'biz_type': 'pugv',
+            'scene': 'normal',
+            'from_client': 'BROWSER',
+            'drm_tech_type': 0,
+            'app_id': 100,
+          },
+          // 免登录查看1080p
+          if (tryLook) 'try_look': 1,
+          'dm_img_list': '[]',
+          'dm_img_str': dmImgStr,
+          'dm_cover_img_str': dmCoverImgStr,
+          'dm_img_inter': '{"ds":[],"wh":[0,0,0],"of":[0,0,0]}',
+          'cur_language': ?language,
+        });
+      case .pgc:
+        final video = Accounts.video;
+        params = await WbiSign.makSign({
+          'x-bili-locale-json':
+              '{"c_locale":{"language":"zh-Hans"},"always_translate":false}',
+          'x-bili-device-req-json': '{"platform":"web","device":"pc","spmid":"666.25","mobi_app":"web_cn"}',
+          if (video.isLogin) 'csrf': video.csrf,
+        });
+        data = {
+          "scene": "normal",
+          "video_index": {
+            "bvid": null,
+            "cid": null,
+            "ogv_season_id": seasonId,
+            "ogv_episode_id": epid,
+          },
+          "video_param": {"qn": qn},
+          "player_param": const {
+            "fnver": 0,
+            "fnval": 4048,
+            "drm_tech_type": 0,
+            "app_id": 100,
+          },
+        };
+    }
 
     try {
-      final res = await Request().get(videoType.api, queryParameters: params);
+      final res = await Request().request(
+        videoType.api,
+        data: data,
+        queryParameters: params,
+        options: Options(method: videoType.method),
+      );
 
       if (res.data['code'] == 0) {
         late PlayUrlModel data;
@@ -245,17 +301,23 @@ abstract final class VideoHttp {
           case .ugc:
             data = PlayUrlModel.fromJson(res.data['data']);
 
-          case .pgc:
-            final result = res.data['result'];
-            data = PlayUrlModel.fromJson(result['video_info'])
-              ..lastPlayTime =
-                  result['play_view_business_info']?['user_status']?['watch_progress']?['current_watch_progress'];
-
-          case .pugv:
+          case .pgc || .pugv:
             final result = res.data['data'];
-            data = PlayUrlModel.fromJson(result)
-              ..lastPlayTime =
-                  result['play_view_business_info']?['user_status']?['watch_progress']?['current_watch_progress'];
+            final videoInfo = result['video_info'];
+            if (videoInfo != null) {
+              data = PlayUrlModel.fromJson(videoInfo);
+              final progress = result['watch_progress'];
+              if (progress != null) {
+                data.lastPlayTime =
+                    progress['current_watch_progress'] ??
+                    progress['current_progress'];
+              }
+            } else {
+              final reason = result['not_playable_reason'];
+              if (reason != null) {
+                return Error(_parseVideoErr(reason['code'], reason['message']));
+              }
+            }
         }
         return Success(data);
       } else if (epid != null && videoType == .ugc) {
@@ -290,13 +352,12 @@ abstract final class VideoHttp {
   }) async {
     final res = await Request().get(
       Api.videoIntro,
-      queryParameters: {'bvid': bvid},
+      queryParameters: await WbiSign.makSign({'bvid': bvid}),
     );
-    VideoDetailResponse data = VideoDetailResponse.fromJson(res.data);
-    if (data.code == 0) {
-      return Success(data.data!);
+    if (res.data['code'] == 0) {
+      return Success(VideoDetailData.fromJson(res.data['data']));
     } else {
-      return Error(data.message);
+      return Error(res.data['message']);
     }
   }
 
@@ -323,9 +384,9 @@ abstract final class VideoHttp {
       queryParameters: {'bvid': bvid},
     );
     if (res.data['code'] == 0) {
-      final items = (res.data['data'] as List?)?.map(
-        (i) => HotVideoItemModel.fromJson(i),
-      );
+      final items = (res.data['data'] as List?)
+          ?.whereNotBlocked((e) => e['owner']?['mid'])
+          .map((i) => HotVideoItemModel.fromJson(i));
       final list = RecommendFilter.applyFilterToRelatedVideos
           ? items?.where((i) => !RecommendFilter.filterAll(i)).toList()
           : items?.toList();
@@ -612,6 +673,11 @@ abstract final class VideoHttp {
     required int act,
     required int reSrc,
   }) async {
+    final isBlock = act == 5;
+    if (isBlock && !Accounts.main.isLogin) {
+      Pref.setBlackMid(mid);
+      return const Success(null);
+    }
     final res = await Request().post(
       Api.relationMod,
       queryParameters: {
@@ -642,7 +708,7 @@ abstract final class VideoHttp {
       ),
     );
     if (res.data['code'] == 0) {
-      if (act == 5) {
+      if (isBlock) {
         // block
         Pref.setBlackMid(mid);
       } else if (act == 6) {
@@ -852,23 +918,6 @@ abstract final class VideoHttp {
     return null;
   }
 
-  static bool _canAddRank(Map i) {
-    if (!GlobalData().blackMids.contains(i['owner']['mid']) &&
-        !RecommendFilter.filterTitle(i['title']) &&
-        !RecommendFilter.filterLikeRatio(
-          i['stat']['like'],
-          i['stat']['view'],
-        )) {
-      if (enableFilter &&
-          i['tname'] != null &&
-          zoneRegExp.hasMatch(i['tname'])) {
-        return false;
-      }
-      return true;
-    }
-    return false;
-  }
-
   // 视频排行
   static Future<LoadingState<List<HotVideoItemModel>>> getRankVideoList(
     int rid,
@@ -878,21 +927,12 @@ abstract final class VideoHttp {
       queryParameters: await WbiSign.makSign({'rid': rid, 'type': 'all'}),
     );
     if (res.data['code'] == 0) {
-      List<HotVideoItemModel> list = <HotVideoItemModel>[];
-      for (final i in res.data['data']['list']) {
-        if (_canAddRank(i)) {
-          list.add(HotVideoItemModel.fromJson(i));
-          // final List? others = i['others'];
-          // if (others != null && others.isNotEmpty) {
-          //   for (final j in others) {
-          //     if (_canAddRank(j)) {
-          //       list.add(HotVideoItemModel.fromJson(j));
-          //     }
-          //   }
-          // }
-        }
-      }
-      return Success(list);
+      return Success(
+        (res.data['data']['list'] as List)
+            .where(_filterHotAndRank)
+            .map((e) => HotVideoItemModel.fromJson(e))
+            .toList(),
+      );
     } else {
       return Error(res.data['message']);
     }
@@ -972,6 +1012,13 @@ abstract final class VideoHttp {
     final res = await Request().get(
       Api.popularSeriesList,
       queryParameters: await WbiSign.makSign({'web_location': 333.934}),
+      options: Options(
+        headers: const {
+          'user-agent': BrowserUa.pc,
+          'origin': HttpString.baseUrl,
+          'referer': 'https://www.bilibili.com/v/popular/weekly',
+        },
+      ),
     );
     if (res.data['code'] == 0) {
       return Success(
@@ -995,6 +1042,13 @@ abstract final class VideoHttp {
         'number': number,
         'web_location': 333.934,
       }),
+      options: Options(
+        headers: {
+          'user-agent': BrowserUa.pc,
+          'origin': HttpString.baseUrl,
+          'referer': 'https://www.bilibili.com/v/popular/weekly?num=$number',
+        },
+      ),
     );
     if (res.data['code'] == 0) {
       return Success(PopularSeriesOneData.fromJson(res.data['data']));
@@ -1013,6 +1067,13 @@ abstract final class VideoHttp {
         'page': page,
         'web_location': 333.934,
       }),
+      options: Options(
+        headers: const {
+          'user-agent': BrowserUa.pc,
+          'origin': HttpString.baseUrl,
+          'referer': 'https://www.bilibili.com/v/popular/history',
+        },
+      ),
     );
     if (res.data['code'] == 0) {
       return Success(PopularPreciousData.fromJson(res.data['data']));

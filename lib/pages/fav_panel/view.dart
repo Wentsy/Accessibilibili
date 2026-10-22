@@ -4,6 +4,7 @@ import 'package:PiliPlus/models_new/fav/fav_folder/list.dart';
 import 'package:PiliPlus/pages/common/common_intro_controller.dart';
 import 'package:PiliPlus/utils/bili_utils.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
+import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -23,11 +24,18 @@ class FavPanel extends StatefulWidget {
 
 class _FavPanelState extends State<FavPanel> {
   LoadingState loadingState = LoadingState.loading();
+  late ColorScheme colorScheme;
 
   @override
   void initState() {
     super.initState();
     _queryVideoInFolder();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    colorScheme = ColorScheme.of(context);
   }
 
   Future<void> _queryVideoInFolder() async {
@@ -91,6 +99,24 @@ class _FavPanelState extends State<FavPanel> {
                         ),
                       ),
                     ),
+                    trailing: isFull
+                        ? Padding(
+                            padding: const .only(right: 8),
+                            child: Icon(
+                              size: 21.6,
+                              color: colorScheme.outline,
+                              Icons.indeterminate_check_box_outlined,
+                            ),
+                          )
+                        : Transform.scale(
+                            scale: 0.9,
+                            alignment: .centerRight,
+                            child: Checkbox(
+                              value: isChecked,
+                              materialTapTargetSize: .shrinkWrap,
+                              onChanged: (bool? checkValue) => onTap(),
+                            ),
+                          ),
                   );
                 },
               ),
@@ -108,7 +134,6 @@ class _FavPanelState extends State<FavPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).colorScheme;
     return Column(
       children: [
         AppBar(
@@ -132,7 +157,7 @@ class _FavPanelState extends State<FavPanel> {
                   setState(() {});
                 }
               }),
-              icon: Icon(Icons.add, color: theme.primary),
+              icon: Icon(Icons.add, color: colorScheme.primary),
               label: const Text('新建收藏夹'),
               style: const ButtonStyle(
                 visualDensity: .compact,
@@ -147,7 +172,7 @@ class _FavPanelState extends State<FavPanel> {
         Expanded(child: _buildBody),
         Divider(
           height: 1,
-          color: theme.outline.withValues(alpha: 0.1),
+          color: colorScheme.outline.withValues(alpha: 0.1),
         ),
         Padding(
           padding: .only(
@@ -164,8 +189,8 @@ class _FavPanelState extends State<FavPanel> {
                 onPressed: Get.back,
                 style: FilledButton.styleFrom(
                   visualDensity: .compact,
-                  foregroundColor: theme.outline,
-                  backgroundColor: theme.onInverseSurface,
+                  foregroundColor: colorScheme.outline,
+                  backgroundColor: colorScheme.onInverseSurface,
                 ),
                 child: const Text('取消'),
               ),

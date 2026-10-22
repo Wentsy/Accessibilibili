@@ -18,6 +18,8 @@ class PgcCardVPgcIndex extends StatelessWidget {
 
   final PgcIndexItem item;
 
+  void onLongPress() => showPgcCover(title: item.title, cover: item.cover);
+
   @override
   Widget build(BuildContext context) {
     void onLongPress() => imageSaveDialog(

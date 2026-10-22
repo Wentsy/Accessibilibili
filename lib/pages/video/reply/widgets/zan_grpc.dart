@@ -1,6 +1,7 @@
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
 import 'package:PiliPlus/http/reply.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/num_utils.dart';
 import 'package:fixnum/fixnum.dart' as $fixnum;
@@ -24,24 +25,17 @@ class ZanButtonGrpc extends StatelessWidget {
   }
 
   Future<void> onHateReply(
-    BuildContext context,
-    bool isProcessing,
-    VoidCallback onDone, {
+    BuildContext context, {
     required bool isLike,
     required bool isDislike,
   }) async {
-    if (isProcessing) {
-      return;
-    }
-    isProcessing = true;
     feedBack();
     final int oid = replyItem.oid.toInt();
     final int rpid = replyItem.id.toInt();
-    // 1 已点赞 2 不喜欢 0 未操作
-    final int action = isDislike ? 0 : 2;
+    final int action = isDislike ? 0 : 1;
     final res = await ReplyHttp.hateReply(
       type: replyItem.type.toInt(),
-      action: action == 2 ? 1 : 0,
+      action: action,
       oid: oid,
       rpid: rpid,
     );
@@ -52,11 +46,9 @@ class ZanButtonGrpc extends StatelessWidget {
       if (action == 2) {
         if (isLike) replyItem.like -= $fixnum.Int64.ONE;
         replyItem.replyControl.action = $fixnum.Int64.TWO;
-      } else {
-        replyItem.replyControl.action = $fixnum.Int64.ZERO;
       }
       if (context.mounted) {
-        (context as Element?)?.markNeedsBuild();
+        (context as Element).markNeedsBuild();
       }
     } else {
       final message = isDislike ? '取消踩失败' : '点踩失败，需要登录';
@@ -64,21 +56,14 @@ class ZanButtonGrpc extends StatelessWidget {
       _announce(message);
       res.toast();
     }
-    onDone();
   }
 
   // 评论点赞
   Future<void> onLikeReply(
-    BuildContext context,
-    bool isProcessing,
-    VoidCallback onDone, {
+    BuildContext context, {
     required bool isLike,
     required bool isDislike,
   }) async {
-    if (isProcessing) {
-      return;
-    }
-    isProcessing = true;
     feedBack();
     final int oid = replyItem.oid.toInt();
     final int rpid = replyItem.id.toInt();
@@ -102,9 +87,13 @@ class ZanButtonGrpc extends StatelessWidget {
         replyItem
           ..like -= $fixnum.Int64.ONE
           ..replyControl.action = $fixnum.Int64.ZERO;
+      } else {
+        replyItem
+          ..like += $fixnum.Int64.ONE
+          ..replyControl.action = $fixnum.Int64.ONE;
       }
       if (context.mounted) {
-        (context as Element?)?.markNeedsBuild();
+        (context as Element).markNeedsBuild();
       }
     } else {
       final message = isLike ? '取消赞失败' : '点赞失败，需要登录';
@@ -112,11 +101,15 @@ class ZanButtonGrpc extends StatelessWidget {
       _announce(message);
       res.toast();
     }
-    onDone();
+  }
+
+  static void _toastNotLogin() {
+    SmartDialog.showToast('账号未登录');
   }
 
   @override
   Widget build(BuildContext context) {
+    final isLogin = Accounts.main.isLogin;
     final ThemeData theme = Theme.of(context);
     late bool isProcessing = false;
     final action = replyItem.replyControl.action;

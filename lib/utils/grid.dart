@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:PiliPlus/common/skeleton/video_card_h.dart';
+import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/rendering.dart';
 import 'package:material_ui/material_ui.dart';
@@ -8,10 +9,12 @@ import 'package:material_ui/material_ui.dart';
 mixin GridMixin {
   late final gridDelegate = Grid.videoCardHDelegate();
 
-  Widget get gridSkeleton => SliverGrid.builder(
+  Widget get gridSkeleton => SliverGrid(
     gridDelegate: gridDelegate,
-    itemBuilder: (_, _) => const VideoCardHSkeleton(),
-    itemCount: 10,
+    delegate: const SliverSingleChildDelegate(
+      count: 10,
+      child: VideoCardHSkeleton(),
+    ),
   );
 }
 
@@ -92,13 +95,13 @@ class SliverGridDelegateWithExtentAndRatio extends SliverGridDelegate {
       return layoutCache!;
     }
     crossAxisExtentCache = constraints.crossAxisExtent;
-    int crossAxisCount =
-        ((constraints.crossAxisExtent - crossAxisSpacing) /
-                (maxCrossAxisExtent + crossAxisSpacing))
-            .ceil();
     // Ensure a minimum count of 1, can be zero and result in an infinite extent
     // below when the window size is 0.
-    crossAxisCount = max(1, crossAxisCount);
+    final crossAxisCount = max(
+      1,
+      (constraints.crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing))
+          .ceil(),
+    );
     final double usableCrossAxisExtent = max(
       0.0,
       constraints.crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1),
@@ -196,12 +199,13 @@ class SliverGridDelegateWithMaxCrossAxisExtent extends SliverGridDelegate {
       return layoutCache!;
     }
     crossAxisExtentCache = constraints.crossAxisExtent;
-    int crossAxisCount =
-        (constraints.crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing))
-            .ceil();
     // Ensure a minimum count of 1, can be zero and result in an infinite extent
     // below when the window size is 0.
-    crossAxisCount = max(1, crossAxisCount);
+    final crossAxisCount = max(
+      1,
+      (constraints.crossAxisExtent / (maxCrossAxisExtent + crossAxisSpacing))
+          .ceil(),
+    );
     final double usableCrossAxisExtent = max(
       0.0,
       constraints.crossAxisExtent - crossAxisSpacing * (crossAxisCount - 1),

@@ -669,6 +669,9 @@ private final class IOSTextLinkRotor {
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "PipPlugin") {
+      PipPlugin.register(with: registrar)
+    }
     textLinkRotor = IOSTextLinkRotor(messenger: engineBridge.applicationRegistrar.messenger())
     videoPhotoExporter = VideoPhotoExporter(messenger: engineBridge.applicationRegistrar.messenger())
 

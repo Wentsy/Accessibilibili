@@ -1,3 +1,5 @@
+import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart'
+    show RefreshIndicatorState;
 import 'package:PiliPlus/common/widgets/scroll_physics.dart' show ReloadMixin;
 import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
 import 'package:PiliPlus/http/loading_state.dart';
@@ -11,16 +13,19 @@ import 'package:PiliPlus/models_new/space/space_archive/data.dart';
 import 'package:PiliPlus/models_new/space/space_archive/episodic_button.dart';
 import 'package:PiliPlus/models_new/space/space_archive/item.dart';
 import 'package:PiliPlus/pages/common/common_list_controller.dart';
+import 'package:PiliPlus/pages/member/controller.dart';
 import 'package:PiliPlus/utils/extension/dimension_ext.dart';
 import 'package:PiliPlus/utils/extension/iterable_ext.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
+import 'package:flutter/widgets.dart' show GlobalKey;
 import 'package:get/get.dart';
 
 class MemberVideoCtr
     extends CommonListController<SpaceArchiveData, SpaceArchiveItem>
     with ReloadMixin {
   MemberVideoCtr({
+    required this.heroTag,
     required this.type,
     required this.mid,
     required this.seasonId,
@@ -29,6 +34,7 @@ class MemberVideoCtr
     this.title,
   }) : isVideo = type == .video;
 
+  final String? heroTag;
   final ContributeType type;
   final bool isVideo;
   int? seasonId;
@@ -45,26 +51,38 @@ class MemberVideoCtr
   String? firstAid;
   String? lastAid;
   String? fromViewAid;
-  RxBool isLocating = false.obs;
+  final RxBool _isLocating = false.obs;
+  bool get isLocating => _isLocating.value;
+  void setIsLocating(bool value, {bool isOnlyInnerScroll = true}) {
+    _isLocating.value = value;
+    if (isOnlyInnerScroll) {
+      onlyInnerScroll = value;
+    }
+  }
+
+  set onlyInnerScroll(bool value) {
+    final state = Get.find<MemberController>(tag: heroTag)
+        .scrollKey
+        .currentState;
+    if (state != null && state.mounted) {
+      state.onlyInnerScroll = value;
+    }
+  }
+
   bool isLoadPrevious = false;
   bool? hasPrev;
 
+  GlobalKey<RefreshIndicatorState>? refreshKey;
+
   @override
-  Future<void> onRefresh() async {
-    if (isLocating.value) {
-      if (hasPrev == true) {
-        isLoadPrevious = true;
-        await queryData();
-      }
-    } else {
-      isLoadPrevious = false;
-      firstAid = null;
-      lastAid = null;
-      next = null;
-      isEnd = false;
-      page = 0;
-      await queryData();
-    }
+  Future<void> onRefresh() {
+    isLoadPrevious = false;
+    firstAid = null;
+    lastAid = null;
+    next = null;
+    isEnd = false;
+    page = 0;
+    return queryData();
   }
 
   @override
@@ -72,6 +90,9 @@ class MemberVideoCtr
     super.onInit();
     if (isVideo) {
       fromViewAid = Get.parameters['from_view_aid'];
+      if (fromViewAid?.isNotEmpty ?? false) {
+        refreshKey = GlobalKey();
+      }
     }
     page = 0;
     queryData();
@@ -87,6 +108,9 @@ class MemberVideoCtr
     next = data.next;
     if (page == 0 || isLoadPrevious) {
       hasPrev = data.hasPrev;
+      if (isLoadPrevious && hasPrev != true) {
+        onlyInnerScroll = false;
+      }
     }
     if (page == 0 || !isLoadPrevious) {
       if ((isVideo ? data.hasNext == false : data.next == 0) ||
@@ -157,13 +181,13 @@ class MemberVideoCtr
         next: next,
         seasonId: seasonId,
         seriesId: seriesId,
-        includeCursor: isLocating.value && page == 0,
+        includeCursor: isLocating && page == 0,
       );
 
   void queryBySort() {
     if (isLoading) return;
     if (isVideo) {
-      isLocating.value = false;
+      setIsLocating(false);
       order = order == .pubdate ? .click : .pubdate;
     } else {
       sort = sort == .desc ? .asc : .desc;
@@ -187,7 +211,7 @@ class MemberVideoCtr
             bvid: bvid,
             cid: cid,
             dimension: res!.dimension,
-            title: res.title,
+            // title: res.title,
             extraArguments: {
               'sourceType': SourceType.archive,
               'mediaId': seasonId ?? seriesId ?? mid,
@@ -254,7 +278,7 @@ class MemberVideoCtr
   @override
   Future<void> onReload() {
     reload = true;
-    isLocating.value = false;
+    setIsLocating(false);
     return super.onReload();
   }
 }

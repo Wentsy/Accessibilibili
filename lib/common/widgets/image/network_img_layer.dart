@@ -73,6 +73,7 @@ class NetworkImgLayer extends StatelessWidget {
     return Semantics(
       excludeSemantics: true,
       child: CachedNetworkImage(
+      gaplessPlayback: true,
       imageUrl: ImageUtils.thumbnailUrl(src, quality),
       width: width,
       height: height,

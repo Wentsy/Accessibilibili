@@ -15,8 +15,8 @@ import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
     show ReplyInfo;
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/video.dart';
-import 'package:PiliPlus/models/common/publish_panel_type.dart';
 import 'package:PiliPlus/models/dynamics/result.dart' show FilePicModel;
+import 'package:PiliPlus/models_new/dynamic/dyn_mention/item.dart';
 import 'package:PiliPlus/pages/common/publish/common_rich_text_pub_page.dart';
 import 'package:PiliPlus/pages/dynamics_mention/controller.dart';
 import 'package:PiliPlus/pages/emote/controller.dart';
@@ -26,23 +26,16 @@ import 'package:PiliPlus/pages/video/reply_search_item/view.dart';
 import 'package:PiliPlus/utils/duration_utils.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
 import 'package:PiliPlus/utils/grid.dart';
+import 'package:PiliPlus/utils/latex_to_unicode.dart';
 import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:PiliPlus/utils/theme_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
-import 'package:material_ui/material_ui.dart' hide TextField;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart' hide TextField;
 
 class ReplyPage extends CommonRichTextPubPage {
-  final int oid;
-  final int root;
-  final int parent;
-  final int replyType;
-  final ReplyInfo? replyItem;
-  final String? hint;
-  final bool canUploadPic;
-
   const ReplyPage({
     super.key,
     super.items,
@@ -55,7 +48,18 @@ class ReplyPage extends CommonRichTextPubPage {
     this.replyItem,
     this.hint,
     this.canUploadPic = true,
+    this.mentionItem,
   });
+
+  final int oid;
+  final int root;
+  final int parent;
+  final int replyType;
+  final ReplyInfo? replyItem;
+  final String? hint;
+  final bool canUploadPic;
+  // mention
+  final MentionItem? mentionItem;
 
   @override
   State<ReplyPage> createState() => _ReplyPageState();
@@ -64,6 +68,8 @@ class ReplyPage extends CommonRichTextPubPage {
 class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
   final RxBool _syncToDynamic = false.obs;
   final heroTag = Get.arguments?['heroTag'];
+
+  final RxBool _latexOn = false.obs;
 
   @override
   void dispose() {
@@ -74,14 +80,12 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    themeData = darkVideoPage ? ThemeUtils.darkTheme : Theme.of(context);
+  void initTheme() {
+    theme = darkVideoPage ? ThemeUtils.darkTheme : Theme.of(context);
   }
 
   late final darkVideoPage =
       Get.currentRoute == '/videoV' && Pref.darkVideoPage;
-  late ThemeData themeData;
 
   @override
   Widget build(BuildContext context) {
@@ -92,7 +96,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
           constraints: const BoxConstraints(maxWidth: 640),
           decoration: BoxDecoration(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            color: themeData.colorScheme.surface,
+            color: theme.colorScheme.surface,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -100,15 +104,13 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
             children: [
               ...buildInputView(),
               buildImagePreview(),
-              Flexible(
-                child: buildPanelContainer(themeData, Colors.transparent),
-              ),
+              Flexible(child: buildPanelContainer(Colors.transparent)),
             ],
           ),
         ),
       ),
     );
-    return darkVideoPage ? Theme(data: themeData, child: child) : child;
+    return darkVideoPage ? Theme(data: theme, child: child) : child;
   }
 
   @override
@@ -186,7 +188,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
       ),
       Divider(
         height: 1,
-        color: themeData.dividerColor.withValues(alpha: 0.1),
+        color: theme.dividerColor.withValues(alpha: 0.1),
       ),
       Container(
         height: 52,
@@ -203,12 +205,14 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
                     ? const Icon(Icons.image, size: 22)
                     : const Icon(Icons.image_not_supported, size: 22),
                 onPressed: widget.canUploadPic
-                    ? onPickImage
+                    ? onPickImageThrottle
                     : () => SmartDialog.showToast('当前评论区不支持发送图片'),
               ),
             ],
             const SizedBox(width: 8),
             atBtn,
+            const SizedBox(width: 8),
+            latexBtn,
             const SizedBox(width: 8),
             moreBtn,
             const SizedBox(width: 8),
@@ -262,7 +266,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
   }
 
   @override
-  Widget buildMorePanel(ThemeData theme) {
+  Widget buildMorePanel() {
     double height = context.isTablet ? 300 : 170;
     final keyboardHeight = controller.keyboardHeight;
     if (keyboardHeight != 0) {
@@ -285,7 +289,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
               aspectRatio: 1,
               child: Container(
                 decoration: BoxDecoration(
-                  color: themeData.colorScheme.onInverseSurface,
+                  color: theme.colorScheme.onInverseSurface,
                   borderRadius: const BorderRadius.all(Radius.circular(6)),
                 ),
                 alignment: Alignment.center,
@@ -306,7 +310,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
     }
 
     final isRoot = widget.root == 0;
-    final color = themeData.colorScheme.onSurfaceVariant;
+    final color = theme.colorScheme.onSurfaceVariant;
     late final gridDelegate = SliverGridDelegateWithExtentAndRatio(
       maxCrossAxisExtent: 65,
       mainAxisSpacing: 12,
@@ -421,7 +425,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
         atNameToMid[e.rawText] ??= int.parse(e.id!);
       }
     }
-    String message = editController.rawText;
+    final message = editController.rawText;
     final res = await VideoHttp.replyAdd(
       type: widget.replyType,
       oid: widget.oid,
@@ -441,5 +445,121 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
     } else {
       res.toast();
     }
+  }
+
+  Widget get latexBtn => Obx(() {
+    final latexOn = _latexOn.value;
+    return ToolbarIconButton(
+      onPressed: latexOn ? _unlatexify : _latexify,
+      icon: const Icon(Icons.functions, size: 22),
+      tooltip: '公式',
+      selected: latexOn,
+    );
+  });
+
+  Future<void> _latexify() async {
+    // value.text is the display space (\uFFFC per emote), the same space
+    // _replaceBlocks applies deltas in; formula spans hold no items, so the
+    // text there is byte-equivalent to rawText.
+    final rawText = editController.value.text;
+    if (rawText.trim().isEmpty) return;
+
+    final (spans, warnings) = LatexToUnicode.convertSpans(rawText);
+    if (spans.isEmpty) {
+      SmartDialog.showToast(
+        warnings.isEmpty
+            ? '未发现用 \$ 括起的公式'
+            : '公式未能识别：${warnings.join('、')}（已保留原文）',
+      );
+      return;
+    }
+
+    _replaceBlocks(spans, rawText);
+    _latexOn.value = true;
+    if (warnings.isNotEmpty) {
+      SmartDialog.showToast(
+        '无法识别：${warnings.join('、')}（已保留原文）',
+      );
+    }
+  }
+
+  void _unlatexify() {
+    // id 'latex' marks blocks created by _latexify.
+    final blocks = editController.items
+        .where((e) => e.type == .latex)
+        .toList(growable: false);
+    if (blocks.isEmpty) {
+      _latexOn.value = false;
+      return;
+    }
+    for (final item in blocks.reversed) {
+      final oldValue = editController.value;
+      final delta = RichTextEditingDeltaReplacement(
+        oldText: oldValue.text,
+        replacementText: item.rawText,
+        replacedRange: TextRange(
+          start: item.range.start,
+          end: item.range.end,
+        ),
+        selection: TextSelection.collapsed(
+          offset: item.range.start + item.rawText.length,
+        ),
+        composing: TextRange.empty,
+        type: RichTextType.text,
+      );
+      final newValue = delta.apply(oldValue);
+      if (oldValue == newValue) continue;
+      editController
+        ..syncRichText(delta)
+        ..value = newValue;
+    }
+    _latexOn.value = false;
+  }
+
+  /// Replaces each formula span with a locked common-type block: the
+  /// rendered Unicode goes into the block text, the LaTeX source into its
+  /// rawText, and id 'latex' marks the block for toggling back.
+  void _replaceBlocks(
+    List<({int start, int end, String converted})> spans,
+    String rawText,
+  ) {
+    for (final span in spans.reversed) {
+      final oldValue = editController.value;
+      final source = rawText.substring(span.start, span.end);
+      final delta = RichTextEditingDeltaReplacement(
+        oldText: oldValue.text,
+        replacementText: span.converted,
+        replacedRange: TextRange(start: span.start, end: span.end),
+        selection: TextSelection.collapsed(
+          offset: span.start + span.converted.length,
+        ),
+        composing: TextRange.empty,
+        type: RichTextType.latex,
+        rawText: source,
+      );
+      final newValue = delta.apply(oldValue);
+      if (oldValue == newValue) continue;
+      editController
+        ..syncRichText(delta)
+        ..value = newValue;
+    }
+  }
+
+  @override
+  MentionItem? get topMentionItem {
+    final mentionItem = widget.mentionItem;
+    if (mentionItem != null) return mentionItem;
+
+    final replyItem = widget.replyItem;
+    if (replyItem != null) {
+      final basic = replyItem.memberV2.basic;
+      return MentionItem(
+        face: basic.face,
+        name: basic.name,
+        uid: replyItem.mid.toString(),
+      );
+    }
+
+    return null;
   }
 }

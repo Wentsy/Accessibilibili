@@ -11,9 +11,9 @@ import 'package:PiliPlus/pages/common/publish/common_rich_text_pub_page.dart';
 import 'package:PiliPlus/pages/live_emote/controller.dart';
 import 'package:PiliPlus/pages/live_emote/view.dart';
 import 'package:PiliPlus/pages/live_room/controller.dart';
-import 'package:material_ui/material_ui.dart' hide TextField;
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
+import 'package:material_ui/material_ui.dart' hide TextField;
 
 class LiveSendDmPanel extends CommonRichTextPubPage {
   final bool fromEmote;
@@ -53,7 +53,6 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return ViewSafeArea(
       child: Align(
         alignment: Alignment.bottomCenter,
@@ -66,8 +65,8 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              ...buildInputView(theme),
-              Flexible(child: buildPanelContainer(theme, Colors.transparent)),
+              buildInputView(),
+              Flexible(child: buildPanelContainer(Colors.transparent)),
             ],
           ),
         ),
@@ -76,16 +75,25 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
   }
 
   @override
-  Widget? get customPanel => LiveEmotePanel(
-    onChoose: onChooseEmote,
-    roomId: liveRoomController.roomId,
-    onSendEmoticonUnique: (emote) {
-      onCustomPublish(
-        message: emote.emoticonUnique!,
-        dmType: 1,
-        emoticonOptions: '[object Object]',
-      );
-    },
+  Widget? get customPanel => DecoratedBox(
+    decoration: BoxDecoration(
+      border: Border(
+        top: BorderSide(
+          color: theme.colorScheme.outline.withValues(alpha: 0.1),
+        ),
+      ),
+    ),
+    child: LiveEmotePanel(
+      onChoose: onChooseEmote,
+      roomId: liveRoomController.roomId,
+      onSendEmoticonUnique: (emote) {
+        onCustomPublish(
+          message: emote.emoticonUnique!,
+          dmType: 1,
+          emoticonOptions: '[object Object]',
+        );
+      },
+    ),
   );
 
   Widget get _liveEmojiBtn => Obx(
@@ -163,8 +171,6 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
                 border: InputBorder.none,
                 hintStyle: TextStyle(fontSize: 14),
               ),
-              style: theme.textTheme.bodyLarge,
-              // inputFormatters: [LengthLimitingTextInputFormatter(20)],
             ),
           ),
         ),
@@ -190,10 +196,10 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
                 child: const Text('发送'),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
-    ];
+    );
   }
 
   @override
