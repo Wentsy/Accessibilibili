@@ -25,7 +25,10 @@ class BottomSheetLayout
   Widget? childForSlot(slot) => switch (slot) {
     .bottomSheet => bottomSheet,
     .body => ExcludeSemantics(
-      excluding: bottomSheet != null && excludeBodySemantics,
+      // 無障礙：底部面板（樓中樓、留言、圖片等）打開時，底下的頁面必須
+      // 從語義樹移除。否則 VoiceOver 滑到面板最後一項後會「穿出去」，
+      // 跑到後面那層的內容繼續唸。
+      excluding: bottomSheet != null,
       child: body,
     ),
   };
