@@ -18,6 +18,10 @@ merge-base：`35e5454a4`（自家 `cfcf25943` = 2.1.3+5737）
 - 上游整個重寫、且與四情境無關的畫面先取上游：`header_control`、`main_reply`、
   `common_dyn_page`、`chat_panel`、`live_room/send_danmaku`、`reply_new`、
   `history/item`、`http/download`、`download_panel`。這些畫面的 a11y 包裝待補。
+- 已在 2.1.6+6024 補回自家 a11y：`chat_panel`（直播彈幕合併語義）、
+  `live_room/send_danmaku`（原生編輯器＋清除鍵朗讀）、
+  `reply_new`（原生編輯器＋公式／轉到動態選取朗讀）、
+  `history/item`（整條合併＋上滑動作）。
 - `common_dyn_page` 取上游後，補回 `dockComposer / composerDock / composerFooter`
   （article、dynamics_detail、music、match_info 都要用）。
 - AppDelegate：上游 PipPlugin 註冊 + 自家整段 a11y / textLinkRotor / exporter 初始化。
