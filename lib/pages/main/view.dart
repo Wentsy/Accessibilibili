@@ -209,7 +209,10 @@ class _MainAppState extends PopScopeState<MainApp>
         );
       }
 
-      if (_mainController.hideBottomBar) {
+      // VoiceOver：底部導航列不要跟著捲動滑走。焦點使用者是用滑動切換元素，
+      // 不會有「往回捲一下」的動作，列一旦滑出去就再也找不回來。
+      if (_mainController.hideBottomBar &&
+          !MediaQuery.accessibleNavigationOf(context)) {
         if (_mainController.barOffset case final barOffset?) {
           return Obx(
             () => FractionalTranslation(
