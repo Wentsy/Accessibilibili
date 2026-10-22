@@ -37,6 +37,7 @@ class _MainAppState extends PopScopeState<MainApp>
   final _mainController = Get.put(MainController());
   late EdgeInsets _padding;
   late ColorScheme _colorScheme;
+  int _navEpoch = 0;
   Brightness? _brightness;
 
   @override
@@ -86,6 +87,18 @@ class _MainAppState extends PopScopeState<MainApp>
       ..checkUnreadDynamic()
       ..checkDefaultSearch(true)
       ..checkUnread(_mainController.useBottomNav);
+    // 從影片等子頁面回來時，底部導航列可能停在「已隱藏」的狀態，
+    // VoiceOver 也會記住舊的元素。這裡把狀態歸零、方向重判，
+    // 再把導航列整棵重建一次，讓 VoiceOver 重新抓到它。
+    if (!_mainController.useSideBar) {
+      _mainController.useBottomNav = MediaQuery.sizeOf(context).isPortrait;
+    }
+    _mainController
+      ..barOffset?.value = 0.0
+      ..showBottomBar?.value = true;
+    if (mounted) {
+      setState(() => _navEpoch++);
+    }
     super.didPopNext();
   }
 
@@ -343,10 +356,13 @@ class _MainAppState extends PopScopeState<MainApp>
         bottomNav = MediaQuery.removePadding(
           context: context,
           removeTop: true,
-          child: Semantics(
-            container: true,
-            explicitChildNodes: false,
-            child: bottomNav,
+          child: KeyedSubtree(
+            key: ValueKey(_navEpoch),
+            child: Semantics(
+              container: true,
+              explicitChildNodes: false,
+              child: bottomNav,
+            ),
           ),
         );
       }
