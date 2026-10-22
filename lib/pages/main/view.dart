@@ -346,9 +346,6 @@ class _MainAppState extends PopScopeState<MainApp>
           child: Semantics(
             container: true,
             explicitChildNodes: false,
-            // 語音朗讀順序：底部導航列排到內容前面。
-            // 首頁/動態是無限列表，排在它後面 VoiceOver 永遠滑不到。
-            sortKey: const OrdinalSortKey(0),
             child: bottomNav,
           ),
         );
@@ -368,22 +365,11 @@ class _MainAppState extends PopScopeState<MainApp>
       padding = .only(top: _padding.top, right: _padding.right);
     }
 
-    Widget body = Padding(padding: padding, child: child);
-    if (bottomNav != null) {
-      // 和底部導航列的 sortKey 成對出現，兩個都在才排得動。
-      body = Semantics(
-        container: true,
-        explicitChildNodes: true,
-        sortKey: const OrdinalSortKey(1),
-        child: body,
-      );
-    }
-
     child = Material(
       child: MainLayout(
         sideBar: sideBar,
         bottomNav: bottomNav,
-        body: body,
+        body: Padding(padding: padding, child: child),
       ),
     );
 
