@@ -6,6 +6,9 @@ import 'package:PiliPlus/common/widgets/button/toolbar_icon_button.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/controller.dart'
     show RichTextType, RichTextEditingDeltaReplacement;
+import 'package:PiliPlus/common/widgets/flutter/text_field/ios_native_rich_text_field.dart';
+import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
+import 'package:PiliPlus/models/common/publish_panel_type.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/text_field.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart'
     show platformClampingPhysics;
@@ -145,23 +148,43 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
           left: 15,
           bottom: 10,
         ),
-        child: Obx(
-          () => RichTextField(
-            key: key,
-            controller: editController,
-            minLines: 4,
-            maxLines: 8,
-            autofocus: false,
-            readOnly: readOnly.value,
-            onChanged: onChanged,
-            onSubmitted: onSubmitted,
-            focusNode: focusNode,
-            decoration: InputDecoration(
-              hintText: widget.hint ?? "输入回复内容",
-              border: InputBorder.none,
-              hintStyle: const TextStyle(fontSize: 14),
-            ),
-            style: theme.textTheme.bodyLarge,
+        child: Listener(
+          onPointerUp: (event) {
+            if (readOnly.value) {
+              updatePanelType(PanelType.keyboard);
+            }
+          },
+          child: Obx(
+            () => Platform.isIOS
+                ? IOSNativeRichTextField(
+                    controller: editController,
+                    focusNode: focusNode,
+                    readOnly: readOnly.value,
+                    minLines: 4,
+                    maxLines: 8,
+                    hintText: widget.hint ?? "输入回复内容",
+                    style: theme.textTheme.bodyLarge,
+                    onChanged: onChanged,
+                    onTapWhenReadOnly: () =>
+                        updatePanelType(PanelType.keyboard),
+                  )
+                : RichTextField(
+                    key: key,
+                    controller: editController,
+                    minLines: 4,
+                    maxLines: 8,
+                    autofocus: false,
+                    readOnly: readOnly.value,
+                    onChanged: onChanged,
+                    onSubmitted: onSubmitted,
+                    focusNode: focusNode,
+                    decoration: InputDecoration(
+                      hintText: widget.hint ?? "输入回复内容",
+                      border: InputBorder.none,
+                      hintStyle: const TextStyle(fontSize: 14),
+                    ),
+                    style: theme.textTheme.bodyLarge,
+                  ),
           ),
         ),
       ),
@@ -196,15 +219,37 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
             moreBtn,
             const SizedBox(width: 8),
             Obx(
-              () => ToolbarIconButton(
-                tooltip: '转到动态',
-                onPressed: _syncToDynamic.toggle,
-                icon: const Icon(
-                  CustomIcons.repeat_rounded_rotate_90,
-                  size: 22,
-                ),
-                selected: _syncToDynamic.value,
-              ),
+              () {
+                final isSelected = _syncToDynamic.value;
+                void toggle() {
+                  _syncToDynamic.toggle();
+                  a11yActionFeedback(
+                    message: isSelected ? '已取消選取轉到動態' : '已選取轉到動態',
+                  );
+                }
+
+                return Semantics(
+                  container: true,
+                  button: true,
+                  label: '轉到動態',
+                  value: isSelected ? '已選取' : '未選取',
+                  hint: isSelected
+                      ? '點兩下取消。送出後只發表這則評論'
+                      : '點兩下選取。送出後會同時轉發到動態',
+                  onTap: toggle,
+                  child: ExcludeSemantics(
+                    child: ToolbarIconButton(
+                      tooltip: '转到动态',
+                      onPressed: toggle,
+                      icon: const Icon(
+                        CustomIcons.repeat_rounded_rotate_90,
+                        size: 22,
+                      ),
+                      selected: isSelected,
+                    ),
+                  ),
+                );
+              },
             ),
             const Spacer(),
             Obx(
@@ -411,11 +456,23 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
 
   Widget get latexBtn => Obx(() {
     final latexOn = _latexOn.value;
-    return ToolbarIconButton(
-      onPressed: latexOn ? _unlatexify : _latexify,
-      icon: const Icon(Icons.functions, size: 22),
-      tooltip: '公式',
-      selected: latexOn,
+    return Semantics(
+      container: true,
+      button: true,
+      label: '公式',
+      value: latexOn ? '已選取' : '未選取',
+      hint: latexOn
+          ? '點兩下把公式還原成原本的寫法'
+          : '點兩下把用錢號包住的公式轉成可讀的符號',
+      onTap: latexOn ? _unlatexify : _latexify,
+      child: ExcludeSemantics(
+        child: ToolbarIconButton(
+          onPressed: latexOn ? _unlatexify : _latexify,
+          icon: const Icon(Icons.functions, size: 22),
+          tooltip: '公式',
+          selected: latexOn,
+        ),
+      ),
     );
   });
 
@@ -433,11 +490,15 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
             ? '未发现用 \$ 括起的公式'
             : '公式未能识别：${warnings.join('、')}（已保留原文）',
       );
+      a11yActionFeedback(
+        message: warnings.isEmpty ? '沒有找到用錢號包住的公式' : '公式無法辨識，已保留原文',
+      );
       return;
     }
 
     _replaceBlocks(spans, rawText);
     _latexOn.value = true;
+    a11yActionFeedback(message: '公式已轉換，已選取');
     if (warnings.isNotEmpty) {
       SmartDialog.showToast(
         '无法识别：${warnings.join('、')}（已保留原文）',
@@ -452,6 +513,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
         .toList(growable: false);
     if (blocks.isEmpty) {
       _latexOn.value = false;
+      a11yActionFeedback(message: '已取消選取公式');
       return;
     }
     for (final item in blocks.reversed) {
@@ -476,6 +538,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
         ..value = newValue;
     }
     _latexOn.value = false;
+    a11yActionFeedback(message: '已取消選取公式');
   }
 
   /// Replaces each formula span with a locked common-type block: the
