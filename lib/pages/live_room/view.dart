@@ -6,6 +6,7 @@ import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
+import 'package:PiliPlus/common/widgets/flutter/text_field/controller.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/extra_hittest_stack.dart';
 import 'package:PiliPlus/common/widgets/flutter/pop_scope.dart';
@@ -799,7 +800,18 @@ class _LiveRoomPageState extends State<LiveRoomPage>
     Widget chat() => LiveRoomChatPanel(
       key: chatKey,
       isPP: isPP,
+      roomId: _liveRoomController.roomId,
       liveRoomController: _liveRoomController,
+      onAtUser: (item) => _liveRoomController
+        ..savedDanmaku = [
+          RichTextItem.fromStart(
+            '@${item.name} ',
+            rawText: item.extra.mid.toString(),
+            type: .at,
+            id: item.extra.id.toString(),
+          ),
+        ]
+        ..onSendDanmaku(),
     );
     return Padding(
       padding: .only(bottom: 12, top: isPortrait ? 12 : 0),

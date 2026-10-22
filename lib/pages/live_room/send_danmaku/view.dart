@@ -1,4 +1,7 @@
+import 'dart:io' show Platform;
+
 import 'package:PiliPlus/common/widgets/button/icon_button.dart';
+import 'package:PiliPlus/common/widgets/flutter/text_field/ios_native_rich_text_field.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/text_field.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/http/live.dart';
@@ -101,7 +104,7 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
             () {
               final isEmoji = panelType.value == .emoji;
               return iconButton(
-                tooltip: '表情',
+                tooltip: isEmoji ? '收起表情' : '表情',
                 onPressed: () => updatePanelType(isEmoji ? .keyboard : .emoji),
                 iconSize: 22,
                 icon: const Icon(Icons.emoji_emotions_outlined),
@@ -113,29 +116,49 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Obx(
-              () => RichTextField(
-                key: key,
-                textInputAction: .send,
-                controller: editController,
-                autofocus: false,
-                readOnly: readOnly.value,
-                onChanged: onChanged,
-                onSubmitted: onSubmitted,
-                focusNode: focusNode,
-                decoration: const InputDecoration(
-                  hintText: "输入弹幕内容",
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(fontSize: 14),
-                ),
-                style: theme.textTheme.bodyLarge,
-                // inputFormatters: [LengthLimitingTextInputFormatter(20)],
+            child: Listener(
+              onPointerUp: (event) {
+                if (readOnly.value) {
+                  updatePanelType(PanelType.keyboard);
+                }
+              },
+              child: Obx(
+                () => Platform.isIOS
+                    ? IOSNativeRichTextField(
+                        controller: editController,
+                        focusNode: focusNode,
+                        readOnly: readOnly.value,
+                        minLines: 1,
+                        maxLines: 2,
+                        hintText: '输入弹幕内容',
+                        style: theme.textTheme.bodyLarge,
+                        onChanged: onChanged,
+                        onTapWhenReadOnly: () =>
+                            updatePanelType(PanelType.keyboard),
+                      )
+                    : RichTextField(
+                        key: key,
+                        textInputAction: .send,
+                        controller: editController,
+                        autofocus: false,
+                        readOnly: readOnly.value,
+                        onChanged: onChanged,
+                        onSubmitted: onSubmitted,
+                        focusNode: focusNode,
+                        decoration: const InputDecoration(
+                          hintText: "输入弹幕内容",
+                          border: InputBorder.none,
+                          hintStyle: TextStyle(fontSize: 14),
+                        ),
+                        style: theme.textTheme.bodyLarge,
+                      ),
               ),
             ),
           ),
           Obx(
             () => enablePublish.value
                 ? iconButton(
+                    tooltip: '清除輸入內容',
                     iconSize: 22,
                     iconColor: theme.colorScheme.onSurfaceVariant,
                     onPressed: () {
