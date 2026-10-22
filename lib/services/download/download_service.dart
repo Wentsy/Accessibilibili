@@ -6,8 +6,8 @@ import 'package:PiliPlus/grpc/dm.dart';
 import 'package:PiliPlus/http/download.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
-import 'package:PiliPlus/http/sponsor_block.dart';
 import 'package:PiliPlus/http/video.dart';
+import 'package:PiliPlus/http/sponsor_block.dart';
 import 'package:PiliPlus/models/common/video/base_quality.dart';
 import 'package:PiliPlus/models_new/download/bili_download_entry_info.dart';
 import 'package:PiliPlus/models_new/download/bili_download_media_file_info.dart';
@@ -16,17 +16,16 @@ import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
 import 'package:PiliPlus/models_new/video/video_detail/data.dart';
 import 'package:PiliPlus/models_new/video/video_detail/episode.dart' as ugc;
 import 'package:PiliPlus/models_new/video/video_detail/page.dart';
+import 'package:PiliPlus/pages/danmaku/controller.dart';
 import 'package:PiliPlus/services/download/download_manager.dart';
 import 'package:PiliPlus/services/download/photo_export.dart';
-import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/danmaku_utils.dart';
+import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/extension/file_ext.dart';
 import 'package:PiliPlus/utils/extension/string_ext.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
 import 'package:PiliPlus/utils/path_utils.dart';
-import 'package:PiliPlus/utils/storage_pref.dart';
-import 'package:flutter/foundation.dart'
-    show kDebugMode, debugPrint, VoidCallback;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:path/path.dart' as path;
@@ -37,7 +36,6 @@ import 'package:synchronized/synchronized.dart';
 class DownloadService extends GetxService {
   static const _entryFile = 'entry.json';
   static const _indexFile = 'index.json';
-  static const _maxDanmakuConcurrency = 4;
 
   final _lock = Lock();
   final _creationLock = Lock();
@@ -124,11 +122,14 @@ class DownloadService extends GetxService {
     return result;
   }
 
-  Future<BiliDownloadEntryInfo> downloadVideo(
-    Part page,
+  Future<BiliDownloadEntryInfo> downloadVideo({
+    int? index,
+    required Part page,
     VideoDetailData? videoDetail,
     ugc.EpisodeItem? videoArc,
-    VideoQuality videoQuality, {
+    required VideoQuality videoQuality,
+    AudioQuality? audioQuality,
+    SeasonInfo? seasonInfo,
     bool saveToPhotos = false,
   }) async {
     final cid = page.cid!;
@@ -193,11 +194,12 @@ class DownloadService extends GetxService {
     return created;
   }
 
-  Future<BiliDownloadEntryInfo> downloadBangumi(
-    int index,
-    PgcInfoModel pgcItem,
-    pgc.EpisodeItem episode,
-    VideoQuality quality, {
+  Future<BiliDownloadEntryInfo> downloadBangumi({
+    required int index,
+    required PgcInfoModel pgcItem,
+    required pgc.EpisodeItem episode,
+    required VideoQuality quality,
+    AudioQuality? audioQuality,
     bool saveToPhotos = false,
   }) async {
     final cid = episode.cid!;
@@ -345,7 +347,9 @@ class DownloadService extends GetxService {
     bool isUpdate = false,
   }) async {
     final cid = entry.pageData?.cid ?? entry.source?.cid;
-    if (cid == null) return false;
+    if (cid == null) {
+      return false;
+    }
     final danmakuFile = File(
       path.join(entry.entryDirPath, PathUtils.danmakuName),
     );
@@ -354,26 +358,21 @@ class DownloadService extends GetxService {
         if (!isUpdate) {
           _updateCurStatus(DownloadStatus.getDanmaku);
         }
-        final seg = (entry.totalTimeMilli / DmUtils.segLength).ceil();
-        if (seg <= 0) {
-          throw StateError('Invalid danmaku segment count: $seg');
-        }
+        final seg = (entry.totalTimeMilli / DmUtils.segLength)
+            .ceil();
 
-        final danmaku = (await DmGrpc.dmSegMobile(
-          cid: cid,
-          segmentIndex: 1,
-        )).data;
-        for (var start = 2; start <= seg; start += _maxDanmakuConcurrency) {
-          final end = start + _maxDanmakuConcurrency - 1;
-          final responses = await Future.wait([
-            for (var index = start; index <= seg && index <= end; index++)
-              DmGrpc.dmSegMobile(cid: cid, segmentIndex: index),
-          ]);
-          for (final response in responses) {
-            danmaku.elems.addAll(response.data.elems);
+        final res = await Future.wait([
+          for (var i = 1; i <= seg; i++)
+            DmGrpc.dmSegMobile(cid: cid, segmentIndex: i),
+        ]);
+
+        final danmaku = res.removeAt(0).data;
+        for (final i in res) {
+          if (i case Success(:final response)) {
+            danmaku.elems.addAll(response.elems);
           }
-          responses.clear();
         }
+        res.clear();
         await danmakuFile.writeAsBytes(danmaku.writeToBuffer());
 
         return true;
@@ -469,8 +468,6 @@ class DownloadService extends GetxService {
 
       if (generation != _generation) return;
       _updateCurStatus(DownloadStatus.getPlayUrl);
-
-      final noSegmentBefore = entry.segments == null;
 
       final mediaFileInfo = await DownloadHttp.getVideoUrl(
         entry: entry,

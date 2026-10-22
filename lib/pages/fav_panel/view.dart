@@ -70,19 +70,25 @@ class _FavPanelState extends State<FavPanel> {
                     (context as Element).markNeedsBuild();
                   }
 
-                  final subtitle =
-                      '${item.mediaCount}个内容，${BiliUtils.isPublicFavText(item.attr)}';
+                  final isFull =
+                      BiliUtils.isFavFolderFull(item.attr, item.mediaCount) &&
+                      !isChecked;
+                  final subtitle = isFull
+                      ? '${item.mediaCount}个内容，收藏夹已满'
+                      : '${item.mediaCount}个内容，${BiliUtils.isPublicFavText(item.attr)}';
                   return Semantics(
                     container: true,
                     checked: isChecked,
-                    enabled: true,
+                    enabled: !isFull,
                     label: item.title,
                     value: subtitle,
-                    hint: isChecked ? '双击取消选择' : '双击选择',
-                    onTap: onTap,
+                    hint: isFull
+                        ? '收藏夹已满'
+                        : (isChecked ? '双击取消选择' : '双击选择'),
+                    onTap: isFull ? null : onTap,
                     child: ExcludeSemantics(
                       child: ListTile(
-                        onTap: onTap,
+                        onTap: isFull ? null : onTap,
                         dense: true,
                         leading: BiliUtils.isPublicFav(item.attr)
                             ? const Icon(Icons.folder_outlined)
@@ -90,33 +96,26 @@ class _FavPanelState extends State<FavPanel> {
                         minLeadingWidth: 0,
                         title: Text(item.title),
                         subtitle: Text(subtitle),
-                        trailing: Transform.scale(
-                          scale: 0.9,
-                          child: Checkbox(
-                            value: isChecked,
-                            onChanged: (bool? checkValue) => onTap(),
-                          ),
-                        ),
+                        trailing: isFull
+                            ? Padding(
+                                padding: const .only(right: 8),
+                                child: Icon(
+                                  size: 21.6,
+                                  color: colorScheme.outline,
+                                  Icons.indeterminate_check_box_outlined,
+                                ),
+                              )
+                            : Transform.scale(
+                                scale: 0.9,
+                                alignment: .centerRight,
+                                child: Checkbox(
+                                  value: isChecked,
+                                  materialTapTargetSize: .shrinkWrap,
+                                  onChanged: (bool? checkValue) => onTap(),
+                                ),
+                              ),
                       ),
                     ),
-                    trailing: isFull
-                        ? Padding(
-                            padding: const .only(right: 8),
-                            child: Icon(
-                              size: 21.6,
-                              color: colorScheme.outline,
-                              Icons.indeterminate_check_box_outlined,
-                            ),
-                          )
-                        : Transform.scale(
-                            scale: 0.9,
-                            alignment: .centerRight,
-                            child: Checkbox(
-                              value: isChecked,
-                              materialTapTargetSize: .shrinkWrap,
-                              onChanged: (bool? checkValue) => onTap(),
-                            ),
-                          ),
                   );
                 },
               ),

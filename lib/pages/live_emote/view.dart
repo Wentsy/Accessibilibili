@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:PiliPlus/common/widgets/emote_tooltip.dart';
 
 import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
 import 'package:PiliPlus/common/widgets/custom_tooltip.dart';
@@ -136,46 +137,13 @@ class _LiveEmotePanelState extends State<LiveEmotePanel>
                                       Radius.circular(6),
                                     ),
                                     onTap: choose,
-                                    child: CustomTooltip(
-                                      indicator: () => Triangle(
-                                        color: color,
-                                        size: const Size(14, 8),
-                                      ),
-                                      overlayWidget: () => Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: color,
-                                          borderRadius: const BorderRadius.all(
-                                            Radius.circular(8),
-                                          ),
-                                        ),
-                                        child: Column(
-                                          spacing: 4,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            NetworkImgLayer(
-                                              src: e.url,
-                                              width: 65,
-                                              height: 65,
-                                              type: ImageType.emote,
-                                              fit: BoxFit.contain,
-                                            ),
-                                            Text(
-                                              e.emoji == null
-                                                  ? ''
-                                                  : e.emoji!.startsWith('[')
-                                                  ? e.emoji!.substring(
-                                                      1,
-                                                      e.emoji!.length - 1,
-                                                    )
-                                                  : e.emoji!,
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
+                                    child: emoteTooltipBuilder(
+                                      enable: true,
+                                      size: 65,
+                                      colorScheme: theme.colorScheme,
+                                      url: e.url,
+                                      emote: e.emoji,
+                                      triggerMode: kTriggerMode,
                                       child: Padding(
                                         padding: const EdgeInsets.all(6),
                                         child: NetworkImgLayer(

@@ -5,8 +5,7 @@ import 'dart:math' show max;
 import 'package:PiliPlus/common/widgets/button/toolbar_icon_button.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/controller.dart'
-    show RichTextType;
-import 'package:PiliPlus/common/widgets/flutter/text_field/ios_native_rich_text_field.dart';
+    show RichTextType, RichTextEditingDeltaReplacement;
 import 'package:PiliPlus/common/widgets/flutter/text_field/text_field.dart';
 import 'package:PiliPlus/common/widgets/scroll_physics.dart'
     show platformClampingPhysics;
@@ -146,43 +145,23 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
           left: 15,
           bottom: 10,
         ),
-        child: Listener(
-          onPointerUp: (event) {
-            if (readOnly.value) {
-              updatePanelType(PanelType.keyboard);
-            }
-          },
-          child: Obx(
-            () => Platform.isIOS
-                ? IOSNativeRichTextField(
-                    controller: editController,
-                    focusNode: focusNode,
-                    readOnly: readOnly.value,
-                    minLines: 4,
-                    maxLines: 8,
-                    hintText: widget.hint ?? "输入回复内容",
-                    style: themeData.textTheme.bodyLarge,
-                    onChanged: onChanged,
-                    onTapWhenReadOnly: () =>
-                        updatePanelType(PanelType.keyboard),
-                  )
-                : RichTextField(
-                    key: key,
-                    controller: editController,
-                    minLines: 4,
-                    maxLines: 8,
-                    autofocus: false,
-                    readOnly: readOnly.value,
-                    onChanged: onChanged,
-                    onSubmitted: onSubmitted,
-                    focusNode: focusNode,
-                    decoration: InputDecoration(
-                      hintText: widget.hint ?? "输入回复内容",
-                      border: InputBorder.none,
-                      hintStyle: const TextStyle(fontSize: 14),
-                    ),
-                    style: themeData.textTheme.bodyLarge,
-                  ),
+        child: Obx(
+          () => RichTextField(
+            key: key,
+            controller: editController,
+            minLines: 4,
+            maxLines: 8,
+            autofocus: false,
+            readOnly: readOnly.value,
+            onChanged: onChanged,
+            onSubmitted: onSubmitted,
+            focusNode: focusNode,
+            decoration: InputDecoration(
+              hintText: widget.hint ?? "输入回复内容",
+              border: InputBorder.none,
+              hintStyle: const TextStyle(fontSize: 14),
+            ),
+            style: theme.textTheme.bodyLarge,
           ),
         ),
       ),
@@ -217,32 +196,15 @@ class _ReplyPageState extends CommonRichTextPubPageState<ReplyPage> {
             moreBtn,
             const SizedBox(width: 8),
             Obx(
-              () {
-                final isSelected = _syncToDynamic.value;
-                return Semantics(
-                  container: true,
-                  button: true,
-                  selected: isSelected,
-                  label: isSelected
-                      ? '同步到动态，已选取'
-                      : '同步到动态，未选取',
-                  hint: isSelected
-                      ? '点两下取消。送出后只发表这则评论或回复'
-                      : '点两下选取。送出后会同时同步到动态',
-                  onTap: _syncToDynamic.toggle,
-                  child: ExcludeSemantics(
-                    child: ToolbarIconButton(
-                      tooltip: '同步到动态',
-                      onPressed: _syncToDynamic.toggle,
-                      icon: const Icon(
-                        CustomIcons.repeat_rounded_rotate_90,
-                        size: 22,
-                      ),
-                      selected: isSelected,
-                    ),
-                  ),
-                );
-              },
+              () => ToolbarIconButton(
+                tooltip: '转到动态',
+                onPressed: _syncToDynamic.toggle,
+                icon: const Icon(
+                  CustomIcons.repeat_rounded_rotate_90,
+                  size: 22,
+                ),
+                selected: _syncToDynamic.value,
+              ),
             ),
             const Spacer(),
             Obx(

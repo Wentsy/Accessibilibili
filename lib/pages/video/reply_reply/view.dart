@@ -115,7 +115,6 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _colorAnimation = null;
     _controller
       ..didChangeDependencies(context)
       ..nestedController = null;
@@ -409,15 +408,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                   if (jumpIndex == index) {
                     return KeyedSubtree(
                       key: ValueKey('reply-${item.id}'),
-                      child: ColoredBoxTransition(
-                        color: _colorAnimation ??= _controller.animController.drive(
-                          ColorTween(
-                            begin: colorScheme.onInverseSurface,
-                            end: colorScheme.surface,
-                          ).chain(CurveTween(curve: const Interval(0.8, 1.0))),
-                        ),
-                        child: child,
-                      ),
+                      child: _controller.colorAnimWrapper(colorScheme, child),
                     );
                   }
                   return KeyedSubtree(
@@ -447,15 +438,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                   if (jumpIndex == index) {
                     return KeyedSubtree(
                       key: ValueKey('reply-${item.id}'),
-                      child: ColoredBoxTransition(
-                        color: _colorAnimation ??= _controller.animController.drive(
-                          ColorTween(
-                            begin: colorScheme.onInverseSurface,
-                            end: colorScheme.surface,
-                          ).chain(CurveTween(curve: const Interval(0.8, 1.0))),
-                        ),
-                        child: child,
-                      ),
+                      child: _controller.colorAnimWrapper(colorScheme, child),
                     );
                   }
                   return KeyedSubtree(
@@ -515,7 +498,6 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
       onDelete: (item, subIndex) => _controller.onRemove(index, item, null),
       upMid: _controller.upMid,
       showDialogue: () => MiniScaffold.of(context).showBottomSheet(
-        excludeBodySemantics: true,
         constraints: BoxConstraints(
           minHeight: MediaQuery.sizeOf(context).height,
           maxHeight: MediaQuery.sizeOf(context).height,

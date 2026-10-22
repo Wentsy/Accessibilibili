@@ -1,4 +1,6 @@
 import 'package:flutter/semantics.dart';
+import 'package:PiliPlus/pages/video/reply_reply/view.dart';
+import 'package:PiliPlus/common/widgets/scaffold/mini_scaffold.dart';
 import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
@@ -232,13 +234,6 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                   margin: .only(bottom: bottom),
                   child: ReplyPaginationStatus(controller: _videoReplyController),
                 );
-                if (item.id == _videoReplyController.targetRootRpId) {
-                  return _videoReplyController.colorAnimWrapper(
-                    colorScheme,
-                    child,
-                  );
-                }
-                return child;
               }
               final item = response[index];
               final reply = ReplyItemGrpc(
@@ -261,7 +256,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 ),
                 a11ySortKey: OrdinalSortKey((index + 1).toDouble()),
               );
-              return ReplyA11ySemantics(
+              final child = ReplyA11ySemantics(
                 key: ValueKey('reply-${item.id}'),
                 replyItem: item,
                 videoController: _videoReplyController.videoCtr,
@@ -279,6 +274,13 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                     : '點兩下回覆這條評論',
                 child: reply,
               );
+              if (item.id == _videoReplyController.targetRootRpId) {
+                return _videoReplyController.colorAnimWrapper(
+                  colorScheme,
+                  child,
+                );
+              }
+              return child;
             },
             itemCount: count,
           );
@@ -309,30 +311,27 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
 
   void replyReply(ReplyInfo replyItem, int? id) {
     hideFab();
-    EasyThrottle.throttle('replyReply', const Duration(milliseconds: 500), () {
-      int oid = replyItem.oid.toInt();
-      int rpid = replyItem.id.toInt();
-      final bottomSheet = MiniScaffold.of(context).showBottomSheet(
-        excludeBodySemantics: true,
-        constraints: BoxConstraints(
+    final oid = replyItem.oid.toInt();
+    final rpid = replyItem.id.toInt();
+    final bottomSheet = MiniScaffold.of(context).showBottomSheet(
+      constraints: BoxConstraints(
           minHeight: MediaQuery.sizeOf(context).height,
           maxHeight: MediaQuery.sizeOf(context).height,
         ),
-        (context) => VideoReplyReplyPanel(
-          videoController: _videoReplyController.videoCtr,
-          id: id,
-          oid: oid,
-          rpid: rpid,
-          firstFloor: replyItem.replyControl.isNote ? null : replyItem,
-          replyType: _videoReplyController.videoType.replyType,
-          isVideoDetail: true,
-          isNested: widget.isNested,
-          upMid: _videoReplyController.upMid,
-        ),
-      );
-      bottomSheet.completer.future.whenComplete(() {
-        if (mounted) showFab();
-      });
+      (context) => VideoReplyReplyPanel(
+        videoController: _videoReplyController.videoCtr,
+        id: id,
+        oid: oid,
+        rpid: rpid,
+        firstFloor: replyItem.replyControl.isNote ? null : replyItem,
+        replyType: _videoReplyController.videoType.replyType,
+        isVideoDetail: true,
+        isNested: widget.isNested,
+        upMid: _videoReplyController.upMid,
+      ),
+    );
+    bottomSheet.completer.future.whenComplete(() {
+      if (mounted) showFab();
     });
   }
 }

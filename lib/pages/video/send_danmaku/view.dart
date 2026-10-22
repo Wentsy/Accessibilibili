@@ -116,7 +116,7 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
                     onTap: _showColorPicker,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: themeData.colorScheme.secondaryContainer,
+                        color: theme.colorScheme.secondaryContainer,
                         borderRadius: const BorderRadius.all(
                           Radius.circular(8),
                         ),
@@ -126,7 +126,7 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
                       child: Icon(
                         size: 22,
                         Icons.edit,
-                        color: themeData.colorScheme.onSecondaryContainer,
+                        color: theme.colorScheme.onSecondaryContainer,
                       ),
                     ),
                   ),
@@ -270,7 +270,7 @@ class _SendDanmakuPanelState extends CommonTextPubPageState<SendDanmakuPanel> {
                   ? null
                   : Border.all(
                       width: 2,
-                      color: themeData.colorScheme.primary,
+                      color: theme.colorScheme.primary,
                     ),
             ),
             child: DecoratedBox(

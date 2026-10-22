@@ -1,7 +1,3 @@
-import 'package:flutter/semantics.dart';
-import 'package:PiliPlus/common/a11y/reply_semantics.dart';
-import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
-import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -55,17 +51,6 @@ class _MainReplyPageState extends State<MainReplyPage>
   late EdgeInsets padding;
   late ColorScheme colorScheme;
 
-  void _publishComment() {
-    try {
-      feedBack();
-      _controller.onReply(
-        null,
-        oid: _controller.oid,
-        replyType: _controller.replyType,
-      );
-    } catch (_) {}
-  }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -76,9 +61,6 @@ class _MainReplyPageState extends State<MainReplyPage>
   @override
   Widget build(BuildContext context) {
     return SimpleScaffold(
-      bottomBar: useVoiceOverComposerDock(context)
-          ? VoiceOverComposerDock(onPressed: _publishComment)
-          : null,
       appBar: AppBar(title: const Text('查看评论')),
       body: fabAnimWrapper(
         child: refreshIndicator(
@@ -88,8 +70,7 @@ class _MainReplyPageState extends State<MainReplyPage>
               left: padding.left,
               right: padding.right,
             ),
-            child: ReplyScrollView(
-              replyController: _controller,
+            child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
                 buildReplyHeader(),
@@ -99,7 +80,7 @@ class _MainReplyPageState extends State<MainReplyPage>
           ),
         ).constraintWidth(),
       ),
-      fab: useVoiceOverComposerDock(context) ? null : SlideTransition(
+      fab: SlideTransition(
         position: fabAnimation,
         child: Padding(
           padding: .only(
@@ -108,7 +89,16 @@ class _MainReplyPageState extends State<MainReplyPage>
           ),
           child: FloatingActionButton(
             heroTag: null,
-            onPressed: _publishComment,
+            onPressed: () {
+              try {
+                feedBack();
+                _controller.onReply(
+                  null,
+                  oid: _controller.oid,
+                  replyType: _controller.replyType,
+                );
+              } catch (_) {}
+            },
             tooltip: '评论',
             child: const Icon(Icons.reply),
           ),
@@ -129,50 +119,27 @@ class _MainReplyPageState extends State<MainReplyPage>
       Success(:final response) =>
         response != null && response.isNotEmpty
             ? SliverList.builder(
-                // Never key the entire list by length: every append would
-                // replace all semantic nodes and discard VoiceOver's position.
-                findChildIndexCallback: (key) {
-                  final index = response.indexWhere(
-                    (item) => ValueKey('reply-${item.id}') == key);
-                  return index < 0 ? null : index;
-                },
                 itemCount: response.length + 1,
                 itemBuilder: (context, index) {
-                  // 🔴 無障礙：VoiceOver 逐項滑動很慢，倒數第4個就預載
-                  if (index >= response.length - 8) {
-                    _controller.onLoadMore();
-                  }
                   if (index == response.length) {
+                    _controller.onLoadMore();
                     return Container(
                       alignment: Alignment.center,
                       margin: EdgeInsets.only(bottom: padding.bottom),
                       height: 125,
-                      child: ReplyPaginationStatus(controller: _controller),
+                      child: Text(
+                        _controller.isEnd ? '没有更多了' : '加载中...',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.outline,
+                        ),
+                      ),
                     );
                   } else {
-                    final item = response[index];
-                    return ReplyA11ySemantics(
-                      key: ValueKey('reply-${item.id}'),
-                      replyItem: item,
-                      label: '${item.member.name} 說：${item.content.message}'
-                          '${item.content.pictures.isNotEmpty ? '，[圖片]' : ''}'
-                          '${item.like > 0 ? '，${item.like} 個讚' : ''}'
-                          '${item.count > 0 ? '，共 ${item.count} 條回覆' : ''}',
-                      onAccessibilityFocus: () {
-                        if (index >= response.length - 5) _controller.retryLoadMore();
-                      },
-                      onTap: item.count.toInt() > 0
-                          ? () => replyReply(context, item, null, colorScheme)
-                          : () => _controller.onReply(item),
-                      onTapHint: item.count.toInt() > 0
-                          ? '點兩下展開回覆' : '點兩下回覆這條評論',
-                      child: ReplyItemGrpc(
-                      key: ValueKey(response[index].id),
+                    return ReplyItemGrpc(
                       replyItem: response[index],
                       replyLevel: 1,
-                      a11ySortKey: OrdinalSortKey(index.toDouble()),
-                      replyReply: (replyItem, id) =>
-                          replyReply(context, replyItem, id, colorScheme),
+                      replyReply: throttleReplyReply,
                       onReply: _controller.onReply,
                       onDelete: (item, subIndex) =>
                           _controller.onRemove(index, item, subIndex),
@@ -184,7 +151,6 @@ class _MainReplyPageState extends State<MainReplyPage>
                         _controller.oid,
                         _controller.replyType,
                       ),
-                    ),
                     );
                   }
                 },
@@ -234,50 +200,22 @@ class _MainReplyPageState extends State<MainReplyPage>
     );
   }
 
-  /// 🔴 YouTube 式翻頁：滾一屏（VoiceOver「下一頁/上一頁」動作）
-  void _pageDown(dynamic controller) {
-    final sc = controller.scrollController;
-    if (!sc.hasClients) return;
-    final pos = sc.position;
-    final target = (pos.pixels + pos.viewportDimension * 0.9)
-        .clamp(0.0, pos.maxScrollExtent);
-    sc.animateTo(
-      target,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeOut,
+  void throttleReplyReply(ReplyInfo replyItem, int? id) {
+    EasyThrottle.throttle(
+      'replyReply',
+      const Duration(milliseconds: 500),
+      () => replyReply(replyItem, id),
     );
   }
 
-  void _pageUp(dynamic controller) {
-    final sc = controller.scrollController;
-    if (!sc.hasClients) return;
-    final pos = sc.position;
-    final target = (pos.pixels - pos.viewportDimension * 0.9)
-        .clamp(0.0, pos.maxScrollExtent);
-    sc.animateTo(
-      target,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeOut,
-    );
-  }
-
-  void replyReply(
-    BuildContext context,
-    ReplyInfo replyItem,
-    int? id,
-    ColorScheme colorScheme,
-  ) {
-    EasyThrottle.throttle('replyReply', const Duration(milliseconds: 500), () {
-      int oid = replyItem.oid.toInt();
-      int rpid = replyItem.id.toInt();
-      Get.to(
-        SimpleScaffold(
-          appBar: AppBar(
-            title: const Text('评论详情'),
-            shape: Border(
-              bottom: BorderSide(
-                color: colorScheme.outline.withValues(alpha: 0.1),
-              ),
+  void replyReply(ReplyInfo replyItem, int? id) {
+    Get.to(
+      SimpleScaffold(
+        appBar: AppBar(
+          title: const Text('评论详情'),
+          shape: Border(
+            bottom: BorderSide(
+              color: colorScheme.outline.withValues(alpha: 0.1),
             ),
           ),
         ),

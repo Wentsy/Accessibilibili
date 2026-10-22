@@ -1,4 +1,5 @@
 import 'package:PiliPlus/common/widgets/badge.dart';
+import 'dart:io' show Platform;
 import 'package:PiliPlus/models/common/video/base_quality.dart';
 import 'package:PiliPlus/models/common/video/video_type.dart';
 import 'package:PiliPlus/models_new/download/download_info.dart';

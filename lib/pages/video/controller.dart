@@ -52,6 +52,9 @@ import 'package:PiliPlus/plugin/pl_player/models/heart_beat_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_status.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/download/photo_export.dart';
+import 'package:PiliPlus/models_new/video/video_detail/page.dart'
+    show Part;
+import 'package:PiliPlus/utils/reply_scheme_helper.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/connectivity_utils.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
@@ -861,6 +864,7 @@ class VideoDetailController extends GetxController
       loadSource: () => VideoHttp.videoUrl(
         cid: cid.value,
         bvid: bvid,
+        qn: VideoQuality.hdrVivid.code,
         epid: epId,
         seasonId: seasonId,
         tryLook: plPlayerController.tryLook,
@@ -946,7 +950,7 @@ class VideoDetailController extends GetxController
           _setVideoHeight();
           currentDecodeFormats = VideoDecodeFormatType.AVC;
           currentVideoQa.value = videoQuality;
-          await _initPlayerIfNeeded(autoFullScreenFlag);
+          await initPlayerIfNeeded(autoFullScreenFlag);
           return;
         } else {
           SmartDialog.showToast('视频资源不存在');
@@ -1524,13 +1528,19 @@ class VideoDetailController extends GetxController
           final episode = episodes[i];
           if (episode is Part && episode.cid == targetCid) {
             target = await downloadService.downloadVideo(
-              episode, videoDetail, null, quality, saveToPhotos: true,
+              page: episode,
+              videoDetail: videoDetail,
+              videoQuality: quality,
+              saveToPhotos: true,
             );
           } else if (episode is ugc.EpisodeItem) {
             for (final part in episode.pages ?? <Part>[]) {
               if (part.cid == targetCid) {
                 target = await downloadService.downloadVideo(
-                  part, null, episode, quality, saveToPhotos: true,
+                  page: part,
+                  videoArc: episode,
+                  videoQuality: quality,
+                  saveToPhotos: true,
                 );
                 break;
               }
@@ -1538,7 +1548,11 @@ class VideoDetailController extends GetxController
           } else if (episode is pgc.EpisodeItem &&
               episode.cid == targetCid && pgcItem != null) {
             target = await downloadService.downloadBangumi(
-              i, pgcItem, episode, quality, saveToPhotos: true,
+              index: i,
+              pgcItem: pgcItem,
+              episode: episode,
+              quality: quality,
+              saveToPhotos: true,
             );
           }
           if (target != null) break;

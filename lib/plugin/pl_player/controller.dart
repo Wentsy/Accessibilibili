@@ -1115,7 +1115,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
             _bufferingWantsPlay = false;
             _syncBufferingRecovery();
           }
-          playerStatus.value = .completed;
+          playerStatus = .completed;
 
           for (final element in _statusListeners) {
             element(.completed);
@@ -1162,11 +1162,10 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
       stream.buffering.listen((bool buffering) {
         isBuffering.value = buffering;
         _syncBufferingRecovery();
-        videoPlayerServiceHandler?.onStatusChange(
-          playerStatus.value,
-          buffering,
-          isLive,
-        );
+        if (!playerStatus.isCompleted) {
+          _stopWakeLockTimer();
+          _updatePlaybackState();
+        }
       }),
       if (kDebugMode)
         stream.log.listen(((PlayerLog log) {
@@ -1384,12 +1383,12 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         _liveReconnect.cancel();
         _bufferingWantsPlay = false;
         _syncBufferingRecovery();
-        playerStatus.value = PlayerStatus.paused;
+        playerStatus = PlayerStatus.paused;
         return;
       }
       try {
         await player.play();
-        if (isCurrent()) playerStatus.value = PlayerStatus.playing;
+        if (isCurrent()) playerStatus = PlayerStatus.playing;
       } catch (_) {
         if (isCurrent()) {
           _liveWantsPlay = false;
@@ -1416,7 +1415,7 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     await _audioTransitions.run(() async {
       await player.pause();
       if (request == _playbackRequest) {
-        playerStatus.value = PlayerStatus.paused;
+        playerStatus = PlayerStatus.paused;
       }
       // Release only after the media has stopped producing audio.
       if (!isInterrupt) await audioSessionHandler?.setActive(false);

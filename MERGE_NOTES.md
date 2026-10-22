@@ -1,75 +1,57 @@
-# 上游同步進度（PiliPlus 2.1.6.2 + 到 2026-10-22 的 commit）
+# 上游同步進度（PiliPlus 2.1.6.2 / main 到 2026-10-22）
 
-分支：main（本地 C:\Users\wents\Documents\Accessibilibili）
-上游：upstream = bggRGjQaUbCoE/PiliPlus，已 fetch 到 006c0fdd1
-自家：origin/main = cfcf25943（2.1.3+5737 基準 3767e1c67）
-merge-base：35e5454a47246c187106b869cd02b9bdbe90c015
-狀態：merge 進行中，尚未 commit
+本地工作 repo：`C:\Users\wents\Documents\Accessibilibili`
+分支：`main`
+merge-base：`35e5454a4`（自家 `cfcf25943` = 2.1.3+5737）
+上游：`006c0fdd1`
+衝突：53 個，全部解完，工作樹無殘留標記。
 
-## 已完成（純 import 衝突，兩邊 union）
-lib/common/widgets/flutter/list_tile.dart
-lib/models_new/download/bili_download_entry_info.dart
-lib/pages/follow_type/view.dart
-lib/pages/later/widgets/video_card_h_later.dart
-lib/pages/live/view.dart
-lib/pages/match_info/view.dart
-lib/pages/msg_feed_top/at_me/view.dart
-lib/pages/msg_feed_top/like_me/view.dart
-lib/pages/msg_feed_top/reply_me/view.dart
-lib/pages/msg_feed_top/sys_msg/view.dart
-lib/pages/rcmd/view.dart
-lib/pages/whisper/view.dart
+## 解法原則
+- 純 import 衝突 → 兩邊 union。
+- 四情境核心（影片留言 `reply/view.dart`、樓中樓 `reply_reply/view.dart`、
+  簡介 `introduction/ugc/*`、`common/reply_controller.dart`、`reply_item_grpc`、
+  `zan_grpc`）→ 以自家 a11y 為底，逐一接上上游新 API（色塊動畫、分頁狀態、
+  節流搬進 controller、`rootRpId` 回到 ReplyController）。
+- 相簿匯出（PhotoExport）客製功能完整保留：`download_service.dart` 沿用自家版本，
+  但把上游新增的 `index / audioQuality / seasonInfo` 具名參數與 `updateSegments`
+  補回來，呼叫端同步改成具名引數。
+- 上游整個重寫、且與四情境無關的畫面先取上游：`header_control`、`main_reply`、
+  `common_dyn_page`、`chat_panel`、`live_room/send_danmaku`、`reply_new`、
+  `history/item`、`http/download`、`download_panel`。這些畫面的 a11y 包裝待補。
+- `common_dyn_page` 取上游後，補回 `dockComposer / composerDock / composerFooter`
+  （article、dynamics_detail、music、match_info 都要用）。
+- AppDelegate：上游 PipPlugin 註冊 + 自家整段 a11y / textLinkRotor / exporter 初始化。
+- pubspec：version 取上游 `2.1.6`（build code 由 CI 用 commit 數產生）；
+  `media_kit_libs_ios_video` 保留本地 `packages/` 路徑。
 
-## 待處理 41 個（依難度分三級）
+## 編譯驗證方式（重要）
+`lib/scripts/patch.ps1` 會 patch **Flutter SDK 本體**與 pub cache 的
+`material_ui` / `cupertino_ui`。本機要先跑：
 
-### A. 小改、可機械處理
-- .gitattributes（兩邊相加）
-- ios/Runner/AppDelegate.swift（theirs 的 PipPlugin 區塊放前面，再放 ours 全部）
-- lib/utils/date_utils.dart（兩邊相加）
-- lib/pages/setting/models/video_settings.dart（文字說明，取 theirs 較新）
-- lib/utils/storage_pref.dart
-- pubspec.yaml / pubspec.lock
-- lib/common/widgets/image/network_img_layer.dart（ours 包 Semantics，theirs 加 gaplessPlayback → 要合併成 Semantics 內含新參數）
+```powershell
+$env:FLUTTER_ROOT='C:\Users\wents\AppData\Local\flutter_sdk'
+$env:GITHUB_WORKSPACE=(Get-Location).Path
+.\lib\scripts\patch.ps1 ios      # 注意：它內部的 ~/.pub-cache 在 Windows 會失敗
+```
 
-### B. 自家 a11y wrapper vs 上游小重構（需人工接）
-- lib/pages/main/view.dart（底部留白）
-- lib/pages/history/widgets/item.dart
-- lib/pages/pgc/widgets/pgc_card_v.dart
-- lib/pages/pgc_index/widgets/pgc_card_v_pgc_index.dart
-- lib/pages/fav_panel/view.dart
-- lib/pages/fav/note/widget/item.dart
-- lib/pages/fav/pgc/widget/item.dart
-- lib/pages/fav_detail/widget/fav_video_card.dart
-- lib/pages/member_cheese/widgets/item.dart
-- lib/pages/member_video/view.dart
-- lib/pages/subscription/widgets/item.dart
-- lib/pages/main_reply/view.dart
-- lib/pages/dynamics_tab/view.dart
-- lib/pages/dynamics_detail/view.dart
-- lib/pages/article/view.dart
-- lib/pages/common/dyn/common_dyn_page.dart
+Windows 上 patch.ps1 走到 pub cache 段會找不到 `~/.pub-cache`，
+要手動對 `%LOCALAPPDATA%\Pub\Cache\hosted\pub.dev\material_ui-1.8.0`
+（以及 `cupertino_ui-1.1.4`）套 `lib/scripts/material`、`lib/scripts/cupertino` 的 patch。
+套完 patch 後 `flutter analyze` 才是可信的（否則會誤報一堆
+`DraggableScrollableSheetState`、`TabBarView.horizontalDragGestureRecognizer` 之類）。
 
-### C. 核心（四情境相關，絕不能丟）
-- lib/pages/video/reply/view.dart（FAB + ReplyPaginationStatus + replyReply）
-- lib/pages/video/reply_reply/view.dart
-- lib/pages/video/introduction/ugc/view.dart（展開/摺疊簡介）
-- lib/pages/video/introduction/ugc/controller.dart（分享 dialog，上游自建 SimpleDialog）
-- lib/pages/common/reply_controller.dart（onA11yReplyLoadMore 等）
-- lib/pages/video/controller.dart（_initPlayerIfNeeded 改名 + HDR 查詢）
-- lib/pages/video/reply/widgets/reply_item_grpc.dart
-- lib/pages/video/reply/widgets/zan_grpc.dart（_announce）
-- lib/pages/video/reply_new/view.dart
-- lib/pages/live_room/widgets/chat_panel.dart（上游改 LiveListView）
-- lib/pages/live_emote/view.dart
-- lib/pages/live_room/send_danmaku/view.dart
-- lib/pages/video/send_danmaku/view.dart
-- lib/pages/video/widgets/header_control.dart
-- lib/plugin/pl_player/controller.dart（8 塊）
-- lib/services/download/download_service.dart（4 塊）
-- lib/services/audio_handler.dart
-- lib/http/download.dart（上游刪掉的區塊，要確認是不是功能搬到別處）
+套完 patch 後：`flutter analyze` → **0 error**。
 
-## 原則
-- 上游已重寫的畫面：以上游結構為底，把自家的 a11y 層重新套上去，不要硬留舊 widget。
-- 四情境（外層評論／展開簡介／摺疊簡介／樓中樓）功能契約不能退步。
-- 舊穩定版 2.1.3+5737 不動；新版測不過就退回。
+## 注意
+- `patch.ps1` 會在 repo 內套 `bottom_sheet_ios_piliplus.patch`、
+  `geetest_ios.patch`（改 `mini_scaffold.dart`、`common_slide_page.dart`、
+  `geetest_webview_dialog.dart`，新增 `geetest_plugin.dart`、pubspec 加
+  `gt3_flutter_plugin`）。**這些不能 commit**，CI 會自己套。
+- 舊穩定 `2.1.3+5737` 與其 IPA 完全沒動。
+- 穩定基準要等希希 iPhone 實機測過四情境才更新 `docs/CURRENT_ACCESSIBILITY_BASELINE.md`。
+
+## 待辦
+1. CI 編譯出 IPA → 給希希實機測四情境（外層評論／展開簡介／摺疊簡介／樓中樓）。
+2. 補回先取上游那些畫面的 a11y 包裝：header_control（播放器控制）、main_reply、
+   common_dyn_page（動態留言）、chat_panel / live_room send_danmaku（直播）、
+   reply_new（發評論）、history/item、download_panel。

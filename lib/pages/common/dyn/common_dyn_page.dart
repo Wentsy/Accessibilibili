@@ -1,8 +1,5 @@
-import 'package:flutter/semantics.dart';
-import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
-import 'package:PiliPlus/common/a11y/composer_dock.dart';
-import 'package:PiliPlus/common/a11y/reply_semantics.dart';
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
+import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
@@ -140,15 +137,7 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
     return false;
   }
 
-  String _replyA11yLabel(ReplyInfo item) {
-    final hasPic = item.content.pictures.isNotEmpty;
-    return '${item.member.name} 說：${item.content.message}'
-        '${hasPic ? '，[圖片]' : ''}'
-        '${item.like > 0 ? '，${item.like} 個讚' : ''}'
-        '${item.count > 0 ? '，共 ${item.count} 條回覆' : ''}';
-  }
-
-  Widget buildReplyHeader([bool _ = true]) {
+  Widget buildReplyHeader() {
     final secondary = theme.colorScheme.secondary;
     return SliverPinnedHeader(
       backgroundColor: theme.colorScheme.surface,
@@ -202,13 +191,7 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
           }
           return ArticleSliverList.builder(
             itemCount: count,
-            findChildIndexCallback: (key) {
-              final itemIndex = response.indexWhere(
-                (item) => ValueKey('dynamic-reply-${item.id}') == key,
-              );
-              if (itemIndex < 0) return null;
-              return itemIndex + (hasVote ? 1 : 0);
-            },
+            isArticle: isArticle,
             itemBuilder: (context, index) {
               if (hasVote) {
                 if (index == 0) {
@@ -218,64 +201,21 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
                 }
               }
               if (index == response.length) {
-                // Match the working nested-reply path: pagination starts only
-                // when the semantic footer is actually laid out. The focused
-                // comment's ensureVisible call can bring this footer into the
-                // cache before VoiceOver reaches the boundary without starting
-                // a background refresh while an unrelated long comment is
-                // still being spoken.
                 controller.onLoadMore();
                 return Container(
                   alignment: Alignment.center,
                   margin: EdgeInsets.only(bottom: padding.bottom),
                   height: 125,
-                  child: ReplyPaginationStatus(controller: controller),
+                  child: Text(
+                    controller.isEnd ? '没有更多了' : '加载中...',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.colorScheme.outline,
+                    ),
+                  ),
                 );
               } else {
-                final item = response[index];
-
-                // Match the proven video-comment accessibility structure:
-                // one stable outer semantic node owns focus while the visual
-                // ReplyItemGrpc remains excluded beneath it. The outer key and
-                // findChildIndexCallback let Flutter preserve that same node
-                // when another page is appended instead of falling back to the
-                // route's first focusable control (the Back button).
-                final reply = ReplyItemGrpc(
-                  key: ValueKey(item.id),
-                  replyItem: item,
-                  replyLevel: 1,
-                  replyReply: (replyItem, id) =>
-                      replyReply(context, replyItem, id),
-                  onReply: controller.onReply,
-                  onDelete: (item, subIndex) =>
-                      controller.onRemove(index, item, subIndex),
-                  upMid: controller.upMid,
-                  onViewImage: hideFab,
-                  onCheckReply: (item) =>
-                      controller.onCheckReply(item, isManual: true),
-                  onToggleTop: (item) => controller.onToggleTop(
-                    item,
-                    index,
-                    controller.oid,
-                    controller.replyType,
-                  ),
-                  a11ySortKey: OrdinalSortKey((index + 1).toDouble()),
-                );
-                return ReplyA11ySemantics(
-                  key: ValueKey('dynamic-reply-${item.id}'),
-                  replyItem: item,
-                  onAccessibilityFocus: () {
-                    if (index >= response.length - 5) controller.retryLoadMore();
-                  },
-                  label: _replyA11yLabel(item),
-                  onTap: item.count.toInt() > 0
-                      ? () => replyReply(context, item, null)
-                      : () => controller.onReply(item),
-                  onTapHint: item.count.toInt() > 0
-                      ? '點兩下展開回覆'
-                      : '點兩下回覆這條評論',
-                  child: reply,
-                );
+                return buildReply(context, index, response[index]);
               }
             },
           );
@@ -363,37 +303,9 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
                 color: theme.colorScheme.outline.withValues(alpha: 0.1),
               ),
             ),
-            body: child,
-          );
-        }
-        return child;
-      }
-
-      // A horizontal inline sheet owns only the comment column. The full-page
-      // footer would otherwise remain reachable below it. Use the existing
-      // full route in VoiceOver mode so route isolation also covers the dock.
-      if (isPortrait || dockComposer) {
-        Get.to(
-          replyReplyPage,
-          routeName: 'dynamicDetail-Copy',
-          arguments: arguments,
+          ),
+          body: child,
         );
-      } else {
-        final scaffoldState = MiniScaffold.maybeOf(context);
-        if (scaffoldState != null) {
-          hideFab();
-          scaffoldState.showBottomSheet(
-            excludeBodySemantics: true,
-            constraints: const BoxConstraints(),
-            (context) => replyReplyPage(showBackBtn: false),
-          );
-        } else {
-          Get.to(
-            replyReplyPage,
-            routeName: 'dynamicDetail-Copy',
-            arguments: arguments,
-          );
-        }
       }
       return child;
     }
@@ -475,6 +387,7 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
         null,
         oid: controller.oid,
         replyType: controller.replyType,
+        mentionItem: controller.mentionItem,
       );
     } catch (_) {}
   }
@@ -488,24 +401,10 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
     children: [actions, composerDock],
   );
 
-  Widget get replyButton {
-    final button = FloatingActionButton(
-      heroTag: null,
-      onPressed: _publishComment,
-      tooltip: '评论',
-      child: const Icon(Icons.reply),
-    );
-    if (!MediaQuery.accessibleNavigationOf(context)) {
-      return button;
-    }
-    return Semantics(
-      container: true,
-      excludeSemantics: true,
-      identifier: 'a11y-touch-only|publish-comment',
-      button: true,
-      label: '發表評論',
-      onTap: _publishComment,
-      child: button,
-    );
-  }
+  Widget get replyButton => FloatingActionButton(
+    heroTag: null,
+    onPressed: _publishComment,
+    tooltip: '评论',
+    child: const Icon(Icons.reply),
+  );
 }

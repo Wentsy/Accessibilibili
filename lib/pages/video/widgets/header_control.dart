@@ -1725,39 +1725,16 @@ class HeaderControlState extends State<HeaderControl>
       }
     }
 
-    const btnWidth = 42.0;
-    const btnHeight = 34.0;
-    const btnStyle = ButtonStyle(padding: WidgetStatePropertyAll(.zero));
-
-    return Column(
-      mainAxisSize: .min,
-      children: [
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            SizedBox(
-              width: btnWidth,
-              height: btnHeight,
-              child: IconButton(
-                tooltip: '返回',
-                style: btnStyle,
-                icon: const Icon(
-                  FontAwesomeIcons.arrowLeft,
-                  size: 15,
-                  color: Colors.white,
-                ),
-                onPressed: () =>
-                    plPlayerController.onPopInvokedWithResult(false, null),
-              ),
-            ),
-
-            title,
-            // show current datetime
-            ...?timeBatteryWidgets,
-            if (PlatformUtils.isDesktop && !plPlayerController.isDesktopPip)
-              Obx(() {
-                final isAlwaysOnTop = plPlayerController.isAlwaysOnTop.value;
-                return SizedBox(
+    return Padding(
+      padding: const .symmetric(vertical: 12),
+      child: Column(
+        mainAxisSize: .min,
+        children: [
+          PlayerBar(
+            left: Row(
+              mainAxisSize: .min,
+              children: [
+                SizedBox(
                   width: btnWidth,
                   height: btnHeight,
                   child: IconButton(

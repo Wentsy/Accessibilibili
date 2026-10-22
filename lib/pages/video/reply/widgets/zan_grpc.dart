@@ -87,10 +87,6 @@ class ZanButtonGrpc extends StatelessWidget {
         replyItem
           ..like -= $fixnum.Int64.ONE
           ..replyControl.action = $fixnum.Int64.ZERO;
-      } else {
-        replyItem
-          ..like += $fixnum.Int64.ONE
-          ..replyControl.action = $fixnum.Int64.ONE;
       }
       if (context.mounted) {
         (context as Element).markNeedsBuild();
@@ -123,21 +119,20 @@ class ZanButtonGrpc extends StatelessWidget {
       visualDensity: VisualDensity.compact,
     );
 
-    Future<void> likeAction() => onLikeReply(
-      context,
-      isProcessing,
-      () => isProcessing = false,
-      isLike: isLike,
-      isDislike: isDislike,
-    );
-
-    Future<void> hateAction() => onHateReply(
-      context,
-      isProcessing,
-      () => isProcessing = false,
-      isLike: isLike,
-      isDislike: isDislike,
-    );
+    @pragma('vm:prefer-inline')
+    Future<void> wrapProcessing(
+      Future<void> Function(
+        BuildContext context, {
+        required bool isLike,
+        required bool isDislike,
+      })
+      onLikeOrDislike,
+    ) async {
+      if (isProcessing) return;
+      isProcessing = true;
+      await onLikeOrDislike(context, isLike: isLike, isDislike: isDislike);
+      isProcessing = false;
+    }
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -149,7 +144,7 @@ class ZanButtonGrpc extends StatelessWidget {
             button: true,
             label: isDislike ? '取消踩' : '点踩',
             hint: isDislike ? '点两下取消踩' : '点两下点踩这条评论',
-            onTap: hateAction,
+            onTap: isLogin ? () => wrapProcessing(onHateReply) : _toastNotLogin,
             child: ExcludeSemantics(
               child: TextButton(
                 style: const ButtonStyle(
@@ -158,7 +153,7 @@ class ZanButtonGrpc extends StatelessWidget {
                   padding: WidgetStatePropertyAll(.zero),
                   minimumSize: WidgetStatePropertyAll(.square(40)),
                 ),
-                onPressed: hateAction,
+                onPressed: isLogin ? () => wrapProcessing(onHateReply) : _toastNotLogin,
                 child: Icon(
                   isDislike
                       ? FontAwesomeIcons.solidThumbsDown
@@ -177,11 +172,11 @@ class ZanButtonGrpc extends StatelessWidget {
             button: true,
             label: isLike ? '取消赞' : '赞评论',
             hint: isLike ? '点两下取消赞这条评论' : '点两下赞这条评论',
-            onTap: likeAction,
+            onTap: isLogin ? () => wrapProcessing(onLikeReply) : _toastNotLogin,
             child: ExcludeSemantics(
               child: TextButton(
                 style: style,
-                onPressed: likeAction,
+                onPressed: isLogin ? () => wrapProcessing(onLikeReply) : _toastNotLogin,
                 child: Row(
                   spacing: 4,
                   children: [

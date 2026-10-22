@@ -29,7 +29,6 @@ class MiniScaffold extends StatefulWidget {
 class MiniScaffoldState extends State<MiniScaffold>
     with TickerProviderStateMixin {
   PersistentBottomSheetController? _currentBottomSheet;
-  bool _excludeBodySemantics = false;
 
   void _closeCurrentBottomSheet() {
     if (_currentBottomSheet != null) {
@@ -137,7 +136,6 @@ class MiniScaffoldState extends State<MiniScaffold>
 
   PersistentBottomSheetController showBottomSheet(
     WidgetBuilder builder, {
-    bool excludeBodySemantics = false,
     BoxConstraints? constraints,
     bool? enableDrag,
     AnimationController? transitionAnimationController,
@@ -153,7 +151,6 @@ class MiniScaffoldState extends State<MiniScaffold>
               ))
           ..forward();
     setState(() {
-      _excludeBodySemantics = excludeBodySemantics;
       _currentBottomSheet = _buildBottomSheet(
         builder,
         animationController: controller,
@@ -171,7 +168,6 @@ class MiniScaffoldState extends State<MiniScaffold>
     return BottomSheetLayout(
       body: widget.body,
       bottomSheet: _currentBottomSheet?.widget,
-      excludeBodySemantics: _excludeBodySemantics,
     );
   }
 }

@@ -1,9 +1,5 @@
-import 'dart:async';
-import 'dart:io' show Platform;
-
-import 'package:PiliPlus/common/widgets/button/toolbar_icon_button.dart';
+import 'package:PiliPlus/common/widgets/button/icon_button.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/text_field.dart';
-import 'package:PiliPlus/common/widgets/flutter/text_field/ios_native_rich_text_field.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/http/live.dart';
 import 'package:PiliPlus/models/common/publish_panel_type.dart';
@@ -96,105 +92,70 @@ class _ReplyPageState extends CommonRichTextPubPageState<LiveSendDmPanel> {
     ),
   );
 
-  Widget get _liveEmojiBtn => Obx(
-    () {
-      final isEmoji = panelType.value == PanelType.emoji;
-
-      void togglePanel() {
-        if (isEmoji) {
-          updatePanelType(PanelType.keyboard);
-        } else {
-          updatePanelType(PanelType.emoji);
-        }
-      }
-
-      return Semantics(
-        container: true,
-        button: true,
-        excludeSemantics: true,
-        label: isEmoji ? '鍵盤' : '表情與貼圖',
-        hint: isEmoji ? '點兩下返回鍵盤' : '點兩下選擇表情與貼圖',
-        onTap: togglePanel,
-        child: ToolbarIconButton(
-          tooltip: isEmoji ? '輸入' : '表情與貼圖',
-          onPressed: togglePanel,
-          icon: isEmoji
-              ? const Icon(Icons.keyboard, size: 22)
-              : const Icon(Icons.emoji_emotions, size: 22),
-          selected: isEmoji,
-        ),
-      );
-    },
-  );
-
-  List<Widget> buildInputView(ThemeData theme) {
-    return [
-      Padding(
-        padding: const EdgeInsets.only(
-          top: 12,
-          right: 15,
-          left: 15,
-          bottom: 10,
-        ),
-        child: Listener(
-          onPointerUp: (event) {
-            if (readOnly.value) {
-              updatePanelType(PanelType.keyboard);
-            }
-          },
-          child: Obx(
-            () => Platform.isIOS
-                ? IOSNativeRichTextField(
-                    controller: editController,
-                    focusNode: focusNode,
-                    readOnly: readOnly.value,
-                    minLines: 1,
-                    maxLines: 2,
-                    hintText: '输入弹幕内容',
-                    style: theme.textTheme.bodyLarge,
-                    onChanged: onChanged,
-                    onTapWhenReadOnly: () =>
-                        updatePanelType(PanelType.keyboard),
-                  )
-                : RichTextField(
-              key: key,
-              controller: editController,
-              minLines: 1,
-              maxLines: 2,
-              autofocus: false,
-              readOnly: readOnly.value,
-              onChanged: onChanged,
-              onSubmitted: onSubmitted,
-              focusNode: focusNode,
-              decoration: const InputDecoration(
-                hintText: "输入弹幕内容",
-                border: InputBorder.none,
-                hintStyle: TextStyle(fontSize: 14),
+  Widget buildInputView() {
+    return Padding(
+      padding: const .only(left: 8, top: 2, right: 8),
+      child: Row(
+        children: [
+          Obx(
+            () {
+              final isEmoji = panelType.value == .emoji;
+              return iconButton(
+                tooltip: '表情',
+                onPressed: () => updatePanelType(isEmoji ? .keyboard : .emoji),
+                iconSize: 22,
+                icon: const Icon(Icons.emoji_emotions_outlined),
+                iconColor: isEmoji
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              );
+            },
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Obx(
+              () => RichTextField(
+                key: key,
+                textInputAction: .send,
+                controller: editController,
+                autofocus: false,
+                readOnly: readOnly.value,
+                onChanged: onChanged,
+                onSubmitted: onSubmitted,
+                focusNode: focusNode,
+                decoration: const InputDecoration(
+                  hintText: "输入弹幕内容",
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(fontSize: 14),
+                ),
+                style: theme.textTheme.bodyLarge,
+                // inputFormatters: [LengthLimitingTextInputFormatter(20)],
               ),
             ),
           ),
-        ),
-      ),
-      Divider(
-        height: 1,
-        color: theme.dividerColor.withValues(alpha: 0.1),
-      ),
-      Container(
-        height: 52,
-        padding: const .symmetric(horizontal: 12),
-        child: Row(
-          mainAxisAlignment: .spaceBetween,
-          children: [
-            _liveEmojiBtn,
-            Obx(
-              () => FilledButton.tonal(
-                onPressed: enablePublish.value ? onPublishThrottle : null,
-                style: FilledButton.styleFrom(
-                  visualDensity: .compact,
-                  padding: const .symmetric(horizontal: 20, vertical: 10),
-                ),
-                child: const Text('发送'),
-              ),
+          Obx(
+            () => enablePublish.value
+                ? iconButton(
+                    iconSize: 22,
+                    iconColor: theme.colorScheme.onSurfaceVariant,
+                    onPressed: () {
+                      editController.clear();
+                      enablePublish.value = false;
+                    },
+                    icon: const Icon(Icons.clear),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          const SizedBox(width: 12),
+          Obx(
+            () => iconButton(
+              tooltip: '发送',
+              iconSize: 22,
+              iconColor: enablePublish.value
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
+              onPressed: enablePublish.value ? onPublishThrottle : null,
+              icon: const Icon(Icons.send),
             ),
           ),
         ],

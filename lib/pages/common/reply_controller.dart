@@ -99,6 +99,10 @@ mixin ReplyLocateMixin<T>
 }
 
 abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
+  ReplyController({int count = -1}) : count = RxInt(count);
+
+  Int64? rootRpId;
+
   final RxBool loadMoreFailed = false.obs;
   Future<void>? _replyLoad;
   int _paginationGeneration = 0;
@@ -172,7 +176,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     loadMoreFailed.value = true;
   }
 
-  final RxInt count = (-1).obs;
+  late final RxInt count;
 
   late final Rx<ReplySortType> sortType;
   late Mode mode;

@@ -1,5 +1,3 @@
-import 'package:PiliPlus/common/a11y/a11y_focus_scroll.dart';
-import 'package:flutter/semantics.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/select_mask.dart';
@@ -42,111 +40,12 @@ class HistoryItem extends StatelessWidget {
             ..enableMultiSelect.value = true
             ..onSelect(item);
 
-    // 🔴 無障礙改造（2026-08-26）：比照首頁卡——整條一個語義節點，左右滑逐條瀏覽
-    final hasProgress = hasDuration && item.progress != null && item.progress != 0;
-    final progressPart = hasDuration
-        ? (item.progress == -1
-            ? '，已看完'
-            : '，觀看至 ${DurationUtils.formatDuration(item.progress)}，時長 ${DurationUtils.formatDuration(item.duration)}')
-        : '';
-    final authorPart = item.authorName?.isNotEmpty == true ? '，${item.authorName}' : '';
-    final viewedAt = DateFormatUtils.a11yDateFormat(item.viewAt);
-    final viewedAtPart = viewedAt.isNotEmpty ? '，$viewedAt看過' : '';
-    final isOfflineLive = business == 'live' && item.liveStatus != 1;
-    final liveStatusPart = isOfflineLive ? '，主播目前未開播' : '';
-    final String a11yLabel =
-        '${item.title}$authorPart$progressPart$viewedAtPart$liveStatusPart';
-
-    return Semantics(
-      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
-      container: true,
-      explicitChildNodes: false,
-      excludeSemantics: true,
-      button: false,
-      label: a11yLabel,
-      hint: isOfflineLive
-          ? '上滑有更多操作'
-          : '點兩下繼續觀看。上滑有更多操作',
-      customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
-        if (item.authorMid != null && item.authorName?.isNotEmpty == true)
-          CustomSemanticsAction(label: '造訪UP主'): () =>
-              Get.toNamed('/member?mid=${item.authorMid}'),
-        if (business != 'pgc' && item.badge != '番剧' &&
-            item.tagName?.contains('动画') != true && business != 'live' &&
-            business?.contains('article') != true)
-          CustomSemanticsAction(label: '稍後再看'): () =>
-              UserHttp.toViewLater(bvid: item.history.bvid),
-        CustomSemanticsAction(label: '刪除這條記錄'): () =>
-            onDelete(item.kid!, business!),
-        if (enableMultiSelect == false)
-          CustomSemanticsAction(label: '多選模式'): () => ctr
-            ..enableMultiSelect.value = true
-            ..onSelect(item),
-      },
-      child: Material(
+    return Material(
       type: MaterialType.transparency,
       child: InkWell(
         onTap: enableMultiSelect
             ? () => ctr.onSelect(item)
-            : () async {
-                if (business?.contains('article') == true) {
-                  PageUtils.toDupNamed(
-                    '/articlePage',
-                    parameters: {
-                      'id': business == 'article-list'
-                          ? '${item.history.cid}'
-                          : '${item.history.oid}',
-                      'type': 'read',
-                    },
-                  );
-                } else if (business == 'live') {
-                  if (item.liveStatus == 1) {
-                    PageUtils.toLiveRoom(item.history.oid);
-                  } else if (!MediaQuery.accessibleNavigationOf(context)) {
-                    SmartDialog.showToast('主播目前未開播');
-                  }
-                } else if (business == 'pgc') {
-                  PageUtils.viewPgc(
-                    epId: item.history.epid,
-                    progress: item.playbackProgress,
-                  );
-                } else if (business == 'cheese') {
-                  if (item.uri?.isNotEmpty == true) {
-                    PageUtils.viewPgcFromUri(
-                      item.uri!,
-                      isPgc: false,
-                      aid: item.history.oid,
-                      progress: item.playbackProgress,
-                    );
-                  }
-                } else {
-                  int? cid = item.history.cid;
-                  Dimension? dimension;
-                  if (cid == null) {
-                    if (await SearchHttp.ab2cWithDimension(
-                          aid: aid,
-                          bvid: bvid,
-                          part: item.history.page,
-                        )
-                        case final res?) {
-                      cid = res.cid;
-                      dimension = res.dimension;
-                    }
-                  }
-                  if (cid != null) {
-                    // TODO: dimension
-                    PageUtils.toVideoPage(
-                      aid: aid,
-                      bvid: bvid,
-                      cid: cid,
-                      cover: item.cover,
-                      title: item.title,
-                      dimension: dimension,
-                      progress: item.playbackProgress,
-                    );
-                  }
-                }
-              },
+            : () => onPushHistory(item),
         onLongPress: onLongPress,
         onSecondaryTap: PlatformUtils.isMobile ? null : onLongPress,
         child: Stack(
@@ -195,9 +94,73 @@ class HistoryItem extends StatelessWidget {
                 ],
               ),
             ),
+            Positioned(
+              right: 12,
+              bottom: 0,
+              width: 29,
+              height: 29,
+              child: PopupMenuButton(
+                padding: EdgeInsets.zero,
+                tooltip: '功能菜单',
+                icon: Icon(
+                  Icons.more_vert_outlined,
+                  color: theme.colorScheme.outline,
+                  size: 18,
+                ),
+                position: PopupMenuPosition.under,
+                itemBuilder: (_) => [
+                  if (item.authorMid != null &&
+                      item.authorName?.isNotEmpty == true)
+                    PopupMenuItem(
+                      onTap: () => Get.toNamed('/member?mid=${item.authorMid}'),
+                      height: 38,
+                      child: Row(
+                        children: [
+                          const Icon(
+                            MdiIcons.accountCircleOutline,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '访问：${item.authorName}',
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (business != 'pgc' &&
+                      item.badge != '番剧' &&
+                      item.tagName?.contains('动画') != true &&
+                      business != 'live' &&
+                      business?.contains('article') != true)
+                    PopupMenuItem(
+                      onTap: () =>
+                          UserHttp.toViewLater(bvid: item.history.bvid),
+                      height: 38,
+                      child: const Row(
+                        children: [
+                          Icon(Icons.watch_later_outlined, size: 16),
+                          SizedBox(width: 6),
+                          Text('稍后再看', style: TextStyle(fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  PopupMenuItem(
+                    onTap: () => onDelete(item.kid!, business!),
+                    height: 38,
+                    child: const Row(
+                      children: [
+                        Icon(Icons.close_outlined, size: 16),
+                        SizedBox(width: 6),
+                        Text('删除记录', style: TextStyle(fontSize: 13)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
-      ),
       ),
     );
   }
