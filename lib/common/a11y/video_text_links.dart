@@ -1,3 +1,5 @@
+import 'package:fixnum/fixnum.dart';
+import 'package:get/get.dart';
 import 'package:PiliPlus/utils/video_link_targets.dart';
 import 'package:PiliPlus/common/a11y/text_link_rotor.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
@@ -11,6 +13,7 @@ List<A11yTextLink> videoTextLinks(
   String text,
   VideoDetailController? player, {
   Map<String, String> titles = const {},
+  Map<String, Int64> atNameToMid = const {},
 }) {
   final links = <A11yTextLink>[];
   final targets = parseVideoLinkTargets(
@@ -55,6 +58,18 @@ List<A11yTextLink> videoTextLinks(
         }),
       );
     }
+  }
+  // 留言裡被 @ 的使用者：比照時間軸放進「連結」轉輪，轉到就能直接進他的主頁。
+  for (final entry in atNameToMid.entries) {
+    final name = entry.key.trim();
+    final mid = entry.value;
+    if (name.isEmpty || mid <= 0) continue;
+    if (!text.contains('@$name')) continue;
+    links.add(
+      A11yTextLink('@$name 的主頁', () {
+        Get.toNamed('/member?mid=$mid');
+      }),
+    );
   }
   return links;
 }

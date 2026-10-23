@@ -108,6 +108,7 @@ class ReplyA11ySemantics extends StatelessWidget {
           for (final entry in replyItem.content.urls.entries)
             if (!entry.value.extra.isWordSearch) entry.key: entry.value.title,
         },
+        atNameToMid: replyItem.content.atNameToMid,
       ),
       builder: (focusLinks) => Semantics(
         container: true,
