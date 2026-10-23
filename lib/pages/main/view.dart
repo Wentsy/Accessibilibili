@@ -51,9 +51,12 @@ class _MainAppState extends PopScopeState<MainApp>
     // 切換首頁／動態／我的時把導航列整棵重建一次。VoiceOver 有時會沿用舊的
     // 元素，重建後才會重新註冊到底部那一排（動態分頁常常踩到）。
     _navWorker = ever<int>(_mainController.selectedIndex, (_) {
-      if (mounted) {
-        setState(() => _navEpoch++);
+      if (!mounted) return;
+      // 順便重判一次方向，避免 useBottomNav 卡在關閉狀態（那時整排根本沒建立）。
+      if (!_mainController.useSideBar) {
+        _mainController.useBottomNav = MediaQuery.sizeOf(context).isPortrait;
       }
+      setState(() => _navEpoch++);
     });
     if (Platform.isMacOS) {
       HardwareKeyboard.instance.addHandler(_handleKeyEvent);
