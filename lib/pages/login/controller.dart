@@ -246,16 +246,19 @@ class LoginPageController extends GetxController
         return;
       }
       final result = await LoginHttp.codePoll(authCode);
+      final data = result['data'];
+      final token = data is Map ? (data['token_info'] ?? data) : null;
       if (result['status'] != true ||
-          result['data'] is! Map ||
-          result['data']['access_token'] == null) {
+          token is! Map ||
+          token['access_token'] is! String ||
+          (token['access_token'] as String).isEmpty) {
         SmartDialog.showToast('授权未完成：${result['msg'] ?? result['code']}');
         return;
       }
-      final token = result['data'] as Map;
-      final cookieList = cookies
-          .map((c) => {'name': c.name, 'value': c.value})
-          .toList();
+      final cookieList = data is Map && data['cookie_info'] is Map &&
+              data['cookie_info']['cookies'] is List
+          ? data['cookie_info']['cookies'] as List
+          : cookies.map((c) => {'name': c.name, 'value': c.value}).toList();
       await setAccount(token, cookieList);
       SmartDialog.showToast('已取得 App 授权凭证');
     } catch (_) {
