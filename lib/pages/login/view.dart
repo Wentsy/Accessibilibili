@@ -46,6 +46,14 @@ class _LoginPageState extends State<LoginPage> {
       children: [
         const SizedBox(height: 20),
         const Text('使用 bilibili 官方 App 扫码登录'),
+        Obx(
+          () => SwitchListTile(
+            title: const Text('相容扫码（实验）'),
+            subtitle: const Text('确认后提示不支持登录时可尝试；切换后请重新扫码。'),
+            value: _loginPageCtr.qrCompatibility.value,
+            onChanged: _loginPageCtr.setQrCompatibility,
+          ),
+        ),
         const SizedBox(height: 20),
         Obx(
           () => Text(
@@ -67,6 +75,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
             TextButton.icon(
               onPressed: () async {
+                if (!_loginPageCtr.codeInfo.value.isSuccess) return;
                 SmartDialog.showLoading(msg: '正在生成截图');
                 final boundary =
                     globalKey.currentContext!.findRenderObject()
@@ -85,10 +94,14 @@ class _LoginPageState extends State<LoginPage> {
             ),
             if (kDebugMode || PlatformUtils.isMobile)
               TextButton.icon(
-                onPressed: () => PageUtils.launchURL(
-                  'bilibili://browser?url=${Uri.encodeComponent(_loginPageCtr.codeInfo.value.data.url)}',
-                  mode: LaunchMode.externalNonBrowserApplication,
-                ),
+                onPressed: () {
+                  final url = _loginPageCtr.codeInfo.value.dataOrNull?.url;
+                  if (url == null) return;
+                  PageUtils.launchURL(
+                    'bilibili://browser?url=${Uri.encodeComponent(url)}',
+                    mode: LaunchMode.externalNonBrowserApplication,
+                  );
+                },
                 icon: const Icon(Icons.open_in_browser_outlined),
                 label: const Text('其他应用打开'),
               ),
@@ -111,9 +124,7 @@ class _LoginPageState extends State<LoginPage> {
                 child: PrettyQrView.data(
                   data: response.url,
                   decoration: const PrettyQrDecoration(
-                    shape: PrettyQrSquaresSymbol(
-                      color: Colors.black87,
-                    ),
+                    shape: PrettyQrSquaresSymbol(color: Colors.black87),
                   ),
                 ),
               ),
@@ -132,29 +143,32 @@ class _LoginPageState extends State<LoginPage> {
             style: TextStyle(color: theme.colorScheme.secondaryFixedDim),
           ),
         ),
-        Obx(
-          () {
-            final url = _loginPageCtr.codeInfo.value.dataOrNull?.url ?? '';
-            return GestureDetector(
-              onTap: () => Utils.copyText(
-                url,
-                toastText: '已复制到剪贴板，可粘贴至已登录的app私信处发送，然后点击已发送的链接打开',
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 20,
-                ),
-                child: Text(
-                  url,
-                  style: theme.textTheme.labelSmall!.copyWith(
-                    color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
-                  ),
-                ),
-              ),
-            );
-          },
+        TextButton.icon(
+          onPressed: () => Utils.copyText(
+            _loginPageCtr.qrDiagnostic.value,
+            toastText: '已复制扫码诊断（不含登录凭证）',
+          ),
+          icon: const Icon(Icons.copy),
+          label: const Text('复制扫码诊断'),
         ),
+        Obx(() {
+          final url = _loginPageCtr.codeInfo.value.dataOrNull?.url ?? '';
+          return GestureDetector(
+            onTap: () => Utils.copyText(
+              url,
+              toastText: '已复制到剪贴板，可粘贴至已登录的app私信处发送，然后点击已发送的链接打开',
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              child: Text(
+                url,
+                style: theme.textTheme.labelSmall!.copyWith(
+                  color: theme.colorScheme.onSurface.withValues(alpha: 0.4),
+                ),
+              ),
+            ),
+          );
+        }),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
           child: Text(

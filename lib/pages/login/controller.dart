@@ -9,6 +9,7 @@ import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/login.dart';
 import 'package:PiliPlus/models/common/account_type.dart';
 import 'package:PiliPlus/models/login/model.dart';
+import 'package:PiliPlus/models/login/qr_login.dart';
 import 'package:PiliPlus/pages/login/geetest/geetest_webview_dialog.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
@@ -47,7 +48,10 @@ class LoginPageController extends GetxController
   Timer? qrCodeTimer;
   Timer? smsSendCooldownTimer;
 
-  bool _isReq = false;
+  final qrCompatibility = false.obs;
+  final qrDiagnostic = ''.obs;
+  int _qrGeneration = 0;
+  bool _savingQrAccount = false;
 
   @override
   void onInit() {
@@ -58,6 +62,7 @@ class LoginPageController extends GetxController
 
   @override
   void onClose() {
+    _qrGeneration++;
     tabController
       ..removeListener(_handleTabChange)
       ..dispose();
@@ -71,41 +76,95 @@ class LoginPageController extends GetxController
     super.onClose();
   }
 
+  Future<void> setQrCompatibility(bool value) async {
+    if (_savingQrAccount) return;
+    qrCompatibility.value = value;
+    await refreshQRCode();
+  }
+
   Future<void> refreshQRCode() async {
-    final res = await LoginHttp.getHDcode();
-    if (res case Success(:final response)) {
-      qrCodeTimer?.cancel();
+    if (_savingQrAccount) return;
+    final generation = ++_qrGeneration;
+    final compatibility = qrCompatibility.value;
+    qrCodeTimer?.cancel();
+    codeInfo.value = LoadingState.loading();
+    qrCodeLeftTime.value = 0;
+    statusQRCode.value = '正在申请二维码';
+    qrDiagnostic.value = '模式：${compatibility ? "相容扫码（实验）" : "原有扫码"}\n阶段：申请二维码';
+    try {
+      final res = await LoginHttp.getHDcode(compatibility: compatibility);
+      if (isClosed || generation != _qrGeneration) return;
       codeInfo.value = res;
-      qrCodeTimer = Timer.periodic(const Duration(milliseconds: 1000), (t) {
-        final left = 180 - t.tick;
-        if (left <= 0) {
-          t.cancel();
-          statusQRCode.value = '二维码已过期，请刷新';
-          qrCodeLeftTime.value = 0;
+      if (res is! Success<({String authCode, String url})>) {
+        statusQRCode.value = res.toString();
+        qrDiagnostic.value += '\n${res.toString()}';
+        return;
+      }
+      statusQRCode.value = '等待扫码确认';
+      qrCodeLeftTime.value = 180;
+      final deadline = DateTime.now().add(const Duration(seconds: 180));
+      var polling = false;
+      qrCodeTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+        if (isClosed || generation != _qrGeneration) {
+          timer.cancel();
           return;
         }
-        qrCodeLeftTime.value = left;
-        if (_isReq || tabController.index != 2) return;
-
-        _isReq = true;
-        LoginHttp.codePoll(response.authCode).then((value) async {
-          _isReq = false;
-          if (value['status']) {
-            t.cancel();
-            statusQRCode.value = '扫码成功';
-            await setAccount(
-              value['data'],
-              value['data']['cookie_info']['cookies'],
-            );
-            Get.back();
-          } else if (value['code'] == 86038) {
-            t.cancel();
-            qrCodeLeftTime.value = 0;
-          } else {
-            statusQRCode.value = value['msg'];
+        final left = deadline.difference(DateTime.now()).inSeconds;
+        qrCodeLeftTime.value = left > 0 ? left : 0;
+        if (left <= 0) {
+          timer.cancel();
+          statusQRCode.value = '二维码已过期，请刷新';
+          return;
+        }
+        if (polling || tabController.index != 2) return;
+        polling = true;
+        var saving = false;
+        try {
+          final value = await LoginHttp.codePoll(
+            res.response.authCode,
+            compatibility: compatibility,
+          );
+          if (isClosed || generation != _qrGeneration) return;
+          final reply = QrLoginReply.fromJson({
+            'code': value['code'],
+            'message': value['msg'],
+            'data': value['data'],
+          });
+          qrDiagnostic.value =
+              '模式：${compatibility ? "相容扫码（实验）" : "原有扫码"}\n${reply.diagnostic}';
+          if (reply.waiting) {
+            statusQRCode.value = '${reply.message}（${reply.code}）';
+            return;
           }
-        });
+          timer.cancel();
+          if (!reply.canSave) {
+            statusQRCode.value = reply.code == 0
+                ? '${reply.credentialError}，未保存登录'
+                : '扫码授权未完成：${reply.message}（错误码 ${reply.code ?? "无"}）';
+            if (reply.expired) qrCodeLeftTime.value = 0;
+            return;
+          }
+          _savingQrAccount = saving = true;
+          statusQRCode.value = '已收到 App 授权，正在保存登录';
+          await setAccount(reply.token!, reply.cookies);
+          if (!isClosed && generation == _qrGeneration) Get.back();
+        } catch (_) {
+          if (isClosed || generation != _qrGeneration) return;
+          statusQRCode.value = saving
+              ? '已取得授权，但保存登录失败；请复制诊断信息'
+              : '查询扫码结果失败，将在有效期内重试';
+          qrDiagnostic.value += saving ? '\n阶段：保存账号失败' : '\n阶段：查询结果发生网络或格式错误';
+        } finally {
+          polling = false;
+          if (saving) _savingQrAccount = false;
+        }
       });
+    } catch (_) {
+      if (isClosed || generation != _qrGeneration) return;
+      const message = '申请二维码失败，请检查网络后重试';
+      codeInfo.value = const Error(message);
+      statusQRCode.value = message;
+      qrDiagnostic.value += '\n$message';
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/http/api.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/login/qr_login.dart';
 import 'package:PiliPlus/models_new/login_devices/data.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
@@ -30,36 +31,47 @@ abstract final class LoginHttp {
   };
 
   @pragma('vm:notify-debugger-on-exception')
-  static Future<LoadingState<({String authCode, String url})>>
-  getHDcode() async {
+  static Future<LoadingState<({String authCode, String url})>> getHDcode({
+    bool compatibility = false,
+  }) async {
     final params = {
       // 'local_id': 'Y952A395BB157D305D8A8340FC2AAECECE17',
       'local_id': '0',
-      'platform': 'android',
-      'mobi_app': 'android_hd',
+      if (!compatibility) 'platform': 'android',
+      if (!compatibility) 'mobi_app': 'android_hd',
     };
     AppSign.appSign(params);
-    final res = await Request().post(Api.getTVCode, queryParameters: params);
+    final res = await Request().post(
+      Api.getTVCode,
+      queryParameters: compatibility ? null : params,
+      data: compatibility ? params : null,
+      options: Options(contentType: Headers.formUrlEncodedContentType),
+    );
 
-    if (res.data['code'] == 0) {
+    final reply = QrLoginReply.fromJson(res.data);
+    if (reply.code == 0) {
       try {
         final Map<String, dynamic> data = res.data['data'];
         return Success((authCode: data['auth_code'], url: data['url']));
-      } catch (e, s) {
-        return Error('$e\n\n$s');
+      } catch (_) {
+        return const Error('申请二维码：服务器返回格式异常');
       }
     } else {
-      return Error(res.data['message']);
+      return Error(
+        '申请二维码：${reply.message}（错误码 ${reply.code ?? "无"}）',
+      );
     }
   }
 
-  static Future codePoll(String authCode) async {
-    final params = {
-      'auth_code': authCode,
-      'local_id': '0',
-    };
+  static Future codePoll(String authCode, {bool compatibility = false}) async {
+    final params = {'auth_code': authCode, 'local_id': '0'};
     AppSign.appSign(params);
-    final res = await Request().post(Api.qrcodePoll, queryParameters: params);
+    final res = await Request().post(
+      Api.qrcodePoll,
+      queryParameters: compatibility ? null : params,
+      data: compatibility ? params : null,
+      options: Options(contentType: Headers.formUrlEncodedContentType),
+    );
     return {
       'status': res.data['code'] == 0,
       'code': res.data['code'],
