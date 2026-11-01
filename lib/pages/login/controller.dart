@@ -196,6 +196,74 @@ class LoginPageController extends GetxController
     }
   }
 
+
+  /// Experimental: authorize an app session with the currently selected web
+  /// account. The undocumented confirmation endpoint may reject the request.
+  Future<void> authorizeAppWithWebCookie() async {
+    final account = Accounts.main;
+    if (!account.isLogin) {
+      SmartDialog.showToast('请先使用 Cookie 登录并选择该账号');
+      return;
+    }
+    if (account.accessKey?.isNotEmpty == true) {
+      SmartDialog.showToast('当前账号已经具有 App 登录凭证');
+      return;
+    }
+    final cookies = account.cookieJar.toList();
+    final byName = {for (final c in cookies) c.name: c.value};
+    if (!byName.containsKey('SESSDATA') ||
+        !byName.containsKey('bili_jct') ||
+        !byName.containsKey('DedeUserID')) {
+      SmartDialog.showToast('缺少 SESSDATA、bili_jct 或 DedeUserID');
+      return;
+    }
+    try {
+      final codeResult = await LoginHttp.getHDcode();
+      if (codeResult is! Success<({String authCode, String url})>) {
+        SmartDialog.showToast('申请授权码失败，请稍后重试');
+        return;
+      }
+      final authCode = codeResult.response.authCode;
+      final response = await Dio().post(
+        'https://passport.bilibili.com/x/passport-tv-login/h5/qrcode/confirm',
+        data: {
+          'auth_code': authCode,
+          'build': '7082000',
+          'csrf': byName['bili_jct'],
+        },
+        options: Options(
+          contentType: Headers.formUrlEncodedContentType,
+          headers: {
+            'cookie': cookies.map((c) => '${c.name}=${c.value}').join('; '),
+            'referer': 'https://www.bilibili.com/',
+          },
+          validateStatus: (status) => status != null && status < 500,
+        ),
+      );
+      final confirmData = response.data;
+      if (confirmData is! Map || confirmData['code'] != 0) {
+        SmartDialog.showToast('网页授权确认失败：${confirmData is Map ? confirmData['message'] : response.statusCode}');
+        return;
+      }
+      final result = await LoginHttp.codePoll(authCode);
+      if (result['status'] != true ||
+          result['data'] is! Map ||
+          result['data']['access_token'] == null) {
+        SmartDialog.showToast('授权未完成：${result['msg'] ?? result['code']}');
+        return;
+      }
+      final token = result['data'] as Map;
+      final cookieList = cookies
+          .map((c) => {'name': c.name, 'value': c.value})
+          .toList();
+      await setAccount(token, cookieList);
+      SmartDialog.showToast('已取得 App 授权凭证');
+    } catch (_) {
+      // Never show credentials or request headers in error messages.
+      SmartDialog.showToast('网页授权失败；可能需要额外安全验证或接口已变更');
+    }
+  }
+
   // app端密码登录
   Future<void> loginByPassword() async {
     String username = usernameTextController.text;
