@@ -1,0 +1,22 @@
+name: International Passport QR test IPA
+
+on:
+  push:
+    branches:
+      - experiment/international-passport-qr
+    paths:
+      - 'lib/**'
+      - 'pubspec*'
+      - '.github/workflows/international-passport-qr.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: international-passport-qr
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    uses: ./.github/workflows/build-ios.yml
