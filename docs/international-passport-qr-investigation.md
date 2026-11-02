@@ -17,6 +17,7 @@ Addresses below are unslid virtual addresses in that binary:
 - BFCAccountGolangApi.requestQRCodeWithGourl:completionBlock: (0x10bdf51fc): uses x/passport-tv-login/qrcode/auth_code.
 - requestQRCodePollWithAuthCode:deviceFields:completionBlock: (0x10bdf5458): uses x/passport-tv-login/qrcode/poll.
 - Both QR methods set local_id from buvid and add bili_local_id, device_id, buvid, device_name and device_platform. The native code gets these from different device providers; this experiment uses one stable anonymous BUVID for the identifier fields.
+- Native request construction at 0x10be44e24 reads apiKeySecretType; at 0x10be44e3c it compares against 1 and at 0x10be44e78 calls passportKey before setting appkey. This corroborates the account API selecting Passport rather than the general app key.
 - BFCApiSignHelper.baseParams (0x10be49834) adds ios, device, build, mobi_app, appkey, actionKey and other common parameters.
 
 The getters permit runtime overrides. Static fallback values do not prove the identity used by every live request. Presence of these methods does not prove which UI calls them.
