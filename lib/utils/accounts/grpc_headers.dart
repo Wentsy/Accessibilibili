@@ -49,36 +49,55 @@ abstract final class GrpcHeaders {
     ).writeToBuffer(),
   );
 
-  static Map<String, String> newHeaders(Account account) {
+  static Map<String, String> newHeaders(
+    Account account, {
+    bool internationalPassport = false,
+  }) {
+    final mobiApp = internationalPassport ? 'iphone_i' : _mobiApp;
+    final platform = internationalPassport ? 'ios' : _device;
+    final device = internationalPassport ? 'phone' : _device;
+    final build = internationalPassport ? 68500200 : _build;
+    final channel = internationalPassport ? 'appstore' : _biliChannel;
     return {
       ..._base,
       if (account.accessKey != null)
         'authorization': 'identify_v1 ${account.accessKey}',
+      if (internationalPassport)
+        'user-agent': 'BiliApp/3.13.0 os/ios mobi_app/iphone_i build/68500200',
       'buvid': account.buvid,
-      'x-bili-fawkes-req-bin': fawkes,
+      'x-bili-fawkes-req-bin': internationalPassport
+          ? base64Encode(FawkesReq(
+              appkey: mobiApp,
+              env: 'prod',
+              sessionId: _sessionId,
+            ).writeToBuffer())
+          : fawkes,
       'x-bili-device-bin': base64Encode(
         Device(
-          appId: 5,
-          build: _build,
+          // The international numeric app ID is not established by the IPA
+          // evidence. Leave it unset instead of asserting Android HD's ID.
+          appId: internationalPassport ? null : 5,
+          build: build,
           buvid: account.buvid,
-          mobiApp: _mobiApp,
-          platform: _device,
-          channel: _biliChannel,
-          brand: _device,
-          model: _device,
+          mobiApp: mobiApp,
+          platform: platform,
+          device: internationalPassport ? device : null,
+          channel: channel,
+          brand: internationalPassport ? 'Apple' : _device,
+          model: internationalPassport ? 'iPhone' : _device,
           osver: '15',
-          versionName: _versionName,
+          versionName: internationalPassport ? '3.13.0' : _versionName,
         ).writeToBuffer(),
       ),
       'x-bili-metadata-bin': base64Encode(
         Metadata(
           accessKey: account.accessKey,
-          mobiApp: _mobiApp,
-          device: _device,
-          build: _build,
-          channel: _biliChannel,
+          mobiApp: mobiApp,
+          device: device,
+          build: build,
+          channel: channel,
           buvid: account.buvid,
-          platform: _device,
+          platform: platform,
         ).writeToBuffer(),
       ),
     };

@@ -61,6 +61,10 @@ class LoginAccount extends Account {
   @HiveField(3)
   final Set<AccountType> type;
 
+  /// Credential origin, preserved across storage and account backups.
+  @HiveField(5)
+  final bool internationalPassport;
+
   late String _buvid = AnonymousAccount()._buvid;
   @override
   @HiveField(4)
@@ -112,6 +116,7 @@ class LoginAccount extends Account {
     'cookies': cookieJar.toJson(),
     'accessKey': accessKey,
     'refresh': refresh,
+    'internationalPassport': internationalPassport,
     'buvid': buvid,
     'type': type.map((i) => i.index).toList(),
   };
@@ -129,6 +134,7 @@ class LoginAccount extends Account {
     this.refresh, [
     Set<AccountType>? type,
     String? buvid,
+    this.internationalPassport = false,
   ]) : type = type ?? {} {
     if (buvid != null) _buvid = buvid;
     cookieJar.setBuvid3();
@@ -140,6 +146,7 @@ class LoginAccount extends Account {
     json['refresh'],
     (json['type'] as Iterable?)?.map((i) => AccountType.values[i]).toSet(),
     json['buvid'],
+    json['internationalPassport'] == true,
   );
 
   @override

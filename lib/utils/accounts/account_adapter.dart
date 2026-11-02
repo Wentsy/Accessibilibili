@@ -19,13 +19,14 @@ class LoginAccountAdapter extends TypeAdapter<LoginAccount> {
       fields[2] as String?,
       (fields[3] as List?)?.cast<AccountType>().toSet(),
       fields[4] as String?,
+      fields[5] == true,
     );
   }
 
   @override
   void write(BinaryWriter writer, LoginAccount obj) {
     writer
-      ..writeByte(5)
+      ..writeByte(6)
       ..writeByte(0)
       ..write(obj.cookieJar)
       ..writeByte(1)
@@ -35,7 +36,9 @@ class LoginAccountAdapter extends TypeAdapter<LoginAccount> {
       ..writeByte(3)
       ..write(obj.type.toList())
       ..writeByte(4)
-      ..write(obj.buvid);
+      ..write(obj.buvid)
+      ..writeByte(5)
+      ..write(obj.internationalPassport);
   }
 
   @override

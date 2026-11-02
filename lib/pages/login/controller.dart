@@ -146,7 +146,11 @@ class LoginPageController extends GetxController
           }
           _savingQrAccount = saving = true;
           statusQRCode.value = '已收到 App 授权，正在保存登录';
-          await setAccount(reply.token!, reply.cookies);
+          await setAccount(
+            reply.token!,
+            reply.cookies,
+            internationalPassport: compatibility,
+          );
           if (!isClosed && generation == _qrGeneration) Get.back();
         } catch (_) {
           if (isClosed || generation != _qrGeneration) return;
@@ -739,11 +743,18 @@ class LoginPageController extends GetxController
         captchaData.token?.isNotEmpty == true;
   }
 
-  Future<void> setAccount(Map tokenInfo, List cookieInfo) async {
+  Future<void> setAccount(
+    Map tokenInfo,
+    List cookieInfo, {
+    bool internationalPassport = false,
+  }) async {
     final account = LoginAccount(
       BiliCookieJar.fromList(cookieInfo),
       tokenInfo['access_token'],
       tokenInfo['refresh_token'],
+      null,
+      AnonymousAccount().buvid,
+      internationalPassport,
     );
     await Future.wait([?account.onChange(), AnonymousAccount().delete()]);
     for (int i = 0; i < AccountType.values.length; i++) {
