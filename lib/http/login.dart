@@ -30,22 +30,69 @@ abstract final class LoginHttp {
     'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
   };
 
+  // Recovered from com.bilibili.inter 3.13.0 (68500200):
+  // BFCBuildConfig.passportKey/passportSecret, BFCAccountGolangApi QR methods.
+  // These are application signing constants, not a user's login credentials.
+  static const _internationalPassportKey = '5ae412b53418aac5';
+  static const _internationalPassportSecret =
+      '5b9cf6c9786efd204dcf0c1ce2d08436';
+
+  static Map<String, String> _qrParams({
+    required bool compatibility,
+    String? authCode,
+  }) {
+    final params = <String, String>{
+      if (authCode != null) 'auth_code': authCode,
+      'local_id': compatibility ? _buvid : '0',
+      if (compatibility) ...{
+        'platform': 'ios',
+        'mobi_app': 'iphone_i',
+        'device': 'phone',
+        'build': '68500200',
+        'sdk_ver': '0.1.15',
+        'actionKey': 'appkey',
+        'buvid': _buvid,
+        'bili_local_id': _buvid,
+        'device_id': _buvid,
+        'device_name': 'Accessibilibili',
+        'device_platform': 'iOS',
+      } else if (authCode == null) ...{
+        'platform': 'android',
+        'mobi_app': 'android_hd',
+      },
+    };
+    if (compatibility) {
+      AppSign.appSign(
+        params,
+        appkey: _internationalPassportKey,
+        appsec: _internationalPassportSecret,
+      );
+    } else {
+      AppSign.appSign(params);
+    }
+    return params;
+  }
+
+  static Options _qrOptions(bool compatibility) => Options(
+    contentType: Headers.formUrlEncodedContentType,
+    headers: compatibility ? {
+        'user-agent': 'BiliApp/3.13.0 os/ios mobi_app/iphone_i build/68500200',
+        'referer': 'https://www.bilibili.com/',
+      } : null,
+    // Keep the chosen identity intact and do not attach an existing account.
+    extra: compatibility ? {'account': const NoAccount()} : null,
+  );
+
   @pragma('vm:notify-debugger-on-exception')
   static Future<LoadingState<({String authCode, String url})>> getHDcode({
     bool compatibility = false,
   }) async {
-    final params = {
-      // 'local_id': 'Y952A395BB157D305D8A8340FC2AAECECE17',
-      'local_id': '0',
-      if (!compatibility) 'platform': 'android',
-      if (!compatibility) 'mobi_app': 'android_hd',
-    };
-    AppSign.appSign(params);
+    final params = _qrParams(compatibility: compatibility);
     final res = await Request().post(
       Api.getTVCode,
       queryParameters: compatibility ? null : params,
       data: compatibility ? params : null,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: _qrOptions(compatibility),
     );
 
     final reply = QrLoginReply.fromJson(res.data);
@@ -64,13 +111,15 @@ abstract final class LoginHttp {
   }
 
   static Future codePoll(String authCode, {bool compatibility = false}) async {
-    final params = {'auth_code': authCode, 'local_id': '0'};
-    AppSign.appSign(params);
+    final params = _qrParams(
+      compatibility: compatibility,
+      authCode: authCode,
+    );
     final res = await Request().post(
       Api.qrcodePoll,
       queryParameters: compatibility ? null : params,
       data: compatibility ? params : null,
-      options: Options(contentType: Headers.formUrlEncodedContentType),
+      options: _qrOptions(compatibility),
     );
     return {
       'status': res.data['code'] == 0,
