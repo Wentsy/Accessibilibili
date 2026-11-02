@@ -48,8 +48,8 @@ class _LoginPageState extends State<LoginPage> {
         const Text('使用 bilibili 官方 App 扫码登录'),
         Obx(
           () => SwitchListTile(
-            title: const Text('相容扫码（实验）'),
-            subtitle: const Text('确认后提示不支持登录时可尝试；切换后请重新扫码。'),
+            title: const Text('国际版 Passport 扫码（实验）'),
+            subtitle: const Text('使用旧版国际 App 的账号授权配置；尚待实测。关闭可切回原有扫码。'),
             value: _loginPageCtr.qrCompatibility.value,
             onChanged: _loginPageCtr.setQrCompatibility,
           ),
