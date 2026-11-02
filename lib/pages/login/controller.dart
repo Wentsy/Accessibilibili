@@ -48,7 +48,7 @@ class LoginPageController extends GetxController
   Timer? qrCodeTimer;
   Timer? smsSendCooldownTimer;
 
-  final qrCompatibility = false.obs;
+  final qrCompatibility = true.obs;
   final qrDiagnostic = ''.obs;
   int _qrGeneration = 0;
   bool _savingQrAccount = false;
@@ -90,7 +90,7 @@ class LoginPageController extends GetxController
     codeInfo.value = LoadingState.loading();
     qrCodeLeftTime.value = 0;
     statusQRCode.value = '正在申请二维码';
-    qrDiagnostic.value = '模式：${compatibility ? "相容扫码（实验）" : "原有扫码"}\n阶段：申请二维码';
+    qrDiagnostic.value = '模式：${compatibility ? "国际版 Passport 扫码（实验）" : "原有扫码"}\n阶段：申请二维码';
     try {
       final res = await LoginHttp.getHDcode(compatibility: compatibility);
       if (isClosed || generation != _qrGeneration) return;
@@ -131,7 +131,7 @@ class LoginPageController extends GetxController
             'data': value['data'],
           });
           qrDiagnostic.value =
-              '模式：${compatibility ? "相容扫码（实验）" : "原有扫码"}\n${reply.diagnostic}';
+              '模式：${compatibility ? "国际版 Passport 扫码（实验）" : "原有扫码"}\n${reply.diagnostic}';
           if (reply.waiting) {
             statusQRCode.value = '${reply.message}（${reply.code}）';
             return;
