@@ -14,6 +14,7 @@ abstract final class AppSign {
     //   params['appkey'] == null,
     //   'appkey-appsec should be provided in appSign',
     // );
+    params.remove('sign');
     params['appkey'] = appkey;
     params['ts'] = (DateTime.now().millisecondsSinceEpoch ~/ 1000).toString();
     final sorted = params.entries.toList()

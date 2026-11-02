@@ -222,13 +222,6 @@ class _LoginPageState extends State<LoginPage> {
           icon: const Icon(Icons.login),
           label: const Text('登录'),
         ),
-        const SizedBox(height: 12),
-        const Text('实验功能：先导入 Cookie 并选为主账号，再尝试获取 App 授权。'),
-        OutlinedButton.icon(
-          onPressed: _loginPageCtr.authorizeAppWithWebCookie,
-          icon: const Icon(Icons.verified_user_outlined),
-          label: const Text('使用网页账号授权 App（实验）'),
-        ),
       ],
     );
   }

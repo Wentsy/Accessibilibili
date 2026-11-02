@@ -46,7 +46,12 @@ void main() {
     expect(device.hasAppId(), isFalse);
     expect(headers['authorization'], 'identify_v1 test-access');
 
-    final legacy = GrpcHeaders.newHeaders(a);
+    final automatic = GrpcHeaders.newHeaders(a);
+    expect(Metadata.fromBuffer(base64Decode(
+      automatic['x-bili-metadata-bin']!,
+    )).mobiApp, 'iphone_i');
+
+    final legacy = GrpcHeaders.newHeaders(account(false));
     final legacyMetadata = Metadata.fromBuffer(
       base64Decode(legacy['x-bili-metadata-bin']!),
     );

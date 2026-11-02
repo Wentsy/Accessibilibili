@@ -7,8 +7,8 @@ import 'package:PiliPlus/models/common/account_type.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/utils/accounts/api_type.dart';
-import 'package:PiliPlus/utils/accounts/grpc_headers.dart';
 import 'package:PiliPlus/utils/app_sign.dart';
+import 'package:PiliPlus/utils/client_identity.dart';
 import 'package:PiliPlus/utils/extension/string_ext.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -59,22 +59,34 @@ class AccountManager extends Interceptor {
     final isApp = path.startsWith(HttpString.appBaseUrl);
 
     if (isApp && options.responseType == ResponseType.bytes) {
-      final imPath = options.uri.path;
-      final internationalIm = account is LoginAccount &&
-          account.internationalPassport &&
-          (imPath.startsWith('/bilibili.im.') ||
-              imPath.startsWith('/bilibili.app.im.'));
-      options.headers.addAll(
-        internationalIm
-            ? GrpcHeaders.newHeaders(account, internationalPassport: true)
-            : account.grpcHeaders,
-      );
+      options.headers.addAll(account.grpcHeaders);
       return handler.next(options);
     }
 
     options.headers
       ..addAll(account.headers)
       ..['referer'] ??= HttpString.baseUrl;
+
+    // Only signed requests opt into App identity; web Cookie/CSRF requests
+    // retain their existing contract. Cover both form bodies and query signing.
+    final international = account is LoginAccount &&
+        account.internationalPassport;
+    final body = options.data;
+    final signedParams = body is Map && body.containsKey('sign')
+        ? body.cast<String, dynamic>()
+        : options.queryParameters.containsKey('sign')
+        ? options.queryParameters
+        : null;
+    final host = options.uri.host;
+    if (international && signedParams != null &&
+        (host == 'bilibili.com' || host.endsWith('.bilibili.com'))) {
+      InternationalClient.sign(
+        signedParams,
+        passport: options.uri.host == 'passport.bilibili.com',
+        buvid: account.buvid,
+      );
+      InternationalClient.applyHeaders(options.headers);
+    }
 
     // app端不需要管理cookie
     if (isApp) {
@@ -86,7 +98,16 @@ class AccountManager extends Interceptor {
         if (!account.accessKey.isNullOrEmpty) {
           dataPtr['access_key'] = account.accessKey!;
         }
-        AppSign.appSign(dataPtr..remove('sign'));
+        if (international) {
+          InternationalClient.sign(
+            dataPtr,
+            passport: false,
+            buvid: account.buvid,
+          );
+          InternationalClient.applyHeaders(options.headers);
+        } else {
+          AppSign.appSign(dataPtr..remove('sign'));
+        }
         // if (kDebugMode) debugPrint(dataPtr.toString());
       }
       return handler.next(options);

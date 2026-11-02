@@ -51,8 +51,10 @@ abstract final class GrpcHeaders {
 
   static Map<String, String> newHeaders(
     Account account, {
-    bool internationalPassport = false,
+    bool? internationalPassport,
   }) {
+    internationalPassport ??=
+        account is LoginAccount && account.internationalPassport;
     final mobiApp = internationalPassport ? 'iphone_i' : _mobiApp;
     final platform = internationalPassport ? 'ios' : _device;
     final device = internationalPassport ? 'phone' : _device;

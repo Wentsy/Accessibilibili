@@ -9,6 +9,7 @@ import 'package:PiliPlus/models_new/login_devices/data.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/utils/app_sign.dart';
+import 'package:PiliPlus/utils/client_identity.dart';
 import 'package:PiliPlus/utils/login_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:crypto/crypto.dart';
@@ -33,9 +34,9 @@ abstract final class LoginHttp {
   // Recovered from com.bilibili.inter 3.13.0 (68500200):
   // BFCBuildConfig.passportKey/passportSecret, BFCAccountGolangApi QR methods.
   // These are application signing constants, not a user's login credentials.
-  static const _internationalPassportKey = '5ae412b53418aac5';
+  static const _internationalPassportKey = InternationalClient.passportKey;
   static const _internationalPassportSecret =
-      '5b9cf6c9786efd204dcf0c1ce2d08436';
+      InternationalClient.passportSecret;
 
   static Map<String, String> _qrParams({
     required bool compatibility,
@@ -571,8 +572,8 @@ abstract final class LoginHttp {
   static Future<LoadingState<LoginDevicesData>> loginDevices() async {
     final account = Accounts.main;
     final params = {
-      'local_id': _buvid,
-      'buvid': _buvid,
+      'local_id': account.buvid,
+      'buvid': account.buvid,
       'device_name': 'android',
       'device_platform': 'android',
       'csrf': account.csrf,
@@ -585,6 +586,7 @@ abstract final class LoginHttp {
     final res = await Request().get(
       Api.loginDevices,
       queryParameters: params,
+      options: Options(extra: {'account': account}),
     );
     if (res.data['code'] == 0) {
       return Success(LoginDevicesData.fromJson(res.data['data']));
