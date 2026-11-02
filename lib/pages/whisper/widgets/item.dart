@@ -193,8 +193,7 @@ class WhisperSessionItem extends StatelessWidget {
               'talkerId': item.id.privateId.talkerUid.toInt(),
               'name': item.sessionInfo.sessionName,
               'face': avatar,
-              if (item.sessionInfo.avatar.hasMid())
-                'mid': item.sessionInfo.avatar.mid.toInt(),
+              'mid': item.id.privateId.talkerUid.toInt(),
               'isLive': item.sessionInfo.isLive,
             },
           );
@@ -260,11 +259,9 @@ class WhisperSessionItem extends StatelessWidget {
               .resImage
               .imageSrc;
 
-          return GestureDetector(
-            onTap: item.sessionInfo.avatar.hasMid()
-                ? () =>
-                      Get.toNamed('/member?mid=${item.sessionInfo.avatar.mid}')
-                : null,
+          // The avatar belongs to the conversation row, not a separate
+          // profile action. Let the ListTile handle touch and accessibility.
+          return ExcludeSemantics(
             child: PendantAvatar(
               avatar,
               size: 42,
