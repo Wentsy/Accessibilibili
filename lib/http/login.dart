@@ -4,10 +4,12 @@ import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/http/api.dart';
 import 'package:PiliPlus/http/init.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/login/qr_login.dart';
 import 'package:PiliPlus/models_new/login_devices/data.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/utils/app_sign.dart';
+import 'package:PiliPlus/utils/client_identity.dart';
 import 'package:PiliPlus/utils/login_utils.dart';
 import 'package:PiliPlus/utils/utils.dart';
 import 'package:crypto/crypto.dart';
@@ -29,37 +31,97 @@ abstract final class LoginHttp {
     'content-type': 'application/x-www-form-urlencoded; charset=utf-8',
   };
 
-  @pragma('vm:notify-debugger-on-exception')
-  static Future<LoadingState<({String authCode, String url})>>
-  getHDcode() async {
-    final params = {
-      // 'local_id': 'Y952A395BB157D305D8A8340FC2AAECECE17',
-      'local_id': '0',
-      'platform': 'android',
-      'mobi_app': 'android_hd',
-    };
-    AppSign.appSign(params);
-    final res = await Request().post(Api.getTVCode, queryParameters: params);
+  // Recovered from com.bilibili.inter 3.13.0 (68500200):
+  // BFCBuildConfig.passportKey/passportSecret, BFCAccountGolangApi QR methods.
+  // These are application signing constants, not a user's login credentials.
+  static const _internationalPassportKey = InternationalClient.passportKey;
+  static const _internationalPassportSecret =
+      InternationalClient.passportSecret;
 
-    if (res.data['code'] == 0) {
+  static Map<String, String> _qrParams({
+    required bool compatibility,
+    String? authCode,
+  }) {
+    final params = <String, String>{
+      if (authCode != null) 'auth_code': authCode,
+      'local_id': compatibility ? _buvid : '0',
+      if (compatibility) ...{
+        'platform': 'ios',
+        'mobi_app': 'iphone_i',
+        'device': 'phone',
+        'build': '68500200',
+        'sdk_ver': '0.1.15',
+        'actionKey': 'appkey',
+        'buvid': _buvid,
+        'bili_local_id': _buvid,
+        'device_id': _buvid,
+        'device_name': 'Accessibilibili',
+        'device_platform': 'iOS',
+      } else if (authCode == null) ...{
+        'platform': 'android',
+        'mobi_app': 'android_hd',
+      },
+    };
+    if (compatibility) {
+      AppSign.appSign(
+        params,
+        appkey: _internationalPassportKey,
+        appsec: _internationalPassportSecret,
+      );
+    } else {
+      AppSign.appSign(params);
+    }
+    return params;
+  }
+
+  static Options _qrOptions(bool compatibility) => Options(
+    contentType: Headers.formUrlEncodedContentType,
+    headers: compatibility ? {
+        'user-agent': 'BiliApp/3.13.0 os/ios mobi_app/iphone_i build/68500200',
+        'referer': 'https://www.bilibili.com/',
+      } : null,
+    // Keep the chosen identity intact and do not attach an existing account.
+    extra: compatibility ? {'account': const NoAccount()} : null,
+  );
+
+  @pragma('vm:notify-debugger-on-exception')
+  static Future<LoadingState<({String authCode, String url})>> getHDcode({
+    bool compatibility = false,
+  }) async {
+    final params = _qrParams(compatibility: compatibility);
+    final res = await Request().post(
+      Api.getTVCode,
+      queryParameters: compatibility ? null : params,
+      data: compatibility ? params : null,
+      options: _qrOptions(compatibility),
+    );
+
+    final reply = QrLoginReply.fromJson(res.data);
+    if (reply.code == 0) {
       try {
         final Map<String, dynamic> data = res.data['data'];
         return Success((authCode: data['auth_code'], url: data['url']));
-      } catch (e, s) {
-        return Error('$e\n\n$s');
+      } catch (_) {
+        return const Error('申请二维码：服务器返回格式异常');
       }
     } else {
-      return Error(res.data['message']);
+      return Error(
+        '申请二维码：${reply.message}（错误码 ${reply.code ?? "无"}）',
+      );
     }
   }
 
-  static Future codePoll(String authCode) async {
-    final params = {
-      'auth_code': authCode,
-      'local_id': '0',
-    };
-    AppSign.appSign(params);
-    final res = await Request().post(Api.qrcodePoll, queryParameters: params);
+  static Future codePoll(String authCode, {bool compatibility = false}) async {
+    final params = _qrParams(
+      compatibility: compatibility,
+      authCode: authCode,
+    );
+    final res = await Request().post(
+      Api.qrcodePoll,
+      queryParameters: compatibility ? null : params,
+      data: compatibility ? params : null,
+      options: _qrOptions(compatibility),
+    );
     return {
       'status': res.data['code'] == 0,
       'code': res.data['code'],
@@ -510,8 +572,8 @@ abstract final class LoginHttp {
   static Future<LoadingState<LoginDevicesData>> loginDevices() async {
     final account = Accounts.main;
     final params = {
-      'local_id': _buvid,
-      'buvid': _buvid,
+      'local_id': account.buvid,
+      'buvid': account.buvid,
       'device_name': 'android',
       'device_platform': 'android',
       'csrf': account.csrf,
@@ -524,6 +586,7 @@ abstract final class LoginHttp {
     final res = await Request().get(
       Api.loginDevices,
       queryParameters: params,
+      options: Options(extra: {'account': account}),
     );
     if (res.data['code'] == 0) {
       return Success(LoginDevicesData.fromJson(res.data['data']));
