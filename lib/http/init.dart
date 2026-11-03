@@ -234,6 +234,7 @@ class Request {
     if (kDebugMode) {
       dio.interceptors.add(
         LogInterceptor(
+          error: false, // DioException strings can include credential query values.
           request: false,
           requestHeader: false,
           responseHeader: false,
