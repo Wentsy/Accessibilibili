@@ -27,8 +27,23 @@ class ReplyPagedScroll extends StatelessWidget {
             ModalRoute.of(context)?.isCurrent == false ||
             !MediaQuery.accessibleNavigationOf(context)) return;
         if ((controller.loadingState.value.dataOrNull?.length ?? 0) > before) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (context.mounted && ModalRoute.of(context)?.isCurrent != false) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!context.mounted || controller.isClosed ||
+                ModalRoute.of(context)?.isCurrent == false) return;
+            final scroll = controller.scrollController;
+            if (!scroll.hasClients) return;
+            final position = scroll.position;
+            final target = (position.pixels + position.viewportDimension * 0.85)
+                .clamp(position.minScrollExtent, position.maxScrollExtent);
+            await scroll.animateTo(
+              target.toDouble(),
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOutCubic,
+            );
+            await WidgetsBinding.instance.endOfFrame;
+            if (context.mounted && !controller.isClosed &&
+                ModalRoute.of(context)?.isCurrent != false &&
+                MediaQuery.accessibleNavigationOf(context)) {
               notifyIosVoiceOverPageScrolled();
             }
           });

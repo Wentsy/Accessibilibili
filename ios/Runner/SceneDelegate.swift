@@ -465,6 +465,8 @@ private enum VoiceOverReplyReadingBridge {
         }
         // Flutter maps UIAccessibilityScrollDirection.up to
         // SemanticsAction.scrollDown, i.e. forward through a vertical list.
+        forwardingReadAll = true
+        defer { forwardingReadAll = false }
         let didScroll = original(
           ancestor.semanticObject,
           selector,
@@ -482,6 +484,8 @@ private enum VoiceOverReplyReadingBridge {
         let ancestor = verticalScrollAncestor(of: object),
         ancestor.scrollView.contentOffset.y > 1
       {
+        forwardingReadAll = true
+        defer { forwardingReadAll = false }
         let didScroll = original(
           ancestor.semanticObject,
           selector,
