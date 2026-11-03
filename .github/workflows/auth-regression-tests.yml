@@ -1,0 +1,32 @@
+name: Authentication regression tests
+on:
+  push:
+    branches: [experiment/international-passport-im]
+    paths:
+      - 'lib/**'
+      - 'test/**'
+      - 'pubspec*'
+      - '.github/workflows/auth-regression-tests.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+          cache: true
+      - run: flutter pub get
+      - name: Authentication regression tests
+        run: >-
+          flutter test
+          test/utils/http_auth_values_test.dart
+          test/utils/passport_refresh_test.dart
+          test/utils/accounts/international_passport_test.dart
+          test/utils/accounts/deleted_account_test.dart
+          test/models/qr_login_test.dart

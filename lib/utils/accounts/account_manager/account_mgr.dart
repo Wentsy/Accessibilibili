@@ -9,6 +9,8 @@ import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/utils/accounts/api_type.dart';
 import 'package:PiliPlus/utils/app_sign.dart';
 import 'package:PiliPlus/utils/client_identity.dart';
+import 'package:PiliPlus/utils/http_auth_values.dart';
+import 'package:PiliPlus/utils/passport_refresh.dart';
 import 'package:PiliPlus/utils/extension/string_ext.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -42,7 +44,7 @@ class AccountManager extends Interceptor {
   }
 
   @override
-  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) async {
     final path = options.path;
 
     final account = _bindRequestAccount(options);
@@ -54,6 +56,35 @@ class AccountManager extends Interceptor {
         DioException.requestCancelled(requestOptions: options, reason: null),
         false,
       );
+    }
+
+    var credentialsChanged = false;
+    // Refresh before dispatch, never replay a business operation afterwards.
+    if (account is LoginAccount && account.internationalPassport) {
+      final oldAccess = account.accessKey;
+      final oldCsrf = account.csrf;
+      await PassportRefresh.ensureFresh(account);
+      if (!account.isCurrent) {
+        return handler.reject(DioException.requestCancelled(
+          requestOptions: options, reason: '账号已切换或退出',
+        ));
+      }
+      credentialsChanged = oldAccess != account.accessKey;
+      if (credentialsChanged) {
+        options.headers.removeWhere((key, _) => key.toLowerCase() == 'cookie');
+      }
+      void updateCredentials(Map params) {
+        for (final key in ['access_key', 'mobile_access_key']) {
+          if (oldAccess != null && params[key] == oldAccess) {
+            params[key] = account.accessKey;
+          }
+        }
+        for (final key in ['csrf', 'csrf_token']) {
+          if (params[key] == oldCsrf) params[key] = account.csrf;
+        }
+      }
+      updateCredentials(options.queryParameters);
+      if (options.data is Map) updateCredentials(options.data as Map);
     }
 
     final isApp = path.startsWith(HttpString.appBaseUrl);
@@ -77,9 +108,12 @@ class AccountManager extends Interceptor {
         : options.queryParameters.containsKey('sign')
         ? options.queryParameters
         : null;
+    if (credentialsChanged && signedParams != null) {
+      AppSign.appSign(signedParams);
+    }
     final host = options.uri.host;
     if (international && signedParams != null &&
-        (host == 'bilibili.com' || host.endsWith('.bilibili.com'))) {
+        host == 'passport.bilibili.com') {
       InternationalClient.sign(
         signedParams,
         passport: options.uri.host == 'passport.bilibili.com',
@@ -115,11 +149,12 @@ class AccountManager extends Interceptor {
       account.cookieJar
           .loadForRequest(options.uri)
           .then((cookies) {
-            final previousCookies =
-                options.headers[HttpHeaders.cookieHeader] as String?;
+            final previousCookies = cookieHeaderValue(
+              options.headers[HttpHeaders.cookieHeader],
+            );
             final newCookies = getCookies([
-              ...?previousCookies
-                  ?.split(';')
+              ...previousCookies
+                  .split(';')
                   .where((e) => e.isNotEmpty)
                   .map(Cookie.fromSetCookieValue),
               ...cookies,
@@ -203,8 +238,10 @@ class AccountManager extends Interceptor {
       'biliimg.com',
       'site/getCoin',
     ];
-    String url = err.requestOptions.uri.toString();
-    if (kDebugMode) debugPrint('🌹🌹ApiInterceptor: $url\n$err');
+    if (err.requestOptions.extra['quietErrors'] == true) return;
+    final uri = err.requestOptions.uri;
+    final url = '${uri.origin}${uri.path}';
+    if (kDebugMode) debugPrint('ApiInterceptor: ${err.type.name} $url');
     if (skipShow.any(url.contains) ||
         (url.contains('skipSegments') && err.requestOptions.method == 'GET')) {
       // skip
@@ -303,7 +340,7 @@ class AccountManager extends Interceptor {
         } catch (_) {
           desc = '';
         }
-        return '$desc网络异常 ${error.error}';
+        return '$desc请求处理异常，请重试';
     }
   }
 }

@@ -1,5 +1,6 @@
 import 'package:PiliPlus/common/constants.dart';
 import 'package:PiliPlus/models/common/account_type.dart';
+import 'package:PiliPlus/models/login/qr_login.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/accounts/grpc_headers.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
@@ -53,10 +54,10 @@ class LoginAccount extends Account {
   final DefaultCookieJar cookieJar;
   @override
   @HiveField(1)
-  final String? accessKey;
+  String? accessKey;
   @override
   @HiveField(2)
-  final String? refresh;
+  String? refresh;
   @override
   @HiveField(3)
   final Set<AccountType> type;
@@ -64,6 +65,9 @@ class LoginAccount extends Account {
   /// Credential origin, preserved across storage and account backups.
   @HiveField(5)
   final bool internationalPassport;
+
+  @HiveField(6)
+  Map<String, dynamic>? pendingRefreshConfirmation;
 
   late String _buvid = AnonymousAccount()._buvid;
   @override
@@ -94,10 +98,53 @@ class LoginAccount extends Account {
   late final Map<String, String> grpcHeaders = GrpcHeaders.newHeaders(this);
 
   @override
-  late final String csrf =
+  String get csrf =>
       cookieJar.domainCookies['bilibili.com']!['/']!['bili_jct']!.cookie.value;
 
   bool _hasDelete = false;
+
+  bool get isCurrent =>
+      !_hasDelete && identical(_box.get(_midStr), this);
+
+  /// Persist the validated new session before confirming retirement of the old.
+  Future<bool> installRefreshedSession(
+    QrLoginReply reply,
+    Map<String, dynamic> confirmation,
+  ) async {
+    if (!isCurrent || !reply.canSave || reply.refreshToken == null ||
+        reply.cookies.firstWhere((c) => c['name'] == 'DedeUserID')['value'] !=
+            mid.toString()) return false;
+    final oldAccess = accessKey;
+    final oldRefresh = refresh;
+    final oldCookies = cookieJar.domainCookies['bilibili.com'];
+    final oldPending = pendingRefreshConfirmation;
+    final nextJar = BiliCookieJar.fromJson({
+      ...cookieJar.toJson(),
+      for (final cookie in reply.cookies) cookie['name']!: cookie['value']!,
+    });
+    cookieJar.domainCookies['bilibili.com'] =
+        nextJar.domainCookies['bilibili.com']!;
+    accessKey = reply.accessToken;
+    refresh = reply.refreshToken;
+    pendingRefreshConfirmation = confirmation;
+    grpcHeaders.addAll(GrpcHeaders.newHeaders(this));
+    try {
+      await onChange();
+      return isCurrent;
+    } catch (_) {
+      if (!_hasDelete) {
+        accessKey = oldAccess;
+        refresh = oldRefresh;
+        if (oldCookies != null) {
+          cookieJar.domainCookies['bilibili.com'] = oldCookies;
+        }
+        pendingRefreshConfirmation = oldPending;
+        grpcHeaders.addAll(GrpcHeaders.newHeaders(this));
+      }
+      rethrow;
+    }
+  }
+
 
   @override
   Future<void> delete() {
@@ -117,6 +164,7 @@ class LoginAccount extends Account {
     'accessKey': accessKey,
     'refresh': refresh,
     'internationalPassport': internationalPassport,
+    'pendingRefreshConfirmation': pendingRefreshConfirmation,
     'buvid': buvid,
     'type': type.map((i) => i.index).toList(),
   };
@@ -135,6 +183,7 @@ class LoginAccount extends Account {
     Set<AccountType>? type,
     String? buvid,
     this.internationalPassport = false,
+    this.pendingRefreshConfirmation,
   ]) : type = type ?? {} {
     if (buvid != null) _buvid = buvid;
     cookieJar.setBuvid3();
@@ -147,6 +196,7 @@ class LoginAccount extends Account {
     (json['type'] as Iterable?)?.map((i) => AccountType.values[i]).toSet(),
     json['buvid'],
     json['internationalPassport'] == true,
+    (json['pendingRefreshConfirmation'] as Map?)?.cast<String, dynamic>(),
   );
 
   @override
