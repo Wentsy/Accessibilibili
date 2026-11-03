@@ -192,7 +192,13 @@ class VideoCardV extends StatelessWidget {
       label: a11yLabel,
       hint: '點兩下開啟影片。上滑有更多操作',
       onLongPressHint: null,
-      onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
+      onDidGainAccessibilityFocus: () => a11yEnsureVisible(
+        context,
+        recoverAfterSuppression: a11yReadingIdentifier != null,
+        nearestScrollableOnly: a11yReadingIdentifier != null,
+        scrollOnlyWhenOutside: a11yReadingIdentifier != null,
+      ),
+      onDidLoseAccessibilityFocus: () => cancelDeferredReplyFocus(context),
       customSemanticsActions: _a11yActions(context),
       child: ExcludeSemantics(
       child: Stack(

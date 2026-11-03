@@ -82,6 +82,14 @@ class _RcmdPageState extends State<RcmdPage>
         response != null && response.isNotEmpty
             ? SliverGrid.builder(
                 gridDelegate: gridDelegate,
+                findChildIndexCallback: (key) {
+                  final index = response.indexWhere(
+                    (item) => ValueKey(item.bvid ?? item.aid) == key,
+                  );
+                  if (index < 0) return null;
+                  final marker = controller.lastRefreshAt;
+                  return marker != null && index >= marker ? index + 1 : index;
+                },
                 itemBuilder: (context, index) {
                   // 🔴 無障礙：VoiceOver 逐項滑動很慢，倒數第 4 個就預載，避免滑到底還要等
                   if (index >= response.length - 4) {

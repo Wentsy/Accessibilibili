@@ -48,7 +48,7 @@ class VideoCardH extends StatelessWidget {
       container: true,
       explicitChildNodes: false,
       excludeSemantics: true,
-      label: '${videoItem.title}，播放 ${videoItem.stat?.view ?? ''} 次$pubdatePart',
+      label: '${videoItem.title}，UP主 ${videoItem.owner.name}，播放 ${videoItem.stat?.view ?? ''} 次$pubdatePart',
       hint: '點兩下開啟影片。上滑有更多操作',
       onDidGainAccessibilityFocus: () => a11yEnsureVisible(context),
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
@@ -205,7 +205,7 @@ class VideoCardH extends StatelessWidget {
               ),
             ),
           Text(
-            "$pubdate${videoItem.owner.name}",
+            "UP主 ${videoItem.owner.name}  $pubdate",
             maxLines: 1,
             style: TextStyle(
               fontSize: 12,
