@@ -1,7 +1,7 @@
 # 2.1.7+6033: feed regression and automatic Passport refresh
 
 ## Feed regression
-The broad REST identity rewrite in 6032 changed Android live-feed endpoints into iphone_i requests. Restore the existing endpoint-specific REST identity except for Passport requests and app.bilibili.com requests. Do not substitute the Web feed. Keep international gRPC identity (including working IM) and the avatar-to-conversation fix.
+The broad REST identity rewrite in 6032 changed Android live-feed endpoints into iphone_i requests. Restore the existing endpoint-specific REST identity except for Passport requests. Do not substitute the Web feed. Keep international gRPC identity (including working IM) and the avatar-to-conversation fix.
 
 Normalize Cookie headers from String or Iterable before merging. Dio request reuse can contain list-valued headers; the former String cast would throw locally. This is a source-level fix for the reported type error, not a completed live reproduction.
 

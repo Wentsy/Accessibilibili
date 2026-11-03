@@ -132,16 +132,9 @@ class AccountManager extends Interceptor {
         if (!account.accessKey.isNullOrEmpty) {
           dataPtr['access_key'] = account.accessKey!;
         }
-        if (international) {
-          InternationalClient.sign(
-            dataPtr,
-            passport: false,
-            buvid: account.buvid,
-          );
-          InternationalClient.applyHeaders(options.headers);
-        } else {
-          AppSign.appSign(dataPtr..remove('sign'));
-        }
+        // REST endpoints retain their working endpoint-specific identity.
+        // International Passport identity is for Passport, not every API.
+        AppSign.appSign(dataPtr..remove('sign'));
         // if (kDebugMode) debugPrint(dataPtr.toString());
       }
       return handler.next(options);
