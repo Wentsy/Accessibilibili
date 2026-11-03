@@ -32,6 +32,7 @@ void a11yEnsureVisible(BuildContext context, {
   bool recoverAfterSuppression = false,
   bool forwardRecovery = false,
   bool nearestScrollableOnly = false,
+  bool scrollOnlyWhenOutside = false,
 }) {
   if (!MediaQuery.accessibleNavigationOf(context)) return;
   if (DateTime.now().millisecondsSinceEpoch < _a11yFocusScrollSuppressedUntilMs) {
@@ -44,7 +45,8 @@ void a11yEnsureVisible(BuildContext context, {
         if (context.mounted) {
           a11yEnsureVisible(context, immediate: immediate,
             recoverAfterSuppression: true, forwardRecovery: true,
-            nearestScrollableOnly: nearestScrollableOnly);
+            nearestScrollableOnly: nearestScrollableOnly,
+            scrollOnlyWhenOutside: scrollOnlyWhenOutside);
         }
       });
     }
@@ -130,6 +132,11 @@ void a11yEnsureVisible(BuildContext context, {
       );
       return;
     }
+
+    // Feed cards already inside the viewport keep their geometry while
+    // VoiceOver hands focus to the adjacent card. Moving visible edge cards
+    // can make UIKit restore the previous node and trap left/right swipes.
+    if (scrollOnlyWhenOutside) return;
 
     // VoiceOver swipe navigation can reach the last semantic node currently
     // built by a lazy Sliver/List/Grid before Flutter has created the next
