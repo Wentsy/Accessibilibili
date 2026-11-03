@@ -26,6 +26,9 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y libgtk-3-dev libx11-dev libxi-dev libayatana-appindicator3-dev libsecret-1-dev libmpv-dev
       - run: flutter pub get
+      - name: Apply required project SDK patches
+        shell: pwsh
+        run: lib/scripts/patch.ps1 linux
       - name: Authentication regression tests
         run: >-
           flutter test
