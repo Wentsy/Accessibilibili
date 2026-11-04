@@ -429,20 +429,17 @@ private enum VoiceOverReplyReadingBridge {
       if !hasRange && replyPageWrapper(from: ancestor.semanticObject) == nil {
         return
       }
-      let target = hasRange ? ancestor.semanticObject : wrapper
+      let useWrapper = !hasRange || next == nil
+      let target = useWrapper ? wrapper : ancestor.semanticObject
       let selector = NSSelectorFromString("accessibilityScroll:")
       guard let method = class_getInstanceMethod(type(of: target), selector)
       else { return }
       let dispatch = unsafeBitCast(method_getImplementation(method), to: ScrollHandler.self)
       forwardingReadAll = true
       defer { forwardingReadAll = false }
-      let direction: UIAccessibilityScrollDirection = hasRange ? .up : .down
-      let didScroll = dispatch(target, selector, direction.rawValue)
-      // At a cached boundary VoiceOver must re-query the new text links.
-      // Network boundaries notify from Dart only after loading and layout.
-      if hasRange && next == nil && didScroll {
-        postPageScrolledAfterSemanticsRefresh()
-      }
+      let direction: UIAccessibilityScrollDirection = useWrapper ? .down : .up
+      // Dart acknowledges boundary turns after scroll, layout and semantics.
+      _ = dispatch(target, selector, direction.rawValue)
     }
   }
 
@@ -500,8 +497,7 @@ private enum VoiceOverReplyReadingBridge {
         shouldCauseForwardPageTurn(object),
         let ancestor = verticalScrollAncestor(of: object)
       {
-        if !hasForwardRange(ancestor.scrollView),
-           let wrapper = replyPageWrapper(from: ancestor.semanticObject),
+        if let wrapper = replyPageWrapper(from: ancestor.semanticObject, includeEnd: true),
            let method = class_getInstanceMethod(type(of: wrapper), selector) {
           // The list is only temporarily at its loaded boundary. Dispatch to
           // Dart's wrapper, which joins/retries the pending page request and

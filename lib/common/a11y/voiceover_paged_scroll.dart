@@ -13,6 +13,7 @@ class VoiceOverPagedScroll extends StatelessWidget {
     this.onScrollForwardAtEnd,
     this.nativeFeedScroll = false,
     this.replyHasMore,
+    this.onScrollForward,
   });
 
   final ScrollController? controller;
@@ -26,6 +27,7 @@ class VoiceOverPagedScroll extends StatelessWidget {
   final bool nativeFeedScroll;
   /// null leaves non-comment scroll paths unchanged.
   final bool? replyHasMore;
+  final VoidCallback? onScrollForward;
 
   void _page(BuildContext context, {required bool forward}) {
     final scrollController =
@@ -73,7 +75,7 @@ class VoiceOverPagedScroll extends StatelessWidget {
       // three-finger down pages backward / refreshes at the start, while
       // three-finger up pages forward / loads more at the end. The native
       // feed bridge is routing-only; opting in must not invert the actions.
-      onScrollUp: () => _page(context, forward: true),
+      onScrollUp: onScrollForward ?? () => _page(context, forward: true),
       onScrollDown: () => _page(context, forward: false),
       child: child,
     );

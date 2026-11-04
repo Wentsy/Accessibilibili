@@ -5,56 +5,70 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show OrdinalSortKey;
 import 'package:get/get.dart';
 
-/// Only explicit page requests emit pageScrolled, never background prefetch.
-class ReplyPagedScroll extends StatelessWidget {
+/// One in-flight turn owns loading, scrolling and the completion notification.
+class ReplyPagedScroll extends StatefulWidget {
   const ReplyPagedScroll({super.key, required this.controller, required this.child,
     this.allowRefresh = false});
   final ReplyController controller;
   final Widget child;
-  // Outer comments opt in; nested replies retain their existing behavior.
   final bool allowRefresh;
 
   @override
+  State<ReplyPagedScroll> createState() => _ReplyPagedScrollState();
+}
+
+class _ReplyPagedScrollState extends State<ReplyPagedScroll> {
+  Future<void>? _turn;
+
+  bool get _active => mounted && !widget.controller.isClosed &&
+      ModalRoute.of(context)?.isCurrent != false &&
+      MediaQuery.accessibleNavigationOf(context);
+
+  Future<void> _forward() {
+    return _turn ??= _advance().whenComplete(() => _turn = null);
+  }
+
+  Future<void> _advance() async {
+    final controller = widget.controller;
+    final scroll = controller.scrollController;
+    if (!_active || !scroll.hasClients) return;
+
+    // A prefetch may already have appended data while native semantics still
+    // reports the old boundary. Layout first; do not require the count to grow.
+    await WidgetsBinding.instance.endOfFrame;
+    if (!_active || !scroll.hasClients) return;
+    if (scroll.position.extentAfter < 1 && !controller.isEnd) {
+      await controller.retryLoadMore();
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    if (!_active || !scroll.hasClients) return;
+    final position = scroll.position;
+    final before = position.pixels;
+    final target = (before + position.viewportDimension * 0.85)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+    if (target - before < 1) return;
+
+    await scroll.animateTo(
+      target.toDouble(),
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+    );
+    // The animation's Future can complete before the new semantic tree is sent.
+    await WidgetsBinding.instance.endOfFrame;
+    if (_active) await notifyIosVoiceOverPageScrolled();
+  }
+
+  @override
   Widget build(BuildContext context) => Obx(() {
+    final controller = widget.controller;
     final data = controller.loadingState.value.dataOrNull;
     final paged = VoiceOverPagedScroll(
       controller: controller.scrollController,
       replyHasMore: data != null && !controller.isEnd,
-      onScrollForwardAtEnd: () async {
-        final before = controller.loadingState.value.dataOrNull?.length ?? 0;
-        await controller.retryLoadMore();
-        if (!context.mounted || controller.isClosed ||
-            ModalRoute.of(context)?.isCurrent == false ||
-            !MediaQuery.accessibleNavigationOf(context)) return;
-        if ((controller.loadingState.value.dataOrNull?.length ?? 0) > before) {
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            if (!context.mounted || controller.isClosed ||
-                ModalRoute.of(context)?.isCurrent == false) return;
-            final scroll = controller.scrollController;
-            if (!scroll.hasClients) return;
-            final position = scroll.position;
-            final target = (position.pixels + position.viewportDimension * 0.85)
-                .clamp(position.minScrollExtent, position.maxScrollExtent);
-            await scroll.animateTo(
-              target.toDouble(),
-              duration: const Duration(milliseconds: 160),
-              curve: Curves.easeOutCubic,
-            );
-            await WidgetsBinding.instance.endOfFrame;
-            if (context.mounted && !controller.isClosed &&
-                ModalRoute.of(context)?.isCurrent != false &&
-                MediaQuery.accessibleNavigationOf(context)) {
-              notifyIosVoiceOverPageScrolled();
-            }
-          });
-          WidgetsBinding.instance.ensureVisualUpdate();
-        }
-      },
-      child: child,
+      onScrollForward: _forward,
+      child: widget.child,
     );
-    if (!allowRefresh) return paged;
-    // Separate the native explicit-gesture route from Read All's quiet
-    // reply wrapper. Keep its more/end marker intact for continuous reading.
+    if (!widget.allowRefresh) return paged;
     return VoiceOverPagedScroll(
       controller: controller.scrollController,
       nativeFeedScroll: true,
