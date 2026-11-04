@@ -566,24 +566,28 @@ enum VoiceOverReplyReadingBridge {
       }
 
       ReplyReadingDiagnostics.record("readingScroll", "direction=\(rawDirection)")
+      // UIKit already chose to turn the page from this reply. The visible
+      // boundary may have moved since it queried causesPageTurn (focus scrolling
+      // and prefetch both change layout). Never revalidate that stale boundary.
+      // Find the comment wrapper directly, without relying on native scroll size.
+      if direction == .next,
+         let semanticObject = object as? NSObject,
+         let wrapper = replyPageWrapper(from: semanticObject, includeEnd: true),
+         let method = class_getInstanceMethod(type(of: wrapper), selector) {
+        let dispatch = unsafeBitCast(method_getImplementation(method), to: ScrollHandler.self)
+        forwardingReadAll = true
+        defer { forwardingReadAll = false }
+        let accepted = dispatch(wrapper, selector, UIAccessibilityScrollDirection.down.rawValue)
+        ReplyReadingDiagnostics.record("boundaryDispatch", "accepted=\(accepted)")
+        return accepted
+      }
+
+      // Other reading groups retain their existing boundary policy.
       if
         direction == .next,
         shouldCauseForwardPageTurn(object),
         let ancestor = verticalScrollAncestor(of: object)
       {
-        if let wrapper = replyPageWrapper(from: ancestor.semanticObject, includeEnd: true),
-           let method = class_getInstanceMethod(type(of: wrapper), selector) {
-          // The list is only temporarily at its loaded boundary. Dispatch to
-          // Dart's wrapper, which joins/retries the pending page request and
-          // posts pageScrolled only after new comments have been laid out.
-          let dispatch = unsafeBitCast(method_getImplementation(method), to: ScrollHandler.self)
-          // UIKit down maps to Flutter scrollUp: the wrapper's forward action.
-          forwardingReadAll = true
-          defer { forwardingReadAll = false }
-          let accepted = dispatch(wrapper, selector, UIAccessibilityScrollDirection.down.rawValue)
-          ReplyReadingDiagnostics.record("boundaryDispatch", "accepted=\(accepted)")
-          return accepted
-        }
         // Flutter maps UIAccessibilityScrollDirection.up to
         // SemanticsAction.scrollDown, i.e. forward through a vertical list.
         forwardingReadAll = true
