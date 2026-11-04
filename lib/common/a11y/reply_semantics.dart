@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/ios_accessibility_actions.dart';
 import 'package:PiliPlus/common/a11y/reply_reading_anchor.dart';
 import 'package:PiliPlus/common/a11y/text_link_rotor.dart';
 import 'package:PiliPlus/common/a11y/video_text_links.dart';
@@ -125,6 +126,9 @@ class ReplyA11ySemantics extends StatelessWidget {
         onTap: onTap,
         onTapHint: onTapHint,
         onDidGainAccessibilityFocus: () {
+          final position = Scrollable.maybeOf(context)?.position;
+          traceReplyReading('focus',
+              'id=$identifier pixels=${position?.pixels} max=${position?.maxScrollExtent}');
           focusLinks();
           onAccessibilityFocus?.call();
           // Make the next lazy-list nodes available without a scroll animation
@@ -137,6 +141,13 @@ class ReplyA11ySemantics extends StatelessWidget {
         },
         onDidLoseAccessibilityFocus: () => cancelDeferredReplyFocus(context),
         customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+          const CustomSemanticsAction(label: '複製朗讀診斷'): () async {
+            final position = Scrollable.maybeOf(context)?.position;
+            traceReplyReading('exportPosition',
+                'id=$identifier pixels=${position?.pixels} max=${position?.maxScrollExtent}');
+            await copyReplyReadingDiagnostics();
+            a11yActionFeedback(message: '朗讀診斷已複製，可以貼給 ChatGPT');
+          },
           CustomSemanticsAction(
             label: action == Int64.ONE ? '取消赞' : '点赞这条评论',
           ): () =>

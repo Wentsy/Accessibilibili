@@ -39,6 +39,10 @@ class _ReplyReadingAnchorState extends State<ReplyReadingAnchor> {
   }
 
   void _onRead() {
+    final position = Scrollable.maybeOf(context)?.position;
+    traceReplyReading('anchorRun',
+        'id=$_identifier route=${ModalRoute.of(context)?.isCurrent} '
+        'pixels=${position?.pixels} max=${position?.maxScrollExtent}');
     if (!mounted || ModalRoute.of(context)?.isCurrent == false ||
         !MediaQuery.accessibleNavigationOf(context)) return;
     widget.onRead?.call();

@@ -25,12 +25,15 @@ class _ReplyPagedScrollState extends State<ReplyPagedScroll> {
       MediaQuery.accessibleNavigationOf(context);
 
   Future<void> _forward() {
+    traceReplyReading('forward', 'busy=${_turn != null} active=$_active');
     return _turn ??= _advance().whenComplete(() => _turn = null);
   }
 
   Future<void> _advance() async {
     final controller = widget.controller;
     final scroll = controller.scrollController;
+    traceReplyReading('advanceStart',
+        'count=${controller.loadingState.value.dataOrNull?.length} end=${controller.isEnd}');
     if (!_active || !scroll.hasClients) return;
 
     // A prefetch may already have appended data while native semantics still
@@ -38,6 +41,7 @@ class _ReplyPagedScrollState extends State<ReplyPagedScroll> {
     await WidgetsBinding.instance.endOfFrame;
     if (!_active || !scroll.hasClients) return;
     if (scroll.position.extentAfter < 1 && !controller.isEnd) {
+      traceReplyReading('boundaryLoad');
       await controller.retryLoadMore();
       await WidgetsBinding.instance.endOfFrame;
     }
@@ -46,6 +50,9 @@ class _ReplyPagedScrollState extends State<ReplyPagedScroll> {
     final before = position.pixels;
     final target = (before + position.viewportDimension * 0.85)
         .clamp(position.minScrollExtent, position.maxScrollExtent);
+    traceReplyReading('advanceTarget',
+        'before=$before target=$target max=${position.maxScrollExtent} '
+        'count=${controller.loadingState.value.dataOrNull?.length} end=${controller.isEnd}');
     if (target - before < 1) return;
 
     await scroll.animateTo(
@@ -55,6 +62,8 @@ class _ReplyPagedScrollState extends State<ReplyPagedScroll> {
     );
     // The animation's Future can complete before the new semantic tree is sent.
     await WidgetsBinding.instance.endOfFrame;
+    traceReplyReading('advanceComplete',
+        'active=$_active pixels=${scroll.hasClients ? scroll.position.pixels : null}');
     if (_active) await notifyIosVoiceOverPageScrolled();
   }
 

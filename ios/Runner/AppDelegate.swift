@@ -695,7 +695,10 @@ private final class IOSTextLinkRotor {
 
     channel.setMethodCallHandler { call, result in
       switch call.method {
+      case "replyReadingDiagnostics":
+        result(VoiceOverReplyReadingBridge.diagnosticReport())
       case "pageScrolled":
+        ReplyReadingDiagnostics.record("pageScrolledReceived")
         if UIAccessibility.isVoiceOverRunning {
           // pageScrolled is the UIKit-native accessibility notification for a
           // completed VoiceOver scroll gesture. An empty position string keeps
