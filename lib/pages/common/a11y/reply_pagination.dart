@@ -11,16 +11,19 @@ class ReplyPagedScroll extends StatelessWidget {
     this.allowRefresh = false});
   final ReplyController controller;
   final Widget child;
-  // Outer comments opt in; nested replies retain their existing behavior.
+  // Refresh shares the comment viewport; do not add a feed-routing ancestor.
   final bool allowRefresh;
 
   @override
   Widget build(BuildContext context) => Obx(() {
     final data = controller.loadingState.value.dataOrNull;
-    final paged = VoiceOverPagedScroll(
+    return VoiceOverPagedScroll(
       controller: controller.scrollController,
       replyScrollMetrics: true,
       replyHasMore: data != null && !controller.isEnd,
+      onScrollBackwardAtStart: allowRefresh
+          ? () { controller.onA11yRefresh(label: '評論'); }
+          : null,
       onScrollForwardAtEnd: () async {
         final before = controller.loadingState.value.dataOrNull?.length ?? 0;
         await controller.retryLoadMore();
@@ -52,19 +55,6 @@ class ReplyPagedScroll extends StatelessWidget {
         }
       },
       child: child,
-    );
-    if (!allowRefresh) return paged;
-    // Separate the native explicit-gesture route from Read All's quiet
-    // reply wrapper. Keep its more/end marker intact for continuous reading.
-    return VoiceOverPagedScroll(
-      controller: controller.scrollController,
-      replyScrollMetrics: true,
-      nativeFeedScroll: true,
-      onScrollBackwardAtStart: () {
-        controller.onA11yRefresh(label: '評論');
-      },
-      onScrollForwardAtEnd: controller.onA11yReplyLoadMore,
-      child: paged,
     );
   });
 }
