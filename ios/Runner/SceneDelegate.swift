@@ -347,6 +347,15 @@ enum VoiceOverReplyReadingBridge {
       if let ancestor = verticalScrollAncestor(of: focused as AnyObject) {
         ReplyReadingDiagnostics.record("exportViewport",
             "offset=\(ancestor.scrollView.contentOffset.y) content=\(ancestor.scrollView.contentSize.height) height=\(ancestor.scrollView.bounds.height)")
+        if let group = readingGroup(of: focused as AnyObject) {
+          let root = replyPageWrapper(from: ancestor.semanticObject, includeEnd: true)
+              ?? ancestor.semanticObject
+          let visibleLast = lastVisibleReadingReply(
+              under: root, group: group, viewport: ancestor.scrollView.accessibilityFrame)
+          let lastElement = visibleLast.flatMap { nativeAccessibility(of: $0) } as? UIAccessibilityElement
+          ReplyReadingDiagnostics.record("exportVisibleBoundary",
+              "cached=\(readingReplies(under: root, group: group).count) last=\(lastElement?.accessibilityIdentifier ?? "none")")
+        }
       }
     }
     return ReplyReadingDiagnostics.report()
@@ -693,29 +702,32 @@ enum VoiceOverReplyReadingBridge {
       return false
     }
 
-    // Traits are queried during ordinary swipe navigation too. Do not build
-    // the entire reading chain for every queried element: at a loaded edge
-    // the recovery marker keeps this path active even without scroll range.
-    guard lastReadingReply(
-      under: ancestor.semanticObject,
-      group: group
+    // iOS 18 Read All stops at the visible accessibility page, not at the
+    // end of Flutter's eight-screen cache. Cached replies below the viewport
+    // must not prevent the last visible reply from requesting a page turn.
+    let wrapper = replyPageWrapper(from: ancestor.semanticObject, includeEnd: true)
+    let root = wrapper ?? ancestor.semanticObject
+    let viewport = ancestor.scrollView.accessibilityFrame
+    guard lastVisibleReadingReply(
+      under: root,
+      group: group,
+      viewport: viewport
     ) === semanticObject else {
       return false
     }
-    // Only the boundary reply needs the range / more-page ancestor check.
     return hasForwardRange(ancestor.scrollView) ||
       replyPageWrapper(from: ancestor.semanticObject) != nil
   }
 
-  private static func lastReadingReply(
+  private static func lastVisibleReadingReply(
     under root: NSObject,
-    group: String
+    group: String,
+    viewport: CGRect
   ) -> NSObject? {
-    // collectReadingReplies uses parent-before-children traversal. Its last
-    // match is therefore the first match in reversed children-before-parent
-    // traversal, including when a reply has nested semantic descendants.
     for child in semanticChildren(of: root).reversed() {
-      if let match = lastReadingReply(under: child, group: group) {
+      if let match = lastVisibleReadingReply(
+        under: child, group: group, viewport: viewport
+      ) {
         return match
       }
     }
@@ -726,7 +738,10 @@ enum VoiceOverReplyReadingBridge {
       identifier.hasPrefix(group),
       isReadingReply(native)
     {
-      return root
+      let visible = element.accessibilityFrame.intersection(viewport)
+      if !visible.isNull && visible.width > 1 && visible.height > 1 {
+        return root
+      }
     }
     return nil
   }
