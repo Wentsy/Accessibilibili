@@ -73,7 +73,7 @@ void a11yEnsureVisible(BuildContext context, {
     }
   }
 
-  WidgetsBinding.instance.addPostFrameCallback((_) {
+  WidgetsBinding.instance.addPostFrameCallback((_) async {
     if (!context.mounted) return;
 
     final renderObject = context.findRenderObject();
@@ -152,7 +152,16 @@ void a11yEnsureVisible(BuildContext context, {
           .toDouble();
       traceReplyReading('revealFollowingReply',
           'before=${position.pixels} target=$target trailing=$trailingOffset');
-      if (target > position.pixels + 1) position.jumpTo(target);
+      if (target > position.pixels + 1) {
+        position.jumpTo(target);
+        // The jump happens after this frame's semantics flush. Notify UIKit
+        // only after the next frame has published the new row geometry.
+        await WidgetsBinding.instance.endOfFrame;
+        if (context.mounted &&
+            ModalRoute.of(context)?.isCurrent != false) {
+          await notifyIosReplyViewportChanged();
+        }
+      }
       return;
     }
 

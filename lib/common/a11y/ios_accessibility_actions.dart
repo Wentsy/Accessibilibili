@@ -76,3 +76,9 @@ Future<void> notifyIosVoiceOverPageScrolled({String? pageDescription}) async {
     // Accessibility feedback must never interfere with scrolling itself.
   }
 }
+
+Future<void> notifyIosReplyViewportChanged() async {
+  if (!Platform.isIOS) return;
+  traceReplyReading('replyViewportChangedSent');
+  await _accessibilityChannel.invokeMethod<void>('replyViewportChanged');
+}

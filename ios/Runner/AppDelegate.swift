@@ -697,6 +697,20 @@ private final class IOSTextLinkRotor {
       switch call.method {
       case "replyReadingDiagnostics":
         result(VoiceOverReplyReadingBridge.diagnosticReport())
+      case "replyViewportChanged":
+        DispatchQueue.main.async {
+          if UIAccessibility.isVoiceOverRunning,
+             let focused = UIAccessibility.focusedElement(using: .notificationVoiceOver)
+                as? UIAccessibilityElement,
+             focused.accessibilityIdentifier?.hasPrefix("a11y-read-reply|") == true {
+            ReplyReadingDiagnostics.record("replyViewportChangedPosted",
+                "id=\(focused.accessibilityIdentifier ?? "")")
+            // Refresh traversal after revealing new rows. No target element:
+            // do not explicitly redirect focus or replay a comment label.
+            UIAccessibility.post(notification: .layoutChanged, argument: nil)
+          }
+          result(nil)
+        }
       case "pageScrolled":
         let pageDescription = call.arguments as? String
         ReplyReadingDiagnostics.record("pageScrolledReceived",
