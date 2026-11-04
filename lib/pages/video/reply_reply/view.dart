@@ -389,6 +389,14 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                   if (index == response.length) {
                     return _threadFooter(colorScheme);
                   }
+                  // Read All does not reliably emit focus events for every reply.
+                  // Prefetch while laying out the final ten loaded comments.
+                  if (index >= response.length - 10 &&
+                      MediaQuery.accessibleNavigationOf(context)) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) _controller.onLoadMore();
+                    });
+                  }
                   final item = response[index];
                   final reply = _replyItem(context, item, index);
                   final child = ReplyA11ySemantics(

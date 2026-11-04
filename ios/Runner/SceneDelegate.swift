@@ -388,6 +388,9 @@ private enum VoiceOverReplyReadingBridge {
         }
         return adjacent
       }
+      if delta > 0 && isReadingReply(object) {
+        prepareReadingViewport(from: object, next: nil)
+      }
       return original?(object, selector)
     }
 
@@ -403,33 +406,43 @@ private enum VoiceOverReplyReadingBridge {
 
   // Read All queries text links without reliably delivering Dart focus events.
   // Advance the real comment viewport before consuming its cached semantic tail.
-  private static func prepareReadingViewport(from object: AnyObject, next: AnyObject) {
+  private static func prepareReadingViewport(from object: AnyObject, next: AnyObject?) {
     guard
       UIAccessibility.isVoiceOverRunning,
       !preparingReadingViewport,
-      let element = next as? UIAccessibilityElement,
       let ancestor = verticalScrollAncestor(of: object),
-      replyPageWrapper(from: ancestor.semanticObject) != nil,
-      element.accessibilityFrame.minY >= ancestor.scrollView.accessibilityFrame.maxY,
-      hasForwardRange(ancestor.scrollView)
+      let wrapper = replyPageWrapper(from: ancestor.semanticObject, includeEnd: true)
     else { return }
-
+    if let element = next as? UIAccessibilityElement,
+       element.accessibilityFrame.minY < ancestor.scrollView.accessibilityFrame.maxY {
+      return
+    }
+    // Even when there is no next semantic node, request the next page.
+    // Previously that case returned nil without starting recovery.
     preparingReadingViewport = true
     DispatchQueue.main.async {
       defer { preparingReadingViewport = false }
       guard UIAccessibility.isVoiceOverRunning,
-        ancestor.scrollView.window != nil,
-        element.accessibilityFrame.minY >= ancestor.scrollView.accessibilityFrame.maxY,
-        hasForwardRange(ancestor.scrollView)
+        ancestor.scrollView.window != nil
       else { return }
+      let hasRange = hasForwardRange(ancestor.scrollView)
+      if !hasRange && replyPageWrapper(from: ancestor.semanticObject) == nil {
+        return
+      }
+      let target = hasRange ? ancestor.semanticObject : wrapper
       let selector = NSSelectorFromString("accessibilityScroll:")
-      guard let method = class_getInstanceMethod(type(of: ancestor.semanticObject), selector)
+      guard let method = class_getInstanceMethod(type(of: target), selector)
       else { return }
       let dispatch = unsafeBitCast(method_getImplementation(method), to: ScrollHandler.self)
       forwardingReadAll = true
       defer { forwardingReadAll = false }
-      // Keep the current reading element; no announcement or focus reset.
-      _ = dispatch(ancestor.semanticObject, selector, UIAccessibilityScrollDirection.up.rawValue)
+      let direction: UIAccessibilityScrollDirection = hasRange ? .up : .down
+      let didScroll = dispatch(target, selector, direction.rawValue)
+      // At a cached boundary VoiceOver must re-query the new text links.
+      // Network boundaries notify from Dart only after loading and layout.
+      if hasRange && next == nil && didScroll {
+        postPageScrolledAfterSemanticsRefresh()
+      }
     }
   }
 
@@ -725,12 +738,13 @@ private enum VoiceOverReplyReadingBridge {
     return scrollView.contentOffset.y < maxOffset - 1
   }
 
-  private static func replyPageWrapper(from object: NSObject) -> NSObject? {
+  private static func replyPageWrapper(from object: NSObject, includeEnd: Bool = false) -> NSObject? {
     var current: NSObject? = object
     for _ in 0..<64 {
       guard let candidate = current else { return nil }
       if let element = nativeAccessibility(of: candidate) as? UIAccessibilityElement,
-         element.accessibilityIdentifier == "a11y-reply-scroll|more" {
+         (element.accessibilityIdentifier == "a11y-reply-scroll|more" ||
+          (includeEnd && element.accessibilityIdentifier == "a11y-reply-scroll|end")) {
         return candidate
       }
       current = semanticParent(of: candidate)
