@@ -385,9 +385,22 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
       Success(:final response!) =>
         MediaQuery.accessibleNavigationOf(context)
             ? SliverList.builder(
+                findChildIndexCallback: (key) {
+                  final index = response.indexWhere(
+                    (item) => ValueKey('reply-${item.id}') == key,
+                  );
+                  return index < 0 ? null : index;
+                },
                 itemBuilder: (context, index) {
                   if (index == response.length) {
                     return _threadFooter(colorScheme);
+                  }
+                  // Prefetch from layout too: Read All may not deliver every focus event.
+                  if (MediaQuery.accessibleNavigationOf(context) &&
+                      index >= response.length - 15) {
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) _controller.onLoadMore();
+                    });
                   }
                   final item = response[index];
                   final reply = _replyItem(context, item, index);
@@ -396,7 +409,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                     replyItem: item,
                     sortKey: OrdinalSortKey(index + 2.0),
                     onAccessibilityFocus: () {
-                      if (index >= response.length - 5) {
+                      if (index >= response.length - 15) {
                         _controller.retryLoadMore();
                       }
                     },
