@@ -68,12 +68,18 @@ class _ReplyPagedScrollState extends State<ReplyPagedScroll> {
   }
 
   @override
-  Widget build(BuildContext context) => Obx(() {
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: widget.controller.scrollController,
+    builder: (context, _) => Obx(() {
     final controller = widget.controller;
     final data = controller.loadingState.value.dataOrNull;
     final paged = VoiceOverPagedScroll(
       controller: controller.scrollController,
-      replyHasMore: data != null && !controller.isEnd,
+      // Server pagination being finished does not mean the viewport is at
+      // the last loaded comment. Native scroll metrics can report zero range.
+      replyHasMore: data != null && (!controller.isEnd ||
+          (controller.scrollController.hasClients &&
+           controller.scrollController.position.extentAfter > 1)),
       onScrollForward: _forward,
       child: widget.child,
     );
@@ -87,7 +93,8 @@ class _ReplyPagedScrollState extends State<ReplyPagedScroll> {
       onScrollForwardAtEnd: controller.onA11yReplyLoadMore,
       child: paged,
     );
-  });
+    }),
+  );
 }
 
 /// Status only: no retry button or tap action is added to comment traversal.

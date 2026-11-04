@@ -785,17 +785,24 @@ enum VoiceOverReplyReadingBridge {
       return nil
     }
 
+    var fallback: (semanticObject: NSObject, scrollView: UIScrollView)?
     var current = semanticParent(of: semanticObject)
     while let candidate = current {
       if
         let native = nativeAccessibility(of: candidate) as? UIScrollView,
         NSStringFromClass(type(of: native)).hasSuffix("FlutterSemanticsScrollView")
       {
-        return (candidate, native)
+        if fallback == nil { fallback = (candidate, native) }
+        // A Flutter semantics scroll view can also represent a horizontal or
+        // zero-range container. Keep walking to the vertical comment viewport.
+        if native.bounds.height > 0 &&
+           native.contentSize.height > native.bounds.height + 1 {
+          return (candidate, native)
+        }
       }
       current = semanticParent(of: candidate)
     }
-    return nil
+    return fallback
   }
 
   private static func hasForwardRange(_ scrollView: UIScrollView) -> Bool {

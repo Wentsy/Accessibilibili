@@ -137,6 +137,7 @@ class ReplyA11ySemantics extends StatelessWidget {
             context,
             immediate: true,
             recoverAfterSuppression: true,
+            nearestScrollableOnly: true,
           );
         },
         onDidLoseAccessibilityFocus: () => cancelDeferredReplyFocus(context),
