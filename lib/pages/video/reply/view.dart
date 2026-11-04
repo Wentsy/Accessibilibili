@@ -235,13 +235,6 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                   child: ReplyPaginationStatus(controller: _videoReplyController),
                 );
               }
-              // Prefetch from layout too: Read All may not deliver every focus event.
-              if (MediaQuery.accessibleNavigationOf(context) &&
-                  index >= response.length - 15) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) _videoReplyController.onLoadMore();
-                });
-              }
               final item = response[index];
               final reply = ReplyItemGrpc(
                 key: ValueKey(item.id),
@@ -264,10 +257,11 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 a11ySortKey: OrdinalSortKey((index + 1).toDouble()),
               );
               final child = ReplyA11ySemantics(
+                key: ValueKey('reply-${item.id}'),
                 replyItem: item,
                 videoController: _videoReplyController.videoCtr,
                 onAccessibilityFocus: () {
-                  if (index >= response.length - 15) {
+                  if (index >= response.length - 5) {
                     _videoReplyController.retryLoadMore();
                   }
                 },
@@ -280,12 +274,13 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                     : '點兩下回覆這條評論',
                 child: reply,
               );
-              return KeyedSubtree(
-                key: ValueKey('reply-${item.id}'),
-                child: item.id == _videoReplyController.targetRootRpId
-                    ? _videoReplyController.colorAnimWrapper(colorScheme, child)
-                    : child,
-              );
+              if (item.id == _videoReplyController.targetRootRpId) {
+                return _videoReplyController.colorAnimWrapper(
+                  colorScheme,
+                  child,
+                );
+              }
+              return child;
             },
             itemCount: count,
           );

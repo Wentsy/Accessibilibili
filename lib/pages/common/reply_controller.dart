@@ -176,26 +176,6 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     loadMoreFailed.value = true;
   }
 
-  bool _refreshingReplies = true;
-
-  @override
-  Future<void> queryData([bool isRefresh = true]) async {
-    if (isLoading) return;
-    _refreshingReplies = isRefresh;
-    await super.queryData(isRefresh);
-  }
-
-  @override
-  void handleListResponse(List<ReplyInfo> dataList) {
-    // Keep existing rows and their order when cursor pages overlap.
-    final seen = <Int64>{
-      if (!_refreshingReplies)
-        for (final item in loadingState.value.dataOrNull ?? <ReplyInfo>[])
-          item.id,
-    };
-    dataList.removeWhere((item) => !seen.add(item.id));
-  }
-
   late final RxInt count;
 
   late final Rx<ReplySortType> sortType;
