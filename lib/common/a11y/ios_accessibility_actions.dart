@@ -59,7 +59,7 @@ void initIosAccessibilityActions() {
 /// UIKit uses UIAccessibility.Notification.pageScrolled for its native
 /// VoiceOver scroll feedback. The short debounce prevents a nested local and
 /// global scroll bridge from producing duplicate feedback for one gesture.
-Future<void> notifyIosVoiceOverPageScrolled() async {
+Future<void> notifyIosVoiceOverPageScrolled({String? pageDescription}) async {
   if (!Platform.isIOS) return;
 
   final now = DateTime.now().millisecondsSinceEpoch;
@@ -67,11 +67,11 @@ Future<void> notifyIosVoiceOverPageScrolled() async {
     traceReplyReading('notificationDebounced');
     return;
   }
-  traceReplyReading('notificationSent');
+  traceReplyReading('notificationSent', 'position=${pageDescription ?? "default"}');
   _lastPageScrolledNotificationMs = now;
 
   try {
-    await _accessibilityChannel.invokeMethod<void>('pageScrolled');
+    await _accessibilityChannel.invokeMethod<void>('pageScrolled', pageDescription);
   } catch (_) {
     // Accessibility feedback must never interfere with scrolling itself.
   }

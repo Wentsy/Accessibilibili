@@ -698,12 +698,14 @@ private final class IOSTextLinkRotor {
       case "replyReadingDiagnostics":
         result(VoiceOverReplyReadingBridge.diagnosticReport())
       case "pageScrolled":
-        ReplyReadingDiagnostics.record("pageScrolledReceived")
+        let pageDescription = call.arguments as? String
+        ReplyReadingDiagnostics.record("pageScrolledReceived",
+            "position=\(pageDescription ?? "default")")
         if UIAccessibility.isVoiceOverRunning {
-          // pageScrolled is the UIKit-native accessibility notification for a
-          // completed VoiceOver scroll gesture. An empty position string keeps
-          // the native scroll cue without adding extra spoken wording.
-          UIAccessibility.post(notification: .pageScrolled, argument: "")
+          // A repeated position string means "boundary reached" to VoiceOver.
+          // Comment paging supplies a new description only after real movement;
+          // callers without a position use nil, not a repeated empty string.
+          UIAccessibility.post(notification: .pageScrolled, argument: pageDescription)
         }
         result(nil)
       case "setRichTextEmotes":

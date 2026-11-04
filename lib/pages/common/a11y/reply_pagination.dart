@@ -19,6 +19,7 @@ class ReplyPagedScroll extends StatefulWidget {
 
 class _ReplyPagedScrollState extends State<ReplyPagedScroll> {
   Future<void>? _turn;
+  int _completedForwardTurns = 0;
 
   bool get _active => mounted && !widget.controller.isClosed &&
       ModalRoute.of(context)?.isCurrent != false &&
@@ -64,7 +65,16 @@ class _ReplyPagedScrollState extends State<ReplyPagedScroll> {
     await WidgetsBinding.instance.endOfFrame;
     traceReplyReading('advanceComplete',
         'active=$_active pixels=${scroll.hasClients ? scroll.position.pixels : null}');
-    if (_active) await notifyIosVoiceOverPageScrolled();
+    if (_active && scroll.hasClients &&
+        scroll.position.pixels > before + 1) {
+      // Repeating the same pageScrolled description tells VoiceOver that a
+      // boundary was reached. Count completed turns, not estimated server pages
+      // or scroll percentages (both can stay unchanged while new rows appear).
+      _completedForwardTurns++;
+      await notifyIosVoiceOverPageScrolled(
+        pageDescription: '評論，已向下翻頁 $_completedForwardTurns 次',
+      );
+    }
   }
 
   @override
