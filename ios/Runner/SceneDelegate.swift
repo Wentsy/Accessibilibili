@@ -310,6 +310,7 @@ private enum VoiceOverReplyReadingBridge {
   // that internal action separate from explicit three-finger feed gestures.
   static var forwardingReadAll = false
   private static let replyIdentifierPrefix = "a11y-read-reply|"
+  private static var preparingReadingViewport = false
 
   private typealias TraitsGetter = @convention(c) (
     AnyObject,
@@ -382,6 +383,9 @@ private enum VoiceOverReplyReadingBridge {
         isReadingReply(object),
         let adjacent = adjacentReadingReply(from: object, delta: delta)
       {
+        if delta > 0 {
+          prepareReadingViewport(from: object, next: adjacent)
+        }
         return adjacent
       }
       return original?(object, selector)
@@ -395,6 +399,38 @@ private enum VoiceOverReplyReadingBridge {
       imp_implementationWithBlock(block),
       typeEncoding
     )
+  }
+
+  // Read All queries text links without reliably delivering Dart focus events.
+  // Advance the real comment viewport before consuming its cached semantic tail.
+  private static func prepareReadingViewport(from object: AnyObject, next: AnyObject) {
+    guard
+      UIAccessibility.isVoiceOverRunning,
+      !preparingReadingViewport,
+      let element = next as? UIAccessibilityElement,
+      let ancestor = verticalScrollAncestor(of: object),
+      replyPageWrapper(from: ancestor.semanticObject) != nil,
+      element.accessibilityFrame.minY >= ancestor.scrollView.accessibilityFrame.maxY,
+      hasForwardRange(ancestor.scrollView)
+    else { return }
+
+    preparingReadingViewport = true
+    DispatchQueue.main.async {
+      defer { preparingReadingViewport = false }
+      guard UIAccessibility.isVoiceOverRunning,
+        ancestor.scrollView.window != nil,
+        element.accessibilityFrame.minY >= ancestor.scrollView.accessibilityFrame.maxY,
+        hasForwardRange(ancestor.scrollView)
+      else { return }
+      let selector = NSSelectorFromString("accessibilityScroll:")
+      guard let method = class_getInstanceMethod(type(of: ancestor.semanticObject), selector)
+      else { return }
+      let dispatch = unsafeBitCast(method_getImplementation(method), to: ScrollHandler.self)
+      forwardingReadAll = true
+      defer { forwardingReadAll = false }
+      // Keep the current reading element; no announcement or focus reset.
+      _ = dispatch(ancestor.semanticObject, selector, UIAccessibilityScrollDirection.up.rawValue)
+    }
   }
 
   // MARK: - Automatic page turn at the end of the reply reading chain
