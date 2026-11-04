@@ -85,7 +85,17 @@ class ReplyPaginationStatus extends StatelessWidget {
   Widget build(BuildContext context) => Obx(() {
     final failed = controller.loadMoreFailed.value;
     controller.loadingState.value; // Observe append/end changes as well.
-    if (controller.isEnd) return const Text('没有更多了');
+    if (controller.isEnd) {
+      return const Semantics(
+        sortKey: OrdinalSortKey(double.maxFinite),
+        child: Text('没有更多了'),
+      );
+    }
+    // A transient loading row must not become Read All's current position:
+    // newly appended replies would then be inserted before that position.
+    if (useIosReplyReading(context) && !failed) {
+      return const ExcludeSemantics(child: Text('正在載入更多評論'));
+    }
     return Semantics(
       sortKey: OrdinalSortKey(double.maxFinite),
       onDidGainAccessibilityFocus: () {

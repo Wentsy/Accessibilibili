@@ -459,6 +459,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
     if (!useIosReplyReading(context)) _controller.onLoadMore();
     final isEnd = _controller.isEnd;
     return Semantics(
+      key: const ValueKey('reply-pagination-status'),
       container: true,
       explicitChildNodes: true,
       sortKey: const OrdinalSortKey(double.maxFinite),
