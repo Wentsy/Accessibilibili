@@ -19,6 +19,7 @@ class ReplyPagedScroll extends StatelessWidget {
     final data = controller.loadingState.value.dataOrNull;
     final paged = VoiceOverPagedScroll(
       controller: controller.scrollController,
+      replyScrollMetrics: true,
       replyHasMore: data != null && !controller.isEnd,
       onScrollForwardAtEnd: () async {
         final before = controller.loadingState.value.dataOrNull?.length ?? 0;
@@ -57,6 +58,7 @@ class ReplyPagedScroll extends StatelessWidget {
     // reply wrapper. Keep its more/end marker intact for continuous reading.
     return VoiceOverPagedScroll(
       controller: controller.scrollController,
+      replyScrollMetrics: true,
       nativeFeedScroll: true,
       onScrollBackwardAtStart: () {
         controller.onA11yRefresh(label: '評論');
