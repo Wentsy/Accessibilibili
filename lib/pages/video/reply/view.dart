@@ -211,7 +211,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
           if (hasVote) {
             count++;
           }
-          return SliverList.builder(
+          return ReplyReadingSliver(
             findChildIndexCallback: (key) {
               final index = response.indexWhere(
                 (item) => ValueKey('reply-${item.id}') == key,
@@ -227,7 +227,9 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 }
               }
               if (index == response.length) {
-                _videoReplyController.onLoadMore();
+                if (!useIosReplyReading(context)) {
+                  _videoReplyController.onLoadMore();
+                }
                 return Container(
                   height: 125,
                   alignment: .center,

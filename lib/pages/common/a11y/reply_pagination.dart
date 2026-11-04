@@ -2,6 +2,7 @@ import 'package:PiliPlus/common/a11y/ios_accessibility_actions.dart';
 import 'package:PiliPlus/common/a11y/voiceover_paged_scroll.dart';
 import 'package:PiliPlus/pages/common/reply_controller.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/semantics.dart' show OrdinalSortKey;
 import 'package:get/get.dart';
 
@@ -15,7 +16,23 @@ class ReplyPagedScroll extends StatelessWidget {
   final bool allowRefresh;
 
   @override
-  Widget build(BuildContext context) => Obx(() {
+  Widget build(BuildContext context) => useIosReplyReading(context)
+      ? NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification.depth == 0 &&
+                notification.metrics.extentAfter < notification.metrics.viewportDimension * 2) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (context.mounted && !controller.isClosed &&
+                    ModalRoute.of(context)?.isCurrent != false) {
+                  controller.onLoadMore();
+                }
+              });
+            }
+            return false;
+          },
+          child: child,
+        )
+      : Obx(() {
     final data = controller.loadingState.value.dataOrNull;
     return VoiceOverPagedScroll(
       controller: controller.scrollController,
@@ -98,6 +115,46 @@ class ReplyScrollView extends StatelessWidget {
         cacheExtent: accessible ? MediaQuery.sizeOf(context).height * 8 : null,
         physics: physics,
         slivers: slivers,
+      ),
+    );
+  }
+}
+
+bool useIosReplyReading(BuildContext context) =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS &&
+    MediaQuery.accessibleNavigationOf(context);
+
+/// Keep loaded rows mounted while VoiceOver traverses the list. Network
+/// pagination is driven by focus/scroll progress, never by building the footer.
+class ReplyReadingSliver extends StatelessWidget {
+  const ReplyReadingSliver({
+    super.key,
+    required this.itemBuilder,
+    required this.itemCount,
+    this.findChildIndexCallback,
+  });
+
+  final IndexedWidgetBuilder itemBuilder;
+  final int itemCount;
+  final int? Function(Key)? findChildIndexCallback;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!useIosReplyReading(context)) {
+      return SliverList.builder(
+        itemBuilder: itemBuilder,
+        itemCount: itemCount,
+        findChildIndexCallback: findChildIndexCallback,
+      );
+    }
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var index = 0; index < itemCount; index++)
+            itemBuilder(context, index),
+        ],
       ),
     );
   }

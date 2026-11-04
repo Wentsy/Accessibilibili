@@ -384,7 +384,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
       ),
       Success(:final response!) =>
         MediaQuery.accessibleNavigationOf(context)
-            ? SliverList.builder(
+            ? ReplyReadingSliver(
                 itemBuilder: (context, index) {
                   if (index == response.length) {
                     return _threadFooter(colorScheme);
@@ -456,7 +456,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
   }
 
   Widget _threadFooter(ColorScheme colorScheme) {
-    _controller.onLoadMore();
+    if (!useIosReplyReading(context)) _controller.onLoadMore();
     final isEnd = _controller.isEnd;
     return Semantics(
       container: true,
