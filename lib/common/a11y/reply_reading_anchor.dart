@@ -52,6 +52,7 @@ class _ReplyReadingAnchorState extends State<ReplyReadingAnchor> {
       recoverAfterSuppression: true,
       forwardRecovery: true,
       nearestScrollableOnly: true,
+            revealFollowingReply: true,
     );
   }
 

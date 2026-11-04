@@ -719,6 +719,19 @@ enum VoiceOverReplyReadingBridge {
     ) === semanticObject else {
       return false
     }
+    // A cached successor belongs to this same comment list. Keep normal
+    // traversal rather than telling UIKit that this unchanged comment is a
+    // replaceable page. Dart reveals space for the successor on focus.
+    if wrapper != nil {
+      let ordered = readingReplies(under: root, group: group)
+      if let index = ordered.firstIndex(where: { $0 === semanticObject }),
+         index + 1 < ordered.count {
+        ReplyReadingDiagnostics.record("inlineContinuation",
+            "index=\(index) cached=\(ordered.count)")
+        return false
+      }
+    }
+    // Retain boundary loading only at the end of the available reading chain.
     return hasForwardRange(ancestor.scrollView) ||
       replyPageWrapper(from: ancestor.semanticObject) != nil
   }

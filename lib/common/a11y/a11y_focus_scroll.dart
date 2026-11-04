@@ -1,6 +1,7 @@
 import 'package:PiliPlus/common/a11y/ios_accessibility_actions.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 
 int _a11yFocusScrollSuppressedUntilMs = 0;
 final _deferredReplyFocus = <BuildContext, Timer>{};
@@ -34,6 +35,7 @@ void a11yEnsureVisible(BuildContext context, {
   bool forwardRecovery = false,
   bool nearestScrollableOnly = false,
   bool scrollOnlyWhenOutside = false,
+  bool revealFollowingReply = false,
 }) {
   if (!MediaQuery.accessibleNavigationOf(context)) return;
   if (DateTime.now().millisecondsSinceEpoch < _a11yFocusScrollSuppressedUntilMs) {
@@ -48,7 +50,8 @@ void a11yEnsureVisible(BuildContext context, {
           a11yEnsureVisible(context, immediate: immediate,
             recoverAfterSuppression: true, forwardRecovery: true,
             nearestScrollableOnly: nearestScrollableOnly,
-            scrollOnlyWhenOutside: scrollOnlyWhenOutside);
+            scrollOnlyWhenOutside: scrollOnlyWhenOutside,
+            revealFollowingReply: revealFollowingReply);
         }
       });
     }
@@ -130,6 +133,27 @@ void a11yEnsureVisible(BuildContext context, {
         duration: duration,
         curve: Curves.easeOutCubic,
       );
+    }
+
+    // A comment is a persistent list item, not a replaceable book page.
+    // Reserve visible space for its successor while the current label is read.
+    // Use the row's trailing edge: fractional alignment leaves almost no room
+    // after tall rows, and can even move the wrong way for rows taller than
+    // the viewport.
+    if (revealFollowingReply &&
+        itemRect.bottom > viewportRect.bottom - viewportRect.height * 0.30) {
+      final position = scrollable.position;
+      final viewport = RenderAbstractViewport.of(renderObject);
+      final trailingOffset = viewport.getOffsetToReveal(
+        renderObject, 1.0, axis: position.axis,
+      ).offset;
+      final target = (trailingOffset + viewportRect.height * 0.30)
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      traceReplyReading('revealFollowingReply',
+          'before=${position.pixels} target=$target trailing=$trailingOffset');
+      if (target > position.pixels + 1) position.jumpTo(target);
+      return;
     }
 
     // If VoiceOver somehow lands on a semantic node that is already outside
