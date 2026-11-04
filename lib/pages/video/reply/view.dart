@@ -235,14 +235,6 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                   child: ReplyPaginationStatus(controller: _videoReplyController),
                 );
               }
-              // Read All does not reliably emit focus events for every reply.
-              // Prefetch while laying out the final ten loaded comments.
-              if (index >= response.length - 10 &&
-                  MediaQuery.accessibleNavigationOf(context)) {
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) _videoReplyController.onLoadMore();
-                });
-              }
               final item = response[index];
               final reply = ReplyItemGrpc(
                 key: ValueKey(item.id),

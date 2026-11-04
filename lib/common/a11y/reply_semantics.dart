@@ -1,5 +1,3 @@
-import 'package:PiliPlus/common/a11y/ios_accessibility_actions.dart';
-import 'package:PiliPlus/common/a11y/reply_reading_anchor.dart';
 import 'package:PiliPlus/common/a11y/text_link_rotor.dart';
 import 'package:PiliPlus/common/a11y/video_text_links.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
@@ -101,10 +99,7 @@ class ReplyA11ySemantics extends StatelessWidget {
         ? label
         : '$label，$commentTime評論';
     final identifier = 'a11y-read-reply|${replyItem.oid}|${replyItem.id}';
-    return ReplyReadingAnchor(
-      identifier: identifier,
-      onRead: onAccessibilityFocus,
-      builder: (identifier) => TextLinkRotor(
+    return TextLinkRotor(
       identifier: identifier,
       links: videoTextLinks(
         replyItem.content.message,
@@ -126,9 +121,6 @@ class ReplyA11ySemantics extends StatelessWidget {
         onTap: onTap,
         onTapHint: onTapHint,
         onDidGainAccessibilityFocus: () {
-          final position = Scrollable.maybeOf(context)?.position;
-          traceReplyReading('focus',
-              'id=$identifier pixels=${position?.pixels} max=${position?.maxScrollExtent}');
           focusLinks();
           onAccessibilityFocus?.call();
           // Make the next lazy-list nodes available without a scroll animation
@@ -137,19 +129,10 @@ class ReplyA11ySemantics extends StatelessWidget {
             context,
             immediate: true,
             recoverAfterSuppression: true,
-            nearestScrollableOnly: true,
-            revealFollowingReply: true,
           );
         },
         onDidLoseAccessibilityFocus: () => cancelDeferredReplyFocus(context),
         customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
-          const CustomSemanticsAction(label: '複製朗讀診斷'): () async {
-            final position = Scrollable.maybeOf(context)?.position;
-            traceReplyReading('exportPosition',
-                'id=$identifier pixels=${position?.pixels} max=${position?.maxScrollExtent}');
-            await copyReplyReadingDiagnostics();
-            a11yActionFeedback(message: '朗讀診斷已複製，可以貼給 ChatGPT');
-          },
           CustomSemanticsAction(
             label: action == Int64.ONE ? '取消赞' : '点赞这条评论',
           ): () =>
@@ -160,7 +143,6 @@ class ReplyA11ySemantics extends StatelessWidget {
               _toggleDislike(context),
         },
         child: ExcludeSemantics(child: child),
-      ),
       ),
     );
   }

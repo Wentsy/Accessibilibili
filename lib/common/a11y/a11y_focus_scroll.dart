@@ -1,7 +1,5 @@
-import 'package:PiliPlus/common/a11y/ios_accessibility_actions.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderAbstractViewport;
 
 int _a11yFocusScrollSuppressedUntilMs = 0;
 final _deferredReplyFocus = <BuildContext, Timer>{};
@@ -35,11 +33,9 @@ void a11yEnsureVisible(BuildContext context, {
   bool forwardRecovery = false,
   bool nearestScrollableOnly = false,
   bool scrollOnlyWhenOutside = false,
-  bool revealFollowingReply = false,
 }) {
   if (!MediaQuery.accessibleNavigationOf(context)) return;
   if (DateTime.now().millisecondsSinceEpoch < _a11yFocusScrollSuppressedUntilMs) {
-    traceReplyReading('focusScrollSuppressed', 'recover=$recoverAfterSuppression');
     if (recoverAfterSuppression) {
       cancelDeferredReplyFocus(context);
       final delay = _a11yFocusScrollSuppressedUntilMs -
@@ -50,8 +46,7 @@ void a11yEnsureVisible(BuildContext context, {
           a11yEnsureVisible(context, immediate: immediate,
             recoverAfterSuppression: true, forwardRecovery: true,
             nearestScrollableOnly: nearestScrollableOnly,
-            scrollOnlyWhenOutside: scrollOnlyWhenOutside,
-            revealFollowingReply: revealFollowingReply);
+            scrollOnlyWhenOutside: scrollOnlyWhenOutside);
         }
       });
     }
@@ -73,7 +68,7 @@ void a11yEnsureVisible(BuildContext context, {
     }
   }
 
-  WidgetsBinding.instance.addPostFrameCallback((_) async {
+  WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!context.mounted) return;
 
     final renderObject = context.findRenderObject();
@@ -100,19 +95,12 @@ void a11yEnsureVisible(BuildContext context, {
     );
     final viewportRect = viewportRenderObject.paintBounds;
     // A restored old/top node must never be replayed as a backwards jump.
-    traceReplyReading('focusGeometry',
-        'top=${itemRect.top} bottom=${itemRect.bottom} '
-        'viewportTop=${viewportRect.top} viewportBottom=${viewportRect.bottom} '
-        'pixels=${scrollable.position.pixels} max=${scrollable.position.maxScrollExtent} '
-        'forwardRecovery=$forwardRecovery');
     if (forwardRecovery && itemRect.top < viewportRect.top) return;
 
     Future<void> ensureVisible({
       required double alignment,
       required Duration duration,
     }) {
-      traceReplyReading('ensureVisible',
-          'alignment=$alignment duration=${duration.inMilliseconds} nearest=$nearestScrollableOnly');
       // Nested pages such as an UP's contribution grid have both an inner
       // content viewport and an outer profile/header viewport. Flutter's
       // Scrollable.ensureVisible walks every scrollable ancestor, which can
@@ -133,36 +121,6 @@ void a11yEnsureVisible(BuildContext context, {
         duration: duration,
         curve: Curves.easeOutCubic,
       );
-    }
-
-    // A comment is a persistent list item, not a replaceable book page.
-    // Reserve visible space for its successor while the current label is read.
-    // Use the row's trailing edge: fractional alignment leaves almost no room
-    // after tall rows, and can even move the wrong way for rows taller than
-    // the viewport.
-    if (revealFollowingReply &&
-        itemRect.bottom > viewportRect.bottom - viewportRect.height * 0.30) {
-      final position = scrollable.position;
-      final viewport = RenderAbstractViewport.of(renderObject);
-      final trailingOffset = viewport.getOffsetToReveal(
-        renderObject, 1.0, axis: position.axis,
-      ).offset;
-      final target = (trailingOffset + viewportRect.height * 0.30)
-          .clamp(position.minScrollExtent, position.maxScrollExtent)
-          .toDouble();
-      traceReplyReading('revealFollowingReply',
-          'before=${position.pixels} target=$target trailing=$trailingOffset');
-      if (target > position.pixels + 1) {
-        position.jumpTo(target);
-        // The jump happens after this frame's semantics flush. Notify UIKit
-        // only after the next frame has published the new row geometry.
-        await WidgetsBinding.instance.endOfFrame;
-        if (context.mounted &&
-            ModalRoute.of(context)?.isCurrent != false) {
-          await notifyIosReplyViewportChanged();
-        }
-      }
-      return;
     }
 
     // If VoiceOver somehow lands on a semantic node that is already outside

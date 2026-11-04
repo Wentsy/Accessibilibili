@@ -689,37 +689,15 @@ private final class IOSTextLinkRotor {
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
     )
     accessibilityChannel = channel
-    VoiceOverReplyReadingBridge.onReadReplyAnchor = { [weak channel] identifier in
-      channel?.invokeMethod("readReplyAnchor", arguments: identifier)
-    }
 
     channel.setMethodCallHandler { call, result in
       switch call.method {
-      case "replyReadingDiagnostics":
-        result(VoiceOverReplyReadingBridge.diagnosticReport())
-      case "replyViewportChanged":
-        DispatchQueue.main.async {
-          if UIAccessibility.isVoiceOverRunning,
-             let focused = UIAccessibility.focusedElement(using: .notificationVoiceOver)
-                as? UIAccessibilityElement,
-             focused.accessibilityIdentifier?.hasPrefix("a11y-read-reply|") == true {
-            ReplyReadingDiagnostics.record("replyViewportChangedPosted",
-                "id=\(focused.accessibilityIdentifier ?? "")")
-            // Refresh traversal after revealing new rows. No target element:
-            // do not explicitly redirect focus or replay a comment label.
-            UIAccessibility.post(notification: .layoutChanged, argument: nil)
-          }
-          result(nil)
-        }
       case "pageScrolled":
-        let pageDescription = call.arguments as? String
-        ReplyReadingDiagnostics.record("pageScrolledReceived",
-            "position=\(pageDescription ?? "default")")
         if UIAccessibility.isVoiceOverRunning {
-          // A repeated position string means "boundary reached" to VoiceOver.
-          // Comment paging supplies a new description only after real movement;
-          // callers without a position use nil, not a repeated empty string.
-          UIAccessibility.post(notification: .pageScrolled, argument: pageDescription)
+          // pageScrolled is the UIKit-native accessibility notification for a
+          // completed VoiceOver scroll gesture. An empty position string keeps
+          // the native scroll cue without adding extra spoken wording.
+          UIAccessibility.post(notification: .pageScrolled, argument: "")
         }
         result(nil)
       case "setRichTextEmotes":

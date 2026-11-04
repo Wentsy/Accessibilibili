@@ -2,36 +2,6 @@ import Flutter
 import ObjectiveC.runtime
 import UIKit
 
-// Bounded, in-memory metadata only; never records labels, cookies or requests.
-enum ReplyReadingDiagnostics {
-  private static var events: [String] = []
-  private static var counts: [String: Int] = [:]
-  private static var lastLine = ""
-  private static var lastTime: Int64 = 0
-
-  static func record(_ event: String, _ detail: String = "") {
-    counts[event, default: 0] += 1
-    let now = Int64(Date().timeIntervalSince1970 * 1000)
-    let line = "\(event) \(detail)"
-    if line == lastLine && now - lastTime < 100 { return }
-    lastLine = line
-    lastTime = now
-    events.append("\(now) N \(line)")
-    if events.count > 240 { events.removeFirst() }
-  }
-
-  static func report() -> String {
-    let info = Bundle.main.infoDictionary ?? [:]
-    let version = info["CFBundleShortVersionString"] as? String ?? ""
-    let build = info["CFBundleVersion"] as? String ?? ""
-    return ([
-      "iOS \(UIDevice.current.systemVersion) app \(version)+\(build)",
-      "VoiceOver \(UIAccessibility.isVoiceOverRunning)",
-      "Native counters: \(counts)"
-    ] + events).joined(separator: "\n")
-  }
-}
-
 private final class VoiceOverComposerTouchProxy: UIAccessibilityElement {
   weak var target: UIAccessibilityElement?
 
@@ -335,32 +305,7 @@ private enum VoiceOverComposerTouchBridge {
 /// This deliberately does not hook accessibility container enumeration,
 /// focus callbacks, hit testing, or showOnScreen, so normal left/right VoiceOver
 /// navigation remains owned by Flutter.
-enum VoiceOverReplyReadingBridge {
-  static func diagnosticReport() -> String {
-    if let focused = UIAccessibility.focusedElement(using: .notificationVoiceOver) {
-      ReplyReadingDiagnostics.record("exportFocus", String(describing: type(of: focused)))
-      if let element = focused as? UIAccessibilityElement {
-        let id = element.accessibilityIdentifier ?? ""
-        ReplyReadingDiagnostics.record("exportReplyId",
-            id.hasPrefix(replyIdentifierPrefix) ? id : "not-a-reply")
-      }
-      if let ancestor = verticalScrollAncestor(of: focused as AnyObject) {
-        ReplyReadingDiagnostics.record("exportViewport",
-            "offset=\(ancestor.scrollView.contentOffset.y) content=\(ancestor.scrollView.contentSize.height) height=\(ancestor.scrollView.bounds.height)")
-        if let group = readingGroup(of: focused as AnyObject) {
-          let root = replyPageWrapper(from: ancestor.semanticObject, includeEnd: true)
-              ?? ancestor.semanticObject
-          let visibleLast = lastVisibleReadingReply(
-              under: root, group: group, viewport: ancestor.scrollView.accessibilityFrame)
-          let lastElement = visibleLast.flatMap { nativeAccessibility(of: $0) } as? UIAccessibilityElement
-          ReplyReadingDiagnostics.record("exportVisibleBoundary",
-              "cached=\(readingReplies(under: root, group: group).count) last=\(lastElement?.accessibilityIdentifier ?? "none")")
-        }
-      }
-    }
-    return ReplyReadingDiagnostics.report()
-  }
-  static var onReadReplyAnchor: ((String) -> Void)?
+private enum VoiceOverReplyReadingBridge {
   // Read All also dispatches a vertical action at the loaded boundary. Keep
   // that internal action separate from explicit three-finger feed gestures.
   static var forwardingReadAll = false
@@ -434,84 +379,57 @@ enum VoiceOverReplyReadingBridge {
     }
 
     let block: @convention(block) (AnyObject) -> AnyObject? = { object in
-      if isReadingReply(object) {
-        ReplyReadingDiagnostics.record("textLinkQuery", "delta=\(delta)")
-      }
-      if delta > 0, isReadingReply(object),
-         let element = object as? UIAccessibilityElement,
-         let identifier = element.accessibilityIdentifier,
-         let ancestor = verticalScrollAncestor(of: object),
-         replyPageWrapper(from: ancestor.semanticObject, includeEnd: true) != nil {
-        DispatchQueue.main.async {
-          if UIAccessibility.isVoiceOverRunning && ancestor.scrollView.window != nil {
-            ReplyReadingDiagnostics.record("anchorSent", identifier)
-            onReadReplyAnchor?(identifier)
-          }
-        }
-      }
       if
         isReadingReply(object),
         let adjacent = adjacentReadingReply(from: object, delta: delta)
       {
-        ReplyReadingDiagnostics.record("textLinkFound")
+        if delta > 0 {
+          prepareReadingViewport(from: object, next: adjacent)
+        }
         return adjacent
-      }
-      if delta > 0 && isReadingReply(object) {
-        ReplyReadingDiagnostics.record("textLinkMissing")
-        prepareReadingViewport(from: object, next: nil)
       }
       return original?(object, selector)
     }
 
     // FlutterSemanticsObject inherits these getters. Add a narrow override on
     // Flutter's class only; never mutate NSObject/UIKit implementations.
-    let installed = class_addMethod(
+    _ = class_addMethod(
       targetClass,
       selector,
       imp_implementationWithBlock(block),
       typeEncoding
     )
-    ReplyReadingDiagnostics.record("installTextLink", "\(selectorName) installed=\(installed)")
   }
 
   // Read All queries text links without reliably delivering Dart focus events.
   // Advance the real comment viewport before consuming its cached semantic tail.
-  private static func prepareReadingViewport(from object: AnyObject, next: AnyObject?) {
+  private static func prepareReadingViewport(from object: AnyObject, next: AnyObject) {
     guard
       UIAccessibility.isVoiceOverRunning,
       !preparingReadingViewport,
+      let element = next as? UIAccessibilityElement,
       let ancestor = verticalScrollAncestor(of: object),
-      let wrapper = replyPageWrapper(from: ancestor.semanticObject, includeEnd: true)
+      replyPageWrapper(from: ancestor.semanticObject) != nil,
+      element.accessibilityFrame.minY >= ancestor.scrollView.accessibilityFrame.maxY,
+      hasForwardRange(ancestor.scrollView)
     else { return }
-    if let element = next as? UIAccessibilityElement,
-       element.accessibilityFrame.minY < ancestor.scrollView.accessibilityFrame.maxY {
-      return
-    }
-    // Even when there is no next semantic node, request the next page.
-    // Previously that case returned nil without starting recovery.
-    ReplyReadingDiagnostics.record("prepareViewport")
+
     preparingReadingViewport = true
     DispatchQueue.main.async {
       defer { preparingReadingViewport = false }
       guard UIAccessibility.isVoiceOverRunning,
-        ancestor.scrollView.window != nil
+        ancestor.scrollView.window != nil,
+        element.accessibilityFrame.minY >= ancestor.scrollView.accessibilityFrame.maxY,
+        hasForwardRange(ancestor.scrollView)
       else { return }
-      let hasRange = hasForwardRange(ancestor.scrollView)
-      if !hasRange && replyPageWrapper(from: ancestor.semanticObject) == nil {
-        return
-      }
-      let useWrapper = !hasRange || next == nil
-      let target = useWrapper ? wrapper : ancestor.semanticObject
       let selector = NSSelectorFromString("accessibilityScroll:")
-      guard let method = class_getInstanceMethod(type(of: target), selector)
+      guard let method = class_getInstanceMethod(type(of: ancestor.semanticObject), selector)
       else { return }
       let dispatch = unsafeBitCast(method_getImplementation(method), to: ScrollHandler.self)
       forwardingReadAll = true
       defer { forwardingReadAll = false }
-      let direction: UIAccessibilityScrollDirection = useWrapper ? .down : .up
-      // Dart acknowledges boundary turns after scroll, layout and semantics.
-      let accepted = dispatch(target, selector, direction.rawValue)
-      ReplyReadingDiagnostics.record("prepareDispatch", "accepted=\(accepted)")
+      // Keep the current reading element; no announcement or focus reset.
+      _ = dispatch(ancestor.semanticObject, selector, UIAccessibilityScrollDirection.up.rawValue)
     }
   }
 
@@ -535,7 +453,6 @@ enum VoiceOverReplyReadingBridge {
       }
 
       var traits = UIAccessibilityTraits(rawValue: rawTraits)
-      ReplyReadingDiagnostics.record("pageTurnTrait")
       traits.insert(.causesPageTurn)
       return traits.rawValue
     }
@@ -565,29 +482,23 @@ enum VoiceOverReplyReadingBridge {
         return original(object, selector, rawDirection)
       }
 
-      ReplyReadingDiagnostics.record("readingScroll", "direction=\(rawDirection)")
-      // UIKit already chose to turn the page from this reply. The visible
-      // boundary may have moved since it queried causesPageTurn (focus scrolling
-      // and prefetch both change layout). Never revalidate that stale boundary.
-      // Find the comment wrapper directly, without relying on native scroll size.
-      if direction == .next,
-         let semanticObject = object as? NSObject,
-         let wrapper = replyPageWrapper(from: semanticObject, includeEnd: true),
-         let method = class_getInstanceMethod(type(of: wrapper), selector) {
-        let dispatch = unsafeBitCast(method_getImplementation(method), to: ScrollHandler.self)
-        forwardingReadAll = true
-        defer { forwardingReadAll = false }
-        let accepted = dispatch(wrapper, selector, UIAccessibilityScrollDirection.down.rawValue)
-        ReplyReadingDiagnostics.record("boundaryDispatch", "accepted=\(accepted)")
-        return accepted
-      }
-
-      // Other reading groups retain their existing boundary policy.
       if
         direction == .next,
         shouldCauseForwardPageTurn(object),
         let ancestor = verticalScrollAncestor(of: object)
       {
+        if !hasForwardRange(ancestor.scrollView),
+           let wrapper = replyPageWrapper(from: ancestor.semanticObject),
+           let method = class_getInstanceMethod(type(of: wrapper), selector) {
+          // The list is only temporarily at its loaded boundary. Dispatch to
+          // Dart's wrapper, which joins/retries the pending page request and
+          // posts pageScrolled only after new comments have been laid out.
+          let dispatch = unsafeBitCast(method_getImplementation(method), to: ScrollHandler.self)
+          // UIKit down maps to Flutter scrollUp: the wrapper's forward action.
+          forwardingReadAll = true
+          defer { forwardingReadAll = false }
+          return dispatch(wrapper, selector, UIAccessibilityScrollDirection.down.rawValue)
+        }
         // Flutter maps UIAccessibilityScrollDirection.up to
         // SemanticsAction.scrollDown, i.e. forward through a vertical list.
         forwardingReadAll = true
@@ -684,11 +595,9 @@ enum VoiceOverReplyReadingBridge {
       group: group
     )
     guard let index = ordered.firstIndex(where: { $0 === semanticObject }) else {
-      ReplyReadingDiagnostics.record("chainObjectMissing", "count=\(ordered.count)")
       return nil
     }
 
-    ReplyReadingDiagnostics.record("chainPosition", "index=\(index) count=\(ordered.count)")
     let target = index + delta
     guard ordered.indices.contains(target) else {
       return nil
@@ -706,45 +615,29 @@ enum VoiceOverReplyReadingBridge {
       return false
     }
 
-    // iOS 18 Read All stops at the visible accessibility page, not at the
-    // end of Flutter's eight-screen cache. Cached replies below the viewport
-    // must not prevent the last visible reply from requesting a page turn.
-    let wrapper = replyPageWrapper(from: ancestor.semanticObject, includeEnd: true)
-    let root = wrapper ?? ancestor.semanticObject
-    let viewport = ancestor.scrollView.accessibilityFrame
-    guard lastVisibleReadingReply(
-      under: root,
-      group: group,
-      viewport: viewport
+    // Traits are queried during ordinary swipe navigation too. Do not build
+    // the entire reading chain for every queried element: at a loaded edge
+    // the recovery marker keeps this path active even without scroll range.
+    guard lastReadingReply(
+      under: ancestor.semanticObject,
+      group: group
     ) === semanticObject else {
       return false
     }
-    // A cached successor belongs to this same comment list. Keep normal
-    // traversal rather than telling UIKit that this unchanged comment is a
-    // replaceable page. Dart reveals space for the successor on focus.
-    if wrapper != nil {
-      let ordered = readingReplies(under: root, group: group)
-      if let index = ordered.firstIndex(where: { $0 === semanticObject }),
-         index + 1 < ordered.count {
-        ReplyReadingDiagnostics.record("inlineContinuation",
-            "index=\(index) cached=\(ordered.count)")
-        return false
-      }
-    }
-    // Retain boundary loading only at the end of the available reading chain.
+    // Only the boundary reply needs the range / more-page ancestor check.
     return hasForwardRange(ancestor.scrollView) ||
       replyPageWrapper(from: ancestor.semanticObject) != nil
   }
 
-  private static func lastVisibleReadingReply(
+  private static func lastReadingReply(
     under root: NSObject,
-    group: String,
-    viewport: CGRect
+    group: String
   ) -> NSObject? {
+    // collectReadingReplies uses parent-before-children traversal. Its last
+    // match is therefore the first match in reversed children-before-parent
+    // traversal, including when a reply has nested semantic descendants.
     for child in semanticChildren(of: root).reversed() {
-      if let match = lastVisibleReadingReply(
-        under: child, group: group, viewport: viewport
-      ) {
+      if let match = lastReadingReply(under: child, group: group) {
         return match
       }
     }
@@ -755,10 +648,7 @@ enum VoiceOverReplyReadingBridge {
       identifier.hasPrefix(group),
       isReadingReply(native)
     {
-      let visible = element.accessibilityFrame.intersection(viewport)
-      if !visible.isNull && visible.width > 1 && visible.height > 1 {
-        return root
-      }
+      return root
     }
     return nil
   }
@@ -817,24 +707,17 @@ enum VoiceOverReplyReadingBridge {
       return nil
     }
 
-    var fallback: (semanticObject: NSObject, scrollView: UIScrollView)?
     var current = semanticParent(of: semanticObject)
     while let candidate = current {
       if
         let native = nativeAccessibility(of: candidate) as? UIScrollView,
         NSStringFromClass(type(of: native)).hasSuffix("FlutterSemanticsScrollView")
       {
-        if fallback == nil { fallback = (candidate, native) }
-        // A Flutter semantics scroll view can also represent a horizontal or
-        // zero-range container. Keep walking to the vertical comment viewport.
-        if native.bounds.height > 0 &&
-           native.contentSize.height > native.bounds.height + 1 {
-          return (candidate, native)
-        }
+        return (candidate, native)
       }
       current = semanticParent(of: candidate)
     }
-    return fallback
+    return nil
   }
 
   private static func hasForwardRange(_ scrollView: UIScrollView) -> Bool {
@@ -842,13 +725,12 @@ enum VoiceOverReplyReadingBridge {
     return scrollView.contentOffset.y < maxOffset - 1
   }
 
-  private static func replyPageWrapper(from object: NSObject, includeEnd: Bool = false) -> NSObject? {
+  private static func replyPageWrapper(from object: NSObject) -> NSObject? {
     var current: NSObject? = object
     for _ in 0..<64 {
       guard let candidate = current else { return nil }
       if let element = nativeAccessibility(of: candidate) as? UIAccessibilityElement,
-         (element.accessibilityIdentifier == "a11y-reply-scroll|more" ||
-          (includeEnd && element.accessibilityIdentifier == "a11y-reply-scroll|end")) {
+         element.accessibilityIdentifier == "a11y-reply-scroll|more" {
         return candidate
       }
       current = semanticParent(of: candidate)

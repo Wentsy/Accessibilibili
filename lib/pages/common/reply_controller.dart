@@ -1,4 +1,3 @@
-import 'package:PiliPlus/common/a11y/ios_accessibility_actions.dart';
 import 'package:PiliPlus/common/widgets/colored_box_transition.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/controller.dart';
 import 'package:PiliPlus/grpc/bilibili/main/community/reply/v1.pb.dart'
@@ -143,15 +142,9 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
   // boundary event. No button, unbounded retry loop, or spoken announcement.
   @override
   Future<void> onLoadMore() {
-    if (_replyLoad case final pending?) {
-      traceReplyReading('loadJoined', 'controller=${identityHashCode(this)}');
-      return pending;
-    }
+    if (_replyLoad case final pending?) return pending;
     if (isClosed || isLoading || isEnd || loadMoreFailed.value ||
         !loadingState.value.isSuccess) {
-      traceReplyReading('loadSkipped',
-          'controller=${identityHashCode(this)} loading=$isLoading end=$isEnd '
-          'failed=${loadMoreFailed.value} success=${loadingState.value.isSuccess}');
       return Future<void>.value();
     }
     final generation = _paginationGeneration;
@@ -170,17 +163,10 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     for (var attempt = 0; attempt < 2; attempt++) {
       if (isClosed || generation != _paginationGeneration || isEnd) return;
       try {
-        traceReplyReading('loadStart',
-            'controller=${identityHashCode(this)} attempt=$attempt page=$page '
-            'count=${loadingState.value.dataOrNull?.length}');
         await super.onLoadMore();
-        traceReplyReading('loadComplete',
-            'controller=${identityHashCode(this)} success=$lastRequestSucceeded '
-            'count=${loadingState.value.dataOrNull?.length} end=$isEnd');
         if (isClosed || generation != _paginationGeneration) return;
         if (lastRequestSucceeded) return;
       } catch (_) {
-        traceReplyReading('loadException', 'controller=${identityHashCode(this)}');
         if (isClosed || generation != _paginationGeneration) return;
       }
       if (attempt == 0) {

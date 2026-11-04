@@ -5,95 +5,56 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart' show OrdinalSortKey;
 import 'package:get/get.dart';
 
-/// One in-flight turn owns loading, scrolling and the completion notification.
-class ReplyPagedScroll extends StatefulWidget {
+/// Only explicit page requests emit pageScrolled, never background prefetch.
+class ReplyPagedScroll extends StatelessWidget {
   const ReplyPagedScroll({super.key, required this.controller, required this.child,
     this.allowRefresh = false});
   final ReplyController controller;
   final Widget child;
+  // Outer comments opt in; nested replies retain their existing behavior.
   final bool allowRefresh;
 
   @override
-  State<ReplyPagedScroll> createState() => _ReplyPagedScrollState();
-}
-
-class _ReplyPagedScrollState extends State<ReplyPagedScroll> {
-  Future<void>? _turn;
-  int _completedForwardTurns = 0;
-
-  bool get _active => mounted && !widget.controller.isClosed &&
-      ModalRoute.of(context)?.isCurrent != false &&
-      MediaQuery.accessibleNavigationOf(context);
-
-  Future<void> _forward() {
-    traceReplyReading('forward', 'busy=${_turn != null} active=$_active');
-    return _turn ??= _advance().whenComplete(() => _turn = null);
-  }
-
-  Future<void> _advance() async {
-    final controller = widget.controller;
-    final scroll = controller.scrollController;
-    traceReplyReading('advanceStart',
-        'count=${controller.loadingState.value.dataOrNull?.length} end=${controller.isEnd}');
-    if (!_active || !scroll.hasClients) return;
-
-    // A prefetch may already have appended data while native semantics still
-    // reports the old boundary. Layout first; do not require the count to grow.
-    await WidgetsBinding.instance.endOfFrame;
-    if (!_active || !scroll.hasClients) return;
-    if (scroll.position.extentAfter < 1 && !controller.isEnd) {
-      traceReplyReading('boundaryLoad');
-      await controller.retryLoadMore();
-      await WidgetsBinding.instance.endOfFrame;
-    }
-    if (!_active || !scroll.hasClients) return;
-    final position = scroll.position;
-    final before = position.pixels;
-    final target = (before + position.viewportDimension * 0.85)
-        .clamp(position.minScrollExtent, position.maxScrollExtent);
-    traceReplyReading('advanceTarget',
-        'before=$before target=$target max=${position.maxScrollExtent} '
-        'count=${controller.loadingState.value.dataOrNull?.length} end=${controller.isEnd}');
-    if (target - before < 1) return;
-
-    await scroll.animateTo(
-      target.toDouble(),
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOutCubic,
-    );
-    // The animation's Future can complete before the new semantic tree is sent.
-    await WidgetsBinding.instance.endOfFrame;
-    traceReplyReading('advanceComplete',
-        'active=$_active pixels=${scroll.hasClients ? scroll.position.pixels : null}');
-    if (_active && scroll.hasClients &&
-        scroll.position.pixels > before + 1) {
-      // Repeating the same pageScrolled description tells VoiceOver that a
-      // boundary was reached. Count completed turns, not estimated server pages
-      // or scroll percentages (both can stay unchanged while new rows appear).
-      _completedForwardTurns++;
-      await notifyIosVoiceOverPageScrolled(
-        pageDescription: '評論，已向下翻頁 $_completedForwardTurns 次',
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => AnimatedBuilder(
-    animation: widget.controller.scrollController,
-    builder: (context, _) => Obx(() {
-    final controller = widget.controller;
+  Widget build(BuildContext context) => Obx(() {
     final data = controller.loadingState.value.dataOrNull;
     final paged = VoiceOverPagedScroll(
       controller: controller.scrollController,
-      // Server pagination being finished does not mean the viewport is at
-      // the last loaded comment. Native scroll metrics can report zero range.
-      replyHasMore: data != null && (!controller.isEnd ||
-          (controller.scrollController.hasClients &&
-           controller.scrollController.position.extentAfter > 1)),
-      onScrollForward: _forward,
-      child: widget.child,
+      replyHasMore: data != null && !controller.isEnd,
+      onScrollForwardAtEnd: () async {
+        final before = controller.loadingState.value.dataOrNull?.length ?? 0;
+        await controller.retryLoadMore();
+        if (!context.mounted || controller.isClosed ||
+            ModalRoute.of(context)?.isCurrent == false ||
+            !MediaQuery.accessibleNavigationOf(context)) return;
+        if ((controller.loadingState.value.dataOrNull?.length ?? 0) > before) {
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            if (!context.mounted || controller.isClosed ||
+                ModalRoute.of(context)?.isCurrent == false) return;
+            final scroll = controller.scrollController;
+            if (!scroll.hasClients) return;
+            final position = scroll.position;
+            final target = (position.pixels + position.viewportDimension * 0.85)
+                .clamp(position.minScrollExtent, position.maxScrollExtent);
+            await scroll.animateTo(
+              target.toDouble(),
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOutCubic,
+            );
+            await WidgetsBinding.instance.endOfFrame;
+            if (context.mounted && !controller.isClosed &&
+                ModalRoute.of(context)?.isCurrent != false &&
+                MediaQuery.accessibleNavigationOf(context)) {
+              notifyIosVoiceOverPageScrolled();
+            }
+          });
+          WidgetsBinding.instance.ensureVisualUpdate();
+        }
+      },
+      child: child,
     );
-    if (!widget.allowRefresh) return paged;
+    if (!allowRefresh) return paged;
+    // Separate the native explicit-gesture route from Read All's quiet
+    // reply wrapper. Keep its more/end marker intact for continuous reading.
     return VoiceOverPagedScroll(
       controller: controller.scrollController,
       nativeFeedScroll: true,
@@ -103,8 +64,7 @@ class _ReplyPagedScrollState extends State<ReplyPagedScroll> {
       onScrollForwardAtEnd: controller.onA11yReplyLoadMore,
       child: paged,
     );
-    }),
-  );
+  });
 }
 
 /// Status only: no retry button or tap action is added to comment traversal.
