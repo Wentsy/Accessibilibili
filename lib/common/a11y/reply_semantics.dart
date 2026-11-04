@@ -1,3 +1,4 @@
+import 'package:PiliPlus/common/a11y/reply_reading_anchor.dart';
 import 'package:PiliPlus/common/a11y/text_link_rotor.dart';
 import 'package:PiliPlus/common/a11y/video_text_links.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
@@ -99,7 +100,10 @@ class ReplyA11ySemantics extends StatelessWidget {
         ? label
         : '$label，$commentTime評論';
     final identifier = 'a11y-read-reply|${replyItem.oid}|${replyItem.id}';
-    return TextLinkRotor(
+    return ReplyReadingAnchor(
+      identifier: identifier,
+      onRead: onAccessibilityFocus,
+      builder: (identifier) => TextLinkRotor(
       identifier: identifier,
       links: videoTextLinks(
         replyItem.content.message,
@@ -143,6 +147,7 @@ class ReplyA11ySemantics extends StatelessWidget {
               _toggleDislike(context),
         },
         child: ExcludeSemantics(child: child),
+      ),
       ),
     );
   }

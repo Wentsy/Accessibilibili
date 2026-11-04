@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:PiliPlus/plugin/pl_player/controller.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show VoidCallback;
 
 const MethodChannel _accessibilityChannel = MethodChannel(
   'accessibilibili/accessibility',
@@ -9,11 +10,15 @@ const MethodChannel _accessibilityChannel = MethodChannel(
 
 int _lastPageScrolledNotificationMs = 0;
 
+final Map<String, VoidCallback> iosReplyReadingAnchors = {};
+
 void initIosAccessibilityActions() {
   if (!Platform.isIOS) return;
 
   _accessibilityChannel.setMethodCallHandler((call) async {
-    if (call.method == 'magicTap') {
+    if (call.method == 'readReplyAnchor') {
+      iosReplyReadingAnchors[call.arguments as String]?.call();
+    } else if (call.method == 'magicTap') {
       await PlPlayerController.instance?.togglePlaybackAccessible();
     }
   });

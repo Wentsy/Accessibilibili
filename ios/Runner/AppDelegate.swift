@@ -689,6 +689,9 @@ private final class IOSTextLinkRotor {
       binaryMessenger: engineBridge.applicationRegistrar.messenger()
     )
     accessibilityChannel = channel
+    VoiceOverReplyReadingBridge.onReadReplyAnchor = { [weak channel] identifier in
+      channel?.invokeMethod("readReplyAnchor", arguments: identifier)
+    }
 
     channel.setMethodCallHandler { call, result in
       switch call.method {

@@ -305,7 +305,8 @@ private enum VoiceOverComposerTouchBridge {
 /// This deliberately does not hook accessibility container enumeration,
 /// focus callbacks, hit testing, or showOnScreen, so normal left/right VoiceOver
 /// navigation remains owned by Flutter.
-private enum VoiceOverReplyReadingBridge {
+enum VoiceOverReplyReadingBridge {
+  static var onReadReplyAnchor: ((String) -> Void)?
   // Read All also dispatches a vertical action at the loaded boundary. Keep
   // that internal action separate from explicit three-finger feed gestures.
   static var forwardingReadAll = false
@@ -379,13 +380,21 @@ private enum VoiceOverReplyReadingBridge {
     }
 
     let block: @convention(block) (AnyObject) -> AnyObject? = { object in
+      if delta > 0, isReadingReply(object),
+         let element = object as? UIAccessibilityElement,
+         let identifier = element.accessibilityIdentifier,
+         let ancestor = verticalScrollAncestor(of: object),
+         replyPageWrapper(from: ancestor.semanticObject, includeEnd: true) != nil {
+        DispatchQueue.main.async {
+          if UIAccessibility.isVoiceOverRunning && ancestor.scrollView.window != nil {
+            onReadReplyAnchor?(identifier)
+          }
+        }
+      }
       if
         isReadingReply(object),
         let adjacent = adjacentReadingReply(from: object, delta: delta)
       {
-        if delta > 0 {
-          prepareReadingViewport(from: object, next: adjacent)
-        }
         return adjacent
       }
       if delta > 0 && isReadingReply(object) {
