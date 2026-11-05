@@ -86,7 +86,8 @@ class ReplyPaginationStatus extends StatelessWidget {
     final failed = controller.loadMoreFailed.value;
     controller.loadingState.value; // Observe append/end changes as well.
     if (controller.isEnd) {
-      return Semantics(`r`n        sortKey: OrdinalSortKey(double.maxFinite),
+      return Semantics(
+        sortKey: OrdinalSortKey(double.maxFinite),
         child: Text('没有更多了'),
       );
     }
