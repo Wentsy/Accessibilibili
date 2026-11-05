@@ -37,3 +37,9 @@ Future<void> notifyIosVoiceOverPageScrolled() async {
     // Accessibility feedback must never interfere with scrolling itself.
   }
 }
+
+Future<void> notifyIosReplyListExtended() async {
+  if (Platform.isIOS) {
+    await _accessibilityChannel.invokeMethod<void>('replyListExtended');
+  }
+}

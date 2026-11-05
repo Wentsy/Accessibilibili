@@ -17,20 +17,26 @@ class ReplyPagedScroll extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => useIosReplyReading(context)
-      ? NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            if (notification.depth == 0 &&
-                notification.metrics.extentAfter < notification.metrics.viewportDimension * 2) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (context.mounted && !controller.isClosed &&
-                    ModalRoute.of(context)?.isCurrent != false) {
-                  controller.onLoadMore();
-                }
-              });
-            }
-            return false;
-          },
-          child: child,
+      ? VoiceOverPagedScroll(
+          controller: controller.scrollController,
+          nativeFeedScroll: true,
+          onScrollBackwardAtStart: () => controller.onA11yRefresh(label: '評論'),
+          onScrollForwardAtEnd: controller.onA11yReplyLoadMore,
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (notification) {
+              if (notification.depth == 0 &&
+                  notification.metrics.extentAfter < notification.metrics.viewportDimension * 2) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (context.mounted && !controller.isClosed &&
+                      ModalRoute.of(context)?.isCurrent != false) {
+                    controller.onLoadMore();
+                  }
+                });
+              }
+              return false;
+            },
+            child: child,
+          ),
         )
       : Obx(() {
     final data = controller.loadingState.value.dataOrNull;
@@ -136,7 +142,7 @@ bool useIosReplyReading(BuildContext context) =>
 
 /// Keep loaded rows mounted while VoiceOver traverses the list. Network
 /// pagination is driven by focus/scroll progress, never by building the footer.
-class ReplyReadingSliver extends StatelessWidget {
+class ReplyReadingSliver extends StatefulWidget {
   const ReplyReadingSliver({
     super.key,
     required this.controller,
@@ -151,16 +157,35 @@ class ReplyReadingSliver extends StatelessWidget {
   final int? Function(Key)? findChildIndexCallback;
 
   @override
+  State<ReplyReadingSliver> createState() => _ReplyReadingSliverState();
+}
+
+class _ReplyReadingSliverState extends State<ReplyReadingSliver> {
+  @override
+  void didUpdateWidget(ReplyReadingSliver oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.controller != oldWidget.controller ||
+        widget.itemCount <= oldWidget.itemCount) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && useIosReplyReading(context) &&
+          ModalRoute.of(context)?.isCurrent != false) {
+        notifyIosReplyListExtended();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     if (!useIosReplyReading(context)) {
       return SliverList.builder(
-        itemBuilder: itemBuilder,
-        itemCount: itemCount,
-        findChildIndexCallback: findChildIndexCallback,
+        itemBuilder: widget.itemBuilder,
+        itemCount: widget.itemCount,
+        findChildIndexCallback: widget.findChildIndexCallback,
       );
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      controller.bufferRepliesForReading(0, () => context.mounted &&
+      if (!mounted) return;
+      widget.controller.bufferRepliesForReading(0, () => context.mounted &&
           ModalRoute.of(context)?.isCurrent != false && useIosReplyReading(context));
     });
     return SliverToBoxAdapter(
@@ -168,8 +193,8 @@ class ReplyReadingSliver extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (var index = 0; index < itemCount; index++)
-            itemBuilder(context, index),
+          for (var index = 0; index < widget.itemCount; index++)
+            widget.itemBuilder(context, index),
         ],
       ),
     );
