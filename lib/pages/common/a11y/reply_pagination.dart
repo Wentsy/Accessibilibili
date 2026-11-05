@@ -139,11 +139,13 @@ bool useIosReplyReading(BuildContext context) =>
 class ReplyReadingSliver extends StatelessWidget {
   const ReplyReadingSliver({
     super.key,
+    required this.controller,
     required this.itemBuilder,
     required this.itemCount,
     this.findChildIndexCallback,
   });
 
+  final ReplyController controller;
   final IndexedWidgetBuilder itemBuilder;
   final int itemCount;
   final int? Function(Key)? findChildIndexCallback;
@@ -157,6 +159,10 @@ class ReplyReadingSliver extends StatelessWidget {
         findChildIndexCallback: findChildIndexCallback,
       );
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      controller.bufferRepliesForReading(0, () => context.mounted &&
+          ModalRoute.of(context)?.isCurrent != false && useIosReplyReading(context));
+    });
     return SliverToBoxAdapter(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

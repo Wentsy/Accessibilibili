@@ -385,6 +385,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
       Success(:final response!) =>
         MediaQuery.accessibleNavigationOf(context)
             ? ReplyReadingSliver(
+                controller: _controller,
                 itemBuilder: (context, index) {
                   if (index == response.length) {
                     return _threadFooter(colorScheme);
@@ -396,7 +397,10 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                     replyItem: item,
                     sortKey: OrdinalSortKey(index + 2.0),
                     onAccessibilityFocus: () {
-                      if (index >= response.length - 5) {
+                      if (useIosReplyReading(context) && !_controller.loadMoreFailed.value) {
+                        _controller.bufferRepliesForReading(index, () => context.mounted &&
+                            ModalRoute.of(context)?.isCurrent != false && useIosReplyReading(context));
+                      } else if (index >= response.length - 5) {
                         _controller.retryLoadMore();
                       }
                     },

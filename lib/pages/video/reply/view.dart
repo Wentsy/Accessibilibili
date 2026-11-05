@@ -212,6 +212,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
             count++;
           }
           return ReplyReadingSliver(
+            controller: _videoReplyController,
             findChildIndexCallback: (key) {
               final index = response.indexWhere(
                 (item) => ValueKey('reply-${item.id}') == key,
@@ -268,7 +269,10 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 sortKey: OrdinalSortKey(index + 1.0),
                 videoController: _videoReplyController.videoCtr,
                 onAccessibilityFocus: () {
-                  if (index >= response.length - 5) {
+                  if (useIosReplyReading(context) && !_videoReplyController.loadMoreFailed.value) {
+                    _videoReplyController.bufferRepliesForReading(index, () => context.mounted &&
+                        ModalRoute.of(context)?.isCurrent != false && useIosReplyReading(context));
+                  } else if (index >= response.length - 5) {
                     _videoReplyController.retryLoadMore();
                   }
                 },

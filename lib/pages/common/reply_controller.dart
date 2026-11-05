@@ -153,6 +153,21 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     });
   }
 
+  Future<void> bufferRepliesForReading(
+    int index,
+    bool Function() stillReading,
+  ) async {
+    int loaded() => loadingState.value.dataOrNull?.length ?? 0;
+    if (loaded() == 0 || loaded() - index - 1 >= 30) return;
+    final generation = _paginationGeneration;
+    while (!isClosed && generation == _paginationGeneration &&
+        stillReading() && !isEnd && loaded() - index - 1 < 60) {
+      final before = loaded();
+      await onLoadMore();
+      if (isClosed || loaded() <= before) return;
+    }
+  }
+
   Future<void> retryLoadMore() {
     if (isClosed) return Future<void>.value();
     loadMoreFailed.value = false;
