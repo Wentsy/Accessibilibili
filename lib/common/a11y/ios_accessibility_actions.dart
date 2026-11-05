@@ -38,8 +38,3 @@ Future<void> notifyIosVoiceOverPageScrolled() async {
   }
 }
 
-Future<void> notifyIosReplyListExtended() async {
-  if (Platform.isIOS) {
-    await _accessibilityChannel.invokeMethod<void>('replyListExtended');
-  }
-}

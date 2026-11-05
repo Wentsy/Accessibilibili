@@ -692,15 +692,6 @@ private final class IOSTextLinkRotor {
 
     channel.setMethodCallHandler { call, result in
       switch call.method {
-      case "replyListExtended":
-        DispatchQueue.main.async {
-          if UIAccessibility.isVoiceOverRunning,
-             let row = UIAccessibility.focusedElement(using: .notificationVoiceOver) as? UIAccessibilityElement,
-             row.accessibilityIdentifier?.hasPrefix("a11y-list-reply|") == true {
-            UIAccessibility.post(notification: .layoutChanged, argument: nil)
-          }
-          result(nil)
-        }
       case "pageScrolled":
         if UIAccessibility.isVoiceOverRunning {
           // pageScrolled is the UIKit-native accessibility notification for a

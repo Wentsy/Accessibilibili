@@ -161,17 +161,21 @@ class ReplyReadingSliver extends StatefulWidget {
 }
 
 class _ReplyReadingSliverState extends State<ReplyReadingSliver> {
+  // The final item is the pagination footer. Seal each loaded batch before
+  // appending its successor so the active batch retains its semantic children.
+  final _batchStarts = <int>[0];
+
   @override
   void didUpdateWidget(ReplyReadingSliver oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.controller != oldWidget.controller ||
-        widget.itemCount <= oldWidget.itemCount) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && useIosReplyReading(context) &&
-          ModalRoute.of(context)?.isCurrent != false) {
-        notifyIosReplyListExtended();
-      }
-    });
+    final oldRows = oldWidget.itemCount - 1;
+    if (widget.controller != oldWidget.controller || widget.itemCount < oldWidget.itemCount) {
+      _batchStarts
+        ..clear()
+        ..add(0);
+    } else if (widget.itemCount > oldWidget.itemCount && oldRows > _batchStarts.last) {
+      _batchStarts.add(oldRows);
+    }
   }
 
   @override
@@ -188,15 +192,32 @@ class _ReplyReadingSliverState extends State<ReplyReadingSliver> {
       widget.controller.bufferRepliesForReading(0, () => context.mounted &&
           ModalRoute.of(context)?.isCurrent != false && useIosReplyReading(context));
     });
-    return SliverToBoxAdapter(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var index = 0; index < widget.itemCount; index++)
-            widget.itemBuilder(context, index),
-        ],
-      ),
+    final footer = widget.itemCount - 1;
+    final boundaries = [..._batchStarts, footer];
+    return SliverMainAxisGroup(
+      slivers: [
+        for (var batch = 0; batch < boundaries.length - 1; batch++)
+          SliverToBoxAdapter(
+            key: ValueKey(boundaries[batch]),
+            child: Semantics(
+              container: true,
+              explicitChildNodes: true,
+              sortKey: OrdinalSortKey(boundaries[batch].toDouble()),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var index = boundaries[batch]; index < boundaries[batch + 1]; index++)
+                    widget.itemBuilder(context, index),
+                ],
+              ),
+            ),
+          ),
+        SliverToBoxAdapter(
+          key: const ValueKey('reading-footer'),
+          child: widget.itemBuilder(context, footer),
+        ),
+      ],
     );
   }
 }
