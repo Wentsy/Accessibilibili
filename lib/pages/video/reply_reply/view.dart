@@ -397,7 +397,7 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                     replyItem: item,
                     sortKey: OrdinalSortKey(index + 2.0),
                     onAccessibilityFocus: () {
-                      if (useIosReplyReading(context) && !_controller.loadMoreFailed.value) {
+                      if (useIosReplyReading(context)) {
                         _controller.bufferRepliesForReading(index, () => context.mounted &&
                             ModalRoute.of(context)?.isCurrent != false && useIosReplyReading(context));
                       } else if (index >= response.length - 5) {
