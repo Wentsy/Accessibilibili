@@ -124,7 +124,11 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                   padding: const .fromLTRB(12, 2.5, 6, 2.5),
                   child: Obx(() {
                     final sortType = _videoReplyController.sortType.value;
-                    return Row(
+                    return Semantics(
+                      container: true,
+                      explicitChildNodes: true,
+                      sortKey: const OrdinalSortKey(1),
+                      child: Row(
                       mainAxisAlignment: .spaceBetween,
                       children: [
                         Text(
@@ -148,6 +152,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                           ),
                         ),
                       ],
+                      ),
                     );
                   }),
                 ),

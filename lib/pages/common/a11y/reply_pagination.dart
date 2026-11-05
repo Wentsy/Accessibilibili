@@ -202,7 +202,8 @@ class _ReplyReadingSliverState extends State<ReplyReadingSliver> {
             child: Semantics(
               container: true,
               explicitChildNodes: true,
-              sortKey: OrdinalSortKey(boundaries[batch].toDouble()),
+              // Root comment and sort controls occupy positions 0 and 1.
+              sortKey: OrdinalSortKey(boundaries[batch] + 2.0),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
