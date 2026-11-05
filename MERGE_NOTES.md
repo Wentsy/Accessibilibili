@@ -1,3 +1,5 @@
+> 目前穩定參照已更新至 2026-11-05 main 合併提交 `66af9a7f47ebe9357b3037aab261410d7d5d086e`。下列內容為上次官方同步的歷史紀錄；下次同步請先讀 `docs/CURRENT_ACCESSIBILITY_BASELINE.md`、`docs/ACCESSIBILITY_MAINTENANCE.md` 與 `docs/comment-read-all-current-baseline.md`。
+
 # 上游同步進度（PiliPlus 2.1.6.2 / main 到 2026-10-22）
 
 本地工作 repo：`C:\Users\wents\Documents\Accessibilibili`

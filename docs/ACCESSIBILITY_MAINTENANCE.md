@@ -8,6 +8,17 @@
 
 ## 版本基準
 
+## 2026-11-05：目前穩定基準（評論連續朗讀）
+
+- main 合併提交：`66af9a7f47ebe9357b3037aab261410d7d5d086e`（PR #5）。
+- 使用者確認的功能提交：`bce82730dcfbe2d89b46f0d976af0a663e32be48`。
+- 實機環境：iOS 18.7.8、iPhone VoiceOver。使用者確認目前已非常穩定，基本不會自行停止，指定作為後續開發與 PiliPlus 官方版同步的穩定基準。
+- 驗證範圍是本輪評論連續朗讀改善；不表示所有歷史功能已在同一天重新完整驗證。偶發停止的確切原因仍未證實，不能直接判定全是網路問題。
+- 基準以 commit 識別，不填寫推算的 App／CI build 號；實際編譯版本由 OC 處理。
+- 先前各專項已確認的行為繼續保留；評論連續朗讀的現行實作以 [專項基準](comment-read-all-current-baseline.md) 為準，歷史實驗文件不得覆蓋這份現行規格。
+
+### 先前專項與歷史驗證紀錄
+
 - **目前 Passport／私信整合實測基準：`9a1b241b8e2ec2d619801e6e139dc0974d51b72e`**（2026-11-03，CI IPA `2.1.7+6047`；來源版本標記 `2.1.7+6033`）。
   - 已納入帳號來源感知的 REST／gRPC identity、私信頭像／整列開啟對話、重複簽名與登入裝置識別修正，以及 Passport 憑證自動刷新。
   - 未來同步 PiliPlus 時，優先保留 `lib/utils/accounts/`、`lib/utils/passport_refresh.dart`、`lib/utils/client_identity.dart`、`lib/utils/app_sign.dart` 與私信入口的帳號來源邏輯；不要用上游單一 Android HD identity 覆蓋。
@@ -210,7 +221,7 @@ lib/pages/main/controller.dart
 - 回覆樓層與回覆特定使用者的語意不可混淆。
 - 評論時間放在整則旁白最後。
 - 外層、樓中樓、動態評論的 **Read All** 可越過目前已建立的評論，自動翻到下一頁；普通左右滑仍完全由 Flutter 正常處理。
-- `ios/Runner/SceneDelegate.swift` 的 `VoiceOverReplyReadingBridge` 只把 `a11y-read-reply|...` 回覆串成閱讀鏈，並只在末端翻同一垂直列表。不可擴大為 container traversal、`accessibilityElementAtIndex` 捲動或全域 focus 移動。
+- 目前 iOS VoiceOver 評論使用 `a11y-list-reply|...`，不走舊 `a11y-read-reply|...` 的 `VoiceOverReplyReadingBridge` 閱讀鏈。保留原生優先捲動、真實 scroll metrics 與穩定分批語意結構，詳見 `comment-read-all-current-baseline.md`；不要把歷史強制翻頁方案重新當成現行規格。
 - `VoiceOverComposerTouchBridge` 只服務 `a11y-touch-only|publish-comment` 與 `a11y-touch-only|publish-reply`：線性左右滑不應碰到浮動按鈕，但觸摸探索按鈕實際 frame 內必須能朗讀並雙擊。它同時處理 FlutterView 與原生 `FlutterSemanticsScrollView`；後者是獨立 `UIScrollView`，不能只修改背後 `SemanticsObject`。
 - 樓中樓／對話以 `MiniScaffold.showBottomSheet(excludeBodySemantics: true)` 開啟時，底下外層語意必須排除到面板關閉；widget 仍保持掛載，關閉後恢復。否則「沒有更多」後會穿到外層評論。
 - iOS VoiceOver 模式下，樓中樓「相關回覆／按時間／按熱度」隨內容捲走；其他情況可吸頂。每頁持續可見的 pinned header 會在回滑時插入回覆閱讀鏈。
