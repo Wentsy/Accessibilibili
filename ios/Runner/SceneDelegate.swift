@@ -770,10 +770,9 @@ private enum VoiceOverReplyReadingBridge {
   }
 }
 
-/// Feed-only gesture routing. Flutter's inner scroll semantics can consume a
-/// page gesture (or reject it at an edge) before the outer Dart Semantics node
-/// receives it. Route explicit vertical gestures to the marked feed wrapper,
-/// which owns paging and edge refresh. No focus, traversal or Read All hooks.
+/// Feed gesture routing with a native-first path for comment viewports.
+/// Comments retain Flutter's normal scrolling; the outer wrapper handles
+/// unhandled boundary gestures for refresh and load-more.
 private enum VoiceOverFeedScrollBridge {
   private typealias ScrollHandler = @convention(c) (
     AnyObject, Selector, Int
@@ -817,6 +816,14 @@ private enum VoiceOverFeedScrollBridge {
       else {
         return original(object, selector, rawDirection)
       }
+      // A comment viewport must first handle ordinary scrolling itself.
+      // Redirect only an unhandled edge gesture to refresh/load-more; routing
+      // every system scroll through Dart also emits pageScrolled during Read All.
+      if let element = target as? UIAccessibilityElement,
+         element.accessibilityIdentifier == "a11y-feed-scroll|replies",
+         original(object, selector, rawDirection) {
+        return true
+      }
       let dispatch = unsafeBitCast(
         method_getImplementation(targetMethod), to: ScrollHandler.self
       )
@@ -834,8 +841,9 @@ private enum VoiceOverFeedScrollBridge {
     var seen = Set<ObjectIdentifier>()
     for _ in 0..<64 {
       guard seen.insert(ObjectIdentifier(current)).inserted else { return nil }
-      let native = objectValue(current, "nativeAccessibility") ?? current
-      if let element = native as? UIAccessibilityElement,
+      // With scroll metrics Flutter exposes a UIScrollView as nativeAccessibility;
+      // the identifier still belongs to its backing SemanticsObject.
+      if let element = current as? UIAccessibilityElement,
          element.accessibilityIdentifier?.hasPrefix("a11y-feed-scroll|") == true {
         return current
       }

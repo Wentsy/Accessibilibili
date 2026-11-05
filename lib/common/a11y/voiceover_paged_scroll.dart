@@ -67,14 +67,28 @@ class VoiceOverPagedScroll extends StatelessWidget {
     }
 
     if (replyScrollMetrics) {
-      return _ReplyScrollSemantics(
-        controller: controller!,
-        identifier: replyHasMore != null
-            ? 'a11y-reply-scroll|${replyHasMore! ? 'more' : 'end'}'
-            : 'a11y-feed-scroll|viewport',
-        forward: () => _page(context, forward: true),
-        backward: () => _page(context, forward: false),
-        child: child,
+      return Builder(
+        builder: (metricsContext) => NotificationListener<ScrollMetricsNotification>(
+          // Appends can change the inner viewport's extent without laying out
+          // this outer proxy or changing its controller's pixel position.
+          onNotification: (notification) {
+            if (notification.depth == 0) {
+              metricsContext.findRenderObject()?.markNeedsSemanticsUpdate();
+            }
+            return false;
+          },
+          child: _ReplyScrollSemantics(
+            controller: controller!,
+            identifier: replyHasMore != null
+                ? 'a11y-reply-scroll|${replyHasMore! ? 'more' : 'end'}'
+                : nativeFeedScroll
+                    ? 'a11y-feed-scroll|replies'
+                    : 'a11y-feed-scroll|viewport',
+            forward: () => _page(context, forward: true),
+            backward: () => _page(context, forward: false),
+            child: child,
+          ),
+        ),
       );
     }
 

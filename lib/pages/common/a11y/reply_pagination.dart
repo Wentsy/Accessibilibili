@@ -12,7 +12,7 @@ class ReplyPagedScroll extends StatelessWidget {
     this.allowRefresh = false});
   final ReplyController controller;
   final Widget child;
-  // Refresh shares the comment viewport; do not add a feed-routing ancestor.
+  // Non-iOS callers opt in to refresh; iOS exposes both viewport edges.
   final bool allowRefresh;
 
   @override
@@ -20,6 +20,7 @@ class ReplyPagedScroll extends StatelessWidget {
       ? VoiceOverPagedScroll(
           controller: controller.scrollController,
           nativeFeedScroll: true,
+          replyScrollMetrics: true,
           onScrollBackwardAtStart: () => controller.onA11yRefresh(label: '評論'),
           onScrollForwardAtEnd: controller.onA11yReplyLoadMore,
           child: NotificationListener<ScrollNotification>(

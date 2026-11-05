@@ -165,6 +165,9 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
       final before = loaded();
       await onLoadMore();
       if (isClosed || loaded() <= before) return;
+      // Commit this page's layout and semantics before another cached/fast
+      // response can append again. This does not announce or move focus.
+      await WidgetsBinding.instance.endOfFrame;
     }
   }
 
