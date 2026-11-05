@@ -384,7 +384,8 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
       ),
       Success(:final response!) =>
         MediaQuery.accessibleNavigationOf(context)
-            ? SliverList.builder(
+            ? ReplyReadingSliver(
+                controller: _controller,
                 itemBuilder: (context, index) {
                   if (index == response.length) {
                     return _threadFooter(colorScheme);
@@ -396,7 +397,10 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
                     replyItem: item,
                     sortKey: OrdinalSortKey(index + 2.0),
                     onAccessibilityFocus: () {
-                      if (index >= response.length - 5) {
+                      if (useIosReplyReading(context)) {
+                        _controller.bufferRepliesForReading(index, () => context.mounted &&
+                            ModalRoute.of(context)?.isCurrent != false && useIosReplyReading(context));
+                      } else if (index >= response.length - 5) {
                         _controller.retryLoadMore();
                       }
                     },
@@ -456,9 +460,10 @@ class _VideoReplyReplyPanelState extends State<VideoReplyReplyPanel>
   }
 
   Widget _threadFooter(ColorScheme colorScheme) {
-    _controller.onLoadMore();
+    if (!useIosReplyReading(context)) _controller.onLoadMore();
     final isEnd = _controller.isEnd;
     return Semantics(
+      key: const ValueKey('reply-pagination-status'),
       container: true,
       explicitChildNodes: true,
       sortKey: const OrdinalSortKey(double.maxFinite),

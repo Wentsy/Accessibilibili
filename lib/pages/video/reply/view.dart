@@ -124,7 +124,11 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                   padding: const .fromLTRB(12, 2.5, 6, 2.5),
                   child: Obx(() {
                     final sortType = _videoReplyController.sortType.value;
-                    return Row(
+                    return Semantics(
+                      container: true,
+                      explicitChildNodes: true,
+                      sortKey: const OrdinalSortKey(1),
+                      child: Row(
                       mainAxisAlignment: .spaceBetween,
                       children: [
                         Text(
@@ -148,6 +152,7 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                           ),
                         ),
                       ],
+                      ),
                     );
                   }),
                 ),
@@ -211,7 +216,8 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
           if (hasVote) {
             count++;
           }
-          return SliverList.builder(
+          return ReplyReadingSliver(
+            controller: _videoReplyController,
             findChildIndexCallback: (key) {
               final index = response.indexWhere(
                 (item) => ValueKey('reply-${item.id}') == key,
@@ -221,14 +227,21 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
             itemBuilder: (context, index) {
               if (hasVote) {
                 if (index == 0) {
-                  return buildVoteCard(context, colorScheme, voteCard);
+                  return Semantics(
+                    key: const ValueKey('reply-vote'),
+                    sortKey: const OrdinalSortKey(0),
+                    child: buildVoteCard(context, colorScheme, voteCard),
+                  );
                 } else {
                   index--;
                 }
               }
               if (index == response.length) {
-                _videoReplyController.onLoadMore();
+                if (!useIosReplyReading(context)) {
+                  _videoReplyController.onLoadMore();
+                }
                 return Container(
+                  key: const ValueKey('reply-pagination-status'),
                   height: 125,
                   alignment: .center,
                   margin: .only(bottom: bottom),
@@ -257,11 +270,14 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                 a11ySortKey: OrdinalSortKey((index + 1).toDouble()),
               );
               final child = ReplyA11ySemantics(
-                key: ValueKey('reply-${item.id}'),
                 replyItem: item,
+                sortKey: OrdinalSortKey(index + 1.0),
                 videoController: _videoReplyController.videoCtr,
                 onAccessibilityFocus: () {
-                  if (index >= response.length - 5) {
+                  if (useIosReplyReading(context)) {
+                    _videoReplyController.bufferRepliesForReading(index, () => context.mounted &&
+                        ModalRoute.of(context)?.isCurrent != false && useIosReplyReading(context));
+                  } else if (index >= response.length - 5) {
                     _videoReplyController.retryLoadMore();
                   }
                 },
@@ -274,13 +290,12 @@ class _VideoReplyPanelState extends State<VideoReplyPanel>
                     : '點兩下回覆這條評論',
                 child: reply,
               );
-              if (item.id == _videoReplyController.targetRootRpId) {
-                return _videoReplyController.colorAnimWrapper(
-                  colorScheme,
-                  child,
-                );
-              }
-              return child;
+              return KeyedSubtree(
+                key: ValueKey('reply-${item.id}'),
+                child: item.id == _videoReplyController.targetRootRpId
+                    ? _videoReplyController.colorAnimWrapper(colorScheme, child)
+                    : child,
+              );
             },
             itemCount: count,
           );

@@ -106,6 +106,7 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
   final RxBool loadMoreFailed = false.obs;
   Future<void>? _replyLoad;
   int _paginationGeneration = 0;
+  DateTime _nextAutomaticReplyRetry = DateTime.fromMillisecondsSinceEpoch(0);
   bool _announcingPageLoad = false;
 
   /// Explicit three-finger requests only; prefetch and Read All stay silent.
@@ -138,41 +139,78 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
   }
 
   // Join an existing request instead of losing a boundary action while loading.
-  // A failed prefetch gets one retry, then waits for another reading/page
-  // boundary event. No button, unbounded retry loop, or spoken announcement.
+  // Retry transient failures with backoff while keeping existing comments and
+  // their focus intact. Exhausted attempts cool down before automatic retry.
   @override
   Future<void> onLoadMore() {
     if (_replyLoad case final pending?) return pending;
-    if (isClosed || isLoading || isEnd || loadMoreFailed.value ||
+    if (isClosed || isLoading || isEnd ||
+        (loadMoreFailed.value && DateTime.now().isBefore(_nextAutomaticReplyRetry)) ||
         !loadingState.value.isSuccess) {
       return Future<void>.value();
     }
     final generation = _paginationGeneration;
-    return _replyLoad = _loadReplyPage(generation).whenComplete(() {
-      _replyLoad = null;
+    loadMoreFailed.value = false;
+    late final Future<void> request;
+    request = _loadReplyPage(generation).whenComplete(() {
+      // An old delayed retry must not clear a new request after refresh.
+      if (identical(_replyLoad, request)) _replyLoad = null;
     });
+    _replyLoad = request;
+    return request;
+  }
+
+  Future<void> bufferRepliesForReading(
+    int index,
+    bool Function() stillReading,
+  ) async {
+    int loaded() => loadingState.value.dataOrNull?.length ?? 0;
+    if (!loadingState.value.isSuccess || loaded() - index - 1 >= 30) return;
+    final generation = _paginationGeneration;
+    while (!isClosed && generation == _paginationGeneration &&
+        stillReading() && !isEnd && loaded() - index - 1 < 60) {
+      final before = loaded();
+      await onLoadMore();
+      if (isClosed || loaded() <= before) return;
+      // Commit this page's layout and semantics before another cached/fast
+      // response can append again. This does not announce or move focus.
+      await WidgetsBinding.instance.endOfFrame;
+    }
   }
 
   Future<void> retryLoadMore() {
     if (isClosed) return Future<void>.value();
     loadMoreFailed.value = false;
+    _nextAutomaticReplyRetry = DateTime.fromMillisecondsSinceEpoch(0);
     return onLoadMore();
   }
 
   Future<void> _loadReplyPage(int generation) async {
-    for (var attempt = 0; attempt < 2; attempt++) {
+    const delays = [600, 2000, 5000, 10000];
+    for (var attempt = 0; attempt <= delays.length; attempt++) {
       if (isClosed || generation != _paginationGeneration || isEnd) return;
+      final before = loadingState.value.dataOrNull?.length ?? 0;
+      final cursorBefore = (cursorNext, paginationReply?.nextOffset);
       try {
         await super.onLoadMore();
         if (isClosed || generation != _paginationGeneration) return;
-        if (lastRequestSucceeded) return;
+        if (lastRequestSucceeded) {
+          if (isEnd || (loadingState.value.dataOrNull?.length ?? 0) > before) {
+            return;
+          }
+          // Filtering may remove a whole page. Follow an advancing server
+          // cursor, but do not spin on a successful empty, unchanged page.
+          if (cursorBefore == (cursorNext, paginationReply?.nextOffset)) break;
+        }
       } catch (_) {
         if (isClosed || generation != _paginationGeneration) return;
       }
-      if (attempt == 0) {
-        await Future<void>.delayed(const Duration(milliseconds: 600));
+      if (attempt < delays.length) {
+        await Future<void>.delayed(Duration(milliseconds: delays[attempt]));
       }
     }
+    if (isClosed || generation != _paginationGeneration) return;
+    _nextAutomaticReplyRetry = DateTime.now().add(const Duration(seconds: 20));
     loadMoreFailed.value = true;
   }
 
@@ -191,6 +229,10 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
 
   @override
   bool? get hasFooter => true;
+
+  // Reply endpoints provide cursor.isEnd; filtered empty pages are not EOF.
+  @override
+  bool get emptyPageIsEnd => false;
 
   // comment antifraud
   late final _enableCommAntifraud = Pref.enableCommAntifraud;
@@ -258,6 +300,8 @@ abstract class ReplyController<R> extends CommonListController<R, ReplyInfo> {
     // Do not reset the cursor while a request is using it.
     if (isLoading) return Future<void>.value();
     _paginationGeneration++;
+    _replyLoad = null;
+    _nextAutomaticReplyRetry = DateTime.fromMillisecondsSinceEpoch(0);
     loadMoreFailed.value = false;
     cursorNext = null;
     subjectControl = null;

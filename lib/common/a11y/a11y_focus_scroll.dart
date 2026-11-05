@@ -2,10 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 int _a11yFocusScrollSuppressedUntilMs = 0;
+final _pendingReplyFocus = <BuildContext, Object>{};
 final _deferredReplyFocus = <BuildContext, Timer>{};
 
 void cancelDeferredReplyFocus(BuildContext context) {
   _deferredReplyFocus.remove(context)?.cancel();
+  _pendingReplyFocus.remove(context);
 }
 
 /// Temporarily suppresses focus-driven scrolling while a paged list rebuilds.
@@ -68,7 +70,13 @@ void a11yEnsureVisible(BuildContext context, {
     }
   }
 
+  final request = Object();
+  _pendingReplyFocus[context] = request;
   WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Focus may have moved while this frame was waiting to run. An old
+    // request must not scroll the newly focused comment out of view.
+    if (_pendingReplyFocus[context] != request) return;
+    _pendingReplyFocus.remove(context);
     if (!context.mounted) return;
 
     final renderObject = context.findRenderObject();

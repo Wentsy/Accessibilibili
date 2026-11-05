@@ -1,3 +1,4 @@
+import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart' show useIosReplyReading;
 import 'package:PiliPlus/common/a11y/text_link_rotor.dart';
 import 'package:PiliPlus/common/a11y/video_text_links.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
@@ -98,7 +99,9 @@ class ReplyA11ySemantics extends StatelessWidget {
     final semanticsLabel = commentTime.isEmpty
         ? label
         : '$label，$commentTime評論';
-    final identifier = 'a11y-read-reply|${replyItem.oid}|${replyItem.id}';
+    final nativeReading = useIosReplyReading(context);
+    final prefix = nativeReading ? 'a11y-list-reply' : 'a11y-read-reply';
+    final identifier = '$prefix|${replyItem.oid}|${replyItem.id}';
     return TextLinkRotor(
       identifier: identifier,
       links: videoTextLinks(
@@ -129,6 +132,8 @@ class ReplyA11ySemantics extends StatelessWidget {
             context,
             immediate: true,
             recoverAfterSuppression: true,
+            nearestScrollableOnly: nativeReading,
+            scrollOnlyWhenOutside: nativeReading,
           );
         },
         onDidLoseAccessibilityFocus: () => cancelDeferredReplyFocus(context),
