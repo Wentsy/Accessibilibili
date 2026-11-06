@@ -10,6 +10,7 @@ import 'package:PiliPlus/models_new/pgc/pgc_info_model/result.dart';
 import 'package:PiliPlus/models_new/search/search_rcmd/data.dart';
 import 'package:PiliPlus/models_new/search/search_trending/data.dart';
 import 'package:PiliPlus/utils/extension/iterable_ext.dart';
+import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/utils/request_utils.dart';
 import 'package:PiliPlus/utils/wbi_sign.dart';
 import 'package:dio/dio.dart';
@@ -170,9 +171,11 @@ abstract final class SearchHttp {
   static Future<LoadingState<PgcInfoModel>> pugvInfo({
     dynamic seasonId,
     dynamic epId,
+    Account? account,
   }) async {
     final res = await Request().get(
       Api.pugvInfo,
+      options: Options(extra: {if (account != null) 'account': account}),
       queryParameters: {
         'season_id': ?seasonId,
         'ep_id': ?epId,

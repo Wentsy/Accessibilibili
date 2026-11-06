@@ -6,6 +6,8 @@ import 'package:PiliPlus/http/user.dart';
 import 'package:PiliPlus/http/video.dart';
 import 'package:PiliPlus/models/common/member/tab_type.dart';
 import 'package:PiliPlus/models/model_owner.dart';
+import 'package:PiliPlus/models_new/relation/data.dart';
+import 'package:PiliPlus/utils/accounts/account.dart';
 import 'package:PiliPlus/models_new/space/space/data.dart';
 import 'package:PiliPlus/models_new/space/space/elec.dart';
 import 'package:PiliPlus/models_new/space/space/live.dart';
@@ -35,6 +37,8 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
 
   Live? live;
   int? silence;
+
+  RelationData? _accountRelation;
 
   int? isFollowed; // 被关注
   RxInt relation = 0.obs;
@@ -107,6 +111,12 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
                   ? -10
                   : card?.relation?.status ?? 2
             : data.relation ?? 0;
+    }
+    if (_accountRelation case final actual?) {
+      final attribute = actual.attribute ?? 0;
+      relation.value = actual.special == 1 && (attribute == 2 || attribute == 6)
+          ? -10
+          : attribute == 6 ? 4 : attribute;
     }
     tab2 = data.tab2;
     live = data.live;
@@ -187,10 +197,22 @@ class MemberController extends CommonDataController<SpaceData, SpaceData?>
   }
 
   @override
-  Future<LoadingState<SpaceData>> customGetData() => MemberHttp.space(
-    mid: mid,
-    fromViewAid: fromViewAid,
-  );
+  Future<LoadingState<SpaceData>> customGetData() async {
+    _accountRelation = null;
+    final space = MemberHttp.space(mid: mid, fromViewAid: fromViewAid);
+    // Match follow/unfollow's Cookie account; App space can omit this relation.
+    if (account is LoginAccount &&
+        (account as LoginAccount).internationalPassport &&
+        mid != account.mid) {
+      final result = await UserHttp.userRelation(mid, account: account);
+      if (result case Success(:final response)) {
+        _accountRelation = response;
+      } else {
+        result.toast();
+      }
+    }
+    return space;
+  }
 
   void blockUser(BuildContext context) {
     if (!account.isLogin) {

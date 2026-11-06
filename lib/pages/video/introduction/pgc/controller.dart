@@ -22,6 +22,7 @@ import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
 import 'package:PiliPlus/utils/bili_utils.dart';
+import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
 import 'package:PiliPlus/utils/global_data.dart';
 import 'package:PiliPlus/utils/id_utils.dart';
@@ -86,6 +87,8 @@ class PgcIntroController extends CommonIntroController {
         }
       }
       queryVideoTags();
+    } else if (isLogin) {
+      queryPugvFavorite();
     }
   }
 
@@ -474,12 +477,30 @@ class PgcIntroController extends CommonIntroController {
     );
   }
 
-  Future<void> onFavPugv(bool isFav) async {
+  Future<bool> queryPugvFavorite() async {
+    final result = await SearchHttp.pugvInfo(
+      seasonId: seasonId,
+      epId: epId,
+      account: Accounts.main,
+    );
+    if (isClosed) return false;
+    if (result case Success(:final response)) {
+      isFav.value = response.userStatus?.favored == 1;
+      return true;
+    }
+    result.toast();
+    return false;
+  }
+
+  Future<void> onFavPugv(bool _) async {
+    // Metadata/progress may belong to the history account; favorites do not.
+    if (!await queryPugvFavorite()) return;
+    final isFav = this.isFav.value;
     final res = isFav
         ? await FavHttp.delFavPugv(seasonId!)
         : await FavHttp.addFavPugv(seasonId!);
     if (res.isSuccess) {
-      this.isFav.toggle();
+      this.isFav.value = !isFav;
       SmartDialog.showToast('${isFav ? '取消' : ''}收藏成功');
     } else {
       res.toast();
