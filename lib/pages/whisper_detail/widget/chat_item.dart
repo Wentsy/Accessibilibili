@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:PiliPlus/common/constants.dart';
+import 'package:PiliPlus/common/a11y/text_link_rotor.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/badge.dart';
 import 'package:PiliPlus/common/widgets/emote_tooltip.dart';
@@ -725,7 +726,25 @@ class ChatItem extends StatelessWidget {
         return '';
       },
     );
-    return SelectionText.rich(TextSpan(children: children));
+    final text = content['content'] as String;
+    // Use the wire text (including named emote tokens) for speech; image
+    // placeholders alone expose U+FFFC as an unnamed attachment on iOS.
+    return TextLinkRotor(
+      identifier: 'whisper-text|${item.msgKey}',
+      links: [
+        for (final match in Constants.urlRegex.allMatches(text))
+          A11yTextLink(match[0]!, () => PiliScheme.routePushFromUrl(match[0]!)),
+      ],
+      builder: (focusLinks) => Semantics(
+        container: true,
+        identifier: 'whisper-text|${item.msgKey}',
+        label: text,
+        onDidGainAccessibilityFocus: focusLinks,
+        child: ExcludeSemantics(
+          child: SelectionText.rich(TextSpan(children: children)),
+        ),
+      ),
+    );
   }
 
   Widget msgTypeNotifyMsg_10(ThemeData theme, content) {

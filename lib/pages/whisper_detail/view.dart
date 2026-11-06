@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'dart:io' show File;
+import 'dart:io' show File, Platform;
 
 import 'package:PiliPlus/common/assets.dart';
 import 'package:PiliPlus/common/widgets/dialog/report.dart';
 import 'package:PiliPlus/common/widgets/flutter/chat_list_view.dart';
 import 'package:PiliPlus/common/widgets/flutter/text_field/text_field.dart';
+import 'package:PiliPlus/common/widgets/flutter/text_field/ios_native_rich_text_field.dart';
 import 'package:PiliPlus/common/widgets/image/network_img_layer.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/loading_widget.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
@@ -281,7 +282,20 @@ class _WhisperDetailPageState
           ),
           Expanded(
             child: Obx(
-              () => RichTextField(
+              () => Platform.isIOS
+                  ? IOSNativeRichTextField(
+                      controller: editController,
+                      focusNode: focusNode,
+                      readOnly: readOnly.value,
+                      minLines: 1,
+                      maxLines: 4,
+                      hintText: '发个消息聊聊呗~',
+                      style: theme.textTheme.bodyLarge,
+                      onChanged: onChanged,
+                      onTapWhenReadOnly: () =>
+                          updatePanelType(.keyboard),
+                    )
+                  : RichTextField(
                 key: key,
                 readOnly: readOnly.value,
                 focusNode: focusNode,
