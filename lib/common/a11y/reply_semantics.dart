@@ -1,5 +1,6 @@
 import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart' show useIosReplyReading;
 import 'package:PiliPlus/common/a11y/text_link_rotor.dart';
+import 'package:PiliPlus/utils/reply_text.dart';
 import 'package:PiliPlus/common/a11y/video_text_links.dart';
 import 'package:PiliPlus/pages/video/controller.dart';
 import 'package:PiliPlus/common/a11y/a11y_action_feedback.dart';
@@ -23,6 +24,7 @@ class ReplyA11ySemantics extends StatelessWidget {
     this.onTap,
     this.videoController,
     this.onTapHint,
+    this.onMore,
     this.onAccessibilityFocus,
     this.sortKey,
   });
@@ -32,6 +34,7 @@ class ReplyA11ySemantics extends StatelessWidget {
   final Widget child;
   final String label;
   final VoidCallback? onTap;
+  final VoidCallback? onMore;
   final String? onTapHint;
   final VoidCallback? onAccessibilityFocus;
   final SemanticsSortKey? sortKey;
@@ -96,9 +99,12 @@ class ReplyA11ySemantics extends StatelessWidget {
   Widget build(BuildContext context) {
     final action = replyItem.replyControl.action;
     final commentTime = DateFormatUtils.a11yDateFormat(replyItem.ctime.toInt());
+    final displayLabel = replyDisplayText(
+      label, hasPictures: replyItem.content.pictures.isNotEmpty,
+    );
     final semanticsLabel = commentTime.isEmpty
-        ? label
-        : '$label，$commentTime評論';
+        ? displayLabel
+        : '$displayLabel，$commentTime評論';
     final nativeReading = useIosReplyReading(context);
     final prefix = nativeReading ? 'a11y-list-reply' : 'a11y-read-reply';
     final identifier = '$prefix|${replyItem.oid}|${replyItem.id}';
@@ -138,6 +144,7 @@ class ReplyA11ySemantics extends StatelessWidget {
         },
         onDidLoseAccessibilityFocus: () => cancelDeferredReplyFocus(context),
         customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
+          if (onMore != null) CustomSemanticsAction(label: '更多操作'): onMore!,
           CustomSemanticsAction(
             label: action == Int64.ONE ? '取消赞' : '点赞这条评论',
           ): () =>
@@ -152,3 +159,4 @@ class ReplyA11ySemantics extends StatelessWidget {
     );
   }
 }
+

@@ -9,8 +9,9 @@ import 'package:get/get.dart';
 /// Only explicit page requests emit pageScrolled, never background prefetch.
 class ReplyPagedScroll extends StatelessWidget {
   const ReplyPagedScroll({super.key, required this.controller, required this.child,
-    this.allowRefresh = false});
+    this.allowRefresh = false, this.scrollController});
   final ReplyController controller;
+  final ScrollController? scrollController;
   final Widget child;
   // Non-iOS callers opt in to refresh; iOS exposes both viewport edges.
   final bool allowRefresh;
@@ -18,7 +19,7 @@ class ReplyPagedScroll extends StatelessWidget {
   @override
   Widget build(BuildContext context) => useIosReplyReading(context)
       ? VoiceOverPagedScroll(
-          controller: controller.scrollController,
+          controller: scrollController ?? controller.scrollController,
           nativeFeedScroll: true,
           replyScrollMetrics: true,
           onScrollBackwardAtStart: () => controller.onA11yRefresh(label: '評論'),
@@ -42,7 +43,7 @@ class ReplyPagedScroll extends StatelessWidget {
       : Obx(() {
     final data = controller.loadingState.value.dataOrNull;
     return VoiceOverPagedScroll(
-      controller: controller.scrollController,
+      controller: scrollController ?? controller.scrollController,
       replyScrollMetrics: true,
       replyHasMore: data != null && !controller.isEnd,
       onScrollBackwardAtStart: allowRefresh
@@ -58,7 +59,7 @@ class ReplyPagedScroll extends StatelessWidget {
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             if (!context.mounted || controller.isClosed ||
                 ModalRoute.of(context)?.isCurrent == false) return;
-            final scroll = controller.scrollController;
+            final scroll = scrollController ?? controller.scrollController;
             if (!scroll.hasClients) return;
             final position = scroll.position;
             final target = (position.pixels + position.viewportDimension * 0.85)
@@ -223,3 +224,4 @@ class _ReplyReadingSliverState extends State<ReplyReadingSliver> {
     );
   }
 }
+

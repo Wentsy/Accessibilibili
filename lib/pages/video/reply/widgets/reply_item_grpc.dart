@@ -59,6 +59,8 @@ import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:PiliPlus/common/a11y/a11y_helper.dart';
+import 'package:PiliPlus/common/a11y/reply_semantics.dart';
+import 'package:PiliPlus/utils/reply_text.dart';
 
 import 'package:protobuf/protobuf.dart';
 
@@ -74,6 +76,7 @@ class ReplyItemGrpc extends StatelessWidget {
     this.onReply,
     this.onDelete,
     this.a11ySortKey,
+    this.onAccessibilityFocus,
     this.upMid,
     this.showDialogue,
     this.getTag,
@@ -91,6 +94,7 @@ class ReplyItemGrpc extends StatelessWidget {
 
   /// 🔴 無障礙：穩定排序鍵
   final OrdinalSortKey? a11ySortKey;
+  final VoidCallback? onAccessibilityFocus;
 
   final Int64? upMid;
   final VoidCallback? showDialogue;
@@ -148,10 +152,33 @@ class ReplyItemGrpc extends StatelessWidget {
     // YouTube iOS 模式：暱稱 → 內容 → [圖片] → 讚數 → 回覆數，單一焦點
     final hasPic = replyItem.content.pictures.isNotEmpty;
     final String picPart = hasPic ? '，[圖片]' : '';
+    final message = replyDisplayText(replyItem.content.message, hasPictures: hasPic);
     final String a11yLabel =
-        '${replyItem.member.name} 說：${replyItem.content.message}$picPart'
+        '${replyItem.member.name} 說：$message$picPart'
         '${replyItem.like > 0 ? '，${replyItem.like} 個讚' : ''}'
         '${replyItem.count > 0 ? '，共 ${replyItem.count} 條回覆' : ''}';
+    if (onAccessibilityFocus != null) {
+      return ReplyA11ySemantics(
+        replyItem: replyItem,
+        label: a11yLabel,
+        sortKey: a11ySortKey,
+        onAccessibilityFocus: onAccessibilityFocus,
+        onMore: showMore,
+        onTap: replyItem.count > 0
+            ? () => replyReply?.call(replyItem, null)
+            : showMore,
+        onTapHint: replyItem.count > 0 ? '點兩下展開回覆' : '點兩下開啟更多操作',
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: () => replyReply?.call(replyItem, null),
+            onLongPress: showMore,
+            onSecondaryTap: PlatformUtils.isMobile ? null : showMore,
+            child: child,
+          ),
+        ),
+      );
+    }
     return Semantics(
       container: true,
       explicitChildNodes: false,
@@ -877,7 +904,7 @@ class ReplyItemGrpc extends StatelessWidget {
     }
 
     // 分割文本并处理每个部分
-    content.message.splitMapJoin(
+    replyDisplayText(content.message, hasPictures: content.pictures.isNotEmpty).splitMapJoin(
       pattern,
       onMatch: (Match match) {
         String matchStr = match[0]!;
@@ -1342,4 +1369,5 @@ class ReplyItemGrpc extends StatelessWidget {
     );
   }
 }
+
 

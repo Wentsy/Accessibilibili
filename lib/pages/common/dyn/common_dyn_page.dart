@@ -1,4 +1,6 @@
 import 'package:PiliPlus/common/skeleton/video_reply.dart';
+import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
+import 'package:flutter/semantics.dart' show OrdinalSortKey;
 import 'package:PiliPlus/common/a11y/composer_dock.dart';
 import 'package:PiliPlus/common/sliver_single_child_delegate.dart';
 import 'package:PiliPlus/common/style.dart';
@@ -107,6 +109,8 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
     on State<T>, TickerProvider, BaseFabMixin<T>, FabMixin<T> {
   CommonDynController get controller;
   bool get isArticle => false;
+  bool get useReplyReading => false;
+  bool get replyReadingActive => useReplyReading;
 
   bool get horizontalPreview => !isPortrait && controller.horizontalPreview;
 
@@ -189,35 +193,56 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
           if (hasVote) {
             count++;
           }
+          Widget itemBuilder(BuildContext context, int index) {
+            if (hasVote) {
+              if (index == 0) {
+                return buildVoteCard(context, theme.colorScheme, voteCard);
+              } else {
+                index--;
+              }
+            }
+            if (index == response.length) {
+              if (!useReplyReading || !useIosReplyReading(context)) {
+                controller.onLoadMore();
+              }
+              return Container(
+                alignment: Alignment.center,
+                margin: EdgeInsets.only(bottom: padding.bottom),
+                height: 125,
+                child: useReplyReading
+                    ? ReplyPaginationStatus(controller: controller)
+                    : Text(
+                  controller.isEnd ? '没有更多了' : '加载中...',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              );
+            } else {
+              return KeyedSubtree(
+                key: ValueKey('reply-${response[index].id}'),
+                child: buildReply(context, index, response[index]),
+              );
+            }
+          }
+          if (useReplyReading) {
+            return ReplyReadingSliver(
+              controller: controller,
+              itemCount: count,
+              itemBuilder: itemBuilder,
+              findChildIndexCallback: (key) {
+                final index = response.indexWhere(
+                  (item) => ValueKey('reply-${item.id}') == key,
+                );
+                return index < 0 ? null : index + (hasVote ? 1 : 0);
+              },
+            );
+          }
           return ArticleSliverList.builder(
             itemCount: count,
             isArticle: isArticle,
-            itemBuilder: (context, index) {
-              if (hasVote) {
-                if (index == 0) {
-                  return buildVoteCard(context, theme.colorScheme, voteCard);
-                } else {
-                  index--;
-                }
-              }
-              if (index == response.length) {
-                controller.onLoadMore();
-                return Container(
-                  alignment: Alignment.center,
-                  margin: EdgeInsets.only(bottom: padding.bottom),
-                  height: 125,
-                  child: Text(
-                    controller.isEnd ? '没有更多了' : '加载中...',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: theme.colorScheme.outline,
-                    ),
-                  ),
-                );
-              } else {
-                return buildReply(context, index, response[index]);
-              }
-            },
+            itemBuilder: itemBuilder,
           );
         }
 
@@ -247,6 +272,16 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
   Widget buildReply(BuildContext context, int index, ReplyInfo item) {
     return ReplyItemGrpc(
       replyItem: item,
+      a11ySortKey: useReplyReading ? OrdinalSortKey(index + 1.0) : null,
+      onAccessibilityFocus: useReplyReading ? () {
+        if (useIosReplyReading(context)) {
+          controller.bufferRepliesForReading(index, () => context.mounted &&
+              replyReadingActive && ModalRoute.of(context)?.isCurrent != false &&
+              useIosReplyReading(context));
+        } else if (index >= (controller.loadingState.value.dataOrNull?.length ?? 0) - 5) {
+          controller.retryLoadMore();
+        }
+      } : null,
       replyLevel: 1,
       replyReply: (item, id) => throttleReplyReply(context, item, id),
       onReply: controller.onReply,
@@ -408,3 +443,4 @@ mixin CommonDynPageMixin<T extends StatefulWidget>
     child: const Icon(Icons.reply),
   );
 }
+

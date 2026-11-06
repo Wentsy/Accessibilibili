@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/semantics.dart' show OrdinalSortKey;
+
 import 'package:PiliPlus/pages/common/a11y/reply_pagination.dart';
 import 'package:PiliPlus/common/style.dart';
 import 'package:PiliPlus/common/widgets/custom_icon.dart';
@@ -56,6 +58,13 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
     with DynReplyLocateStateMixin {
   @override
   late final DynamicDetailController controller;
+
+  @override
+  bool get useReplyReading => useIosReplyReading(context);
+
+  @override
+  bool get replyReadingActive =>
+      useReplyReading && tabController.index == DynType.reply.index;
   late final DynRepostController _repostController;
   late final DynLikeController _likeController;
 
@@ -342,18 +351,34 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
   }
 
   Widget _buildTabBody([bool isPortrait = true]) {
-    Widget reply = CustomScrollView(
-      primary: true,
-      key: const PageStorageKey(DynType.reply),
-      physics: ReloadScrollPhysics(
-        controller: controller,
-        parent: isPortrait ? platformAlwaysClampingPhysics : null,
-      ),
-      slivers: [
-        buildReplyHeader(isPortrait),
-        Obx(() => replyList(controller.loadingState.value)),
-      ],
-    );
+    Widget reply = Builder(builder: (context) {
+      final reading = useIosReplyReading(context);
+      // Keep the nested inner controller so the dynamic header still collapses.
+      final scroll = isPortrait
+          ? PrimaryScrollController.of(context)
+          : controller.scrollController;
+      final list = CustomScrollView(
+        primary: reading ? false : true,
+        controller: reading ? scroll : null,
+        cacheExtent: reading ? MediaQuery.sizeOf(context).height * 8 : null,
+        key: const PageStorageKey(DynType.reply),
+        physics: ReloadScrollPhysics(
+          controller: controller,
+          parent: isPortrait ? platformAlwaysClampingPhysics : null,
+        ),
+        slivers: [
+          buildReplyHeader(isPortrait),
+          Obx(() => replyList(controller.loadingState.value)),
+        ],
+      );
+      return reading
+          ? ReplyPagedScroll(
+              controller: controller,
+              scrollController: scroll,
+              child: list,
+            )
+          : list;
+    });
     if (!isPortrait) {
       reply = refreshIndicator(onRefresh: controller.onRefresh, child: reply);
     }
@@ -666,7 +691,12 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
     );
     return SliverFloatingHeaderWidget(
       backgroundColor: theme.colorScheme.surface,
-      child: child,
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        sortKey: useReplyReading ? const OrdinalSortKey(1) : null,
+        child: child,
+      ),
     );
   }
 
@@ -678,3 +708,4 @@ class _DynamicDetailPageState extends CommonDynPageMultiState<DynamicDetailPage>
     } catch (_) {}
   }
 }
+
