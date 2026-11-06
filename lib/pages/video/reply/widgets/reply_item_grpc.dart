@@ -194,34 +194,49 @@ class ReplyItemGrpc extends StatelessWidget {
       onTapHint: (replyItem.count.toInt()) > 0 ? '點兩下展開回覆' : '點兩下開啟更多操作',
       customSemanticsActions: <CustomSemanticsAction, VoidCallback>{
         CustomSemanticsAction(label: '更多操作'): showMore,
-        CustomSemanticsAction(label: '點讚這條評論'): () async {
+        CustomSemanticsAction(
+          label: replyItem.replyControl.action == Int64.ONE
+              ? '取消讚' : '點讚這條評論',
+        ): () async {
+          final liked = replyItem.replyControl.action == Int64.ONE;
           final res = await ReplyHttp.likeReply(
-            type: 1,
+            type: replyItem.type.toInt(),
             oid: replyItem.oid.toInt(),
             rpid: replyItem.id.toInt(),
-            action: 1,
+            action: liked ? 0 : 1,
           );
           if (res case Success()) {
-            SmartDialog.showToast('已點讚');
-            a11yAnnounce('已點讚');
+            replyItem.like += liked ? -Int64.ONE : Int64.ONE;
+            replyItem.replyControl.action = liked ? Int64.ZERO : Int64.ONE;
+            final message = liked ? '已取消讚' : '已點讚';
+            SmartDialog.showToast(message);
+            a11yAnnounce(message);
+            if (context.mounted) (context as Element).markNeedsBuild();
           } else {
-            SmartDialog.showToast('點讚失敗（需登入）');
-            a11yAnnounce('點讚失敗，需登入');
+            res.toast();
           }
         },
-        CustomSemanticsAction(label: '點踩這條評論'): () async {
+        CustomSemanticsAction(
+          label: replyItem.replyControl.action == Int64.TWO
+              ? '取消踩' : '點踩這條評論',
+        ): () async {
+          final disliked = replyItem.replyControl.action == Int64.TWO;
+          final liked = replyItem.replyControl.action == Int64.ONE;
           final res = await ReplyHttp.hateReply(
-            type: 1,
-            action: 1,
+            type: replyItem.type.toInt(),
+            action: disliked ? 0 : 1,
             oid: replyItem.oid.toInt(),
             rpid: replyItem.id.toInt(),
           );
           if (res case Success()) {
-            SmartDialog.showToast('已點踩');
-            a11yAnnounce('已點踩');
+            if (!disliked && liked) replyItem.like -= Int64.ONE;
+            replyItem.replyControl.action = disliked ? Int64.ZERO : Int64.TWO;
+            final message = disliked ? '已取消踩' : '已點踩';
+            SmartDialog.showToast(message);
+            a11yAnnounce(message);
+            if (context.mounted) (context as Element).markNeedsBuild();
           } else {
-            SmartDialog.showToast('點踩失敗（需登入）');
-            a11yAnnounce('點踩失敗，需登入');
+            res.toast();
           }
         },
       },
