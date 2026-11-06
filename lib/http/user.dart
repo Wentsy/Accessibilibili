@@ -272,9 +272,12 @@ abstract final class UserHttp {
     }
   }
 
-  static Future<LoadingState<RelationData>> userRelation(int mid) async {
+  static Future<LoadingState<RelationData>> userRelation(
+    int mid, {Account? account}
+  ) async {
     final res = await Request().get(
       Api.relation,
+      options: Options(extra: {'account': account ?? Accounts.main}),
       queryParameters: {
         'fid': mid,
       },
